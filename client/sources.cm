@@ -1,0 +1,19 @@
+Group
+        source(-)
+        library($CMLIB/cmlib.cm)
+is
+        base58.sig
+        base58.sml
+        network.sml
+        protocol.sig
+        protocol.sml
+        reader.sig
+        reader.sml
+        script.sig
+        script.sml
+        transaction.sig
+        transaction.sml
+        writer.sig
+        writer.sml
+
+        $CMLIB/cmlib.cm

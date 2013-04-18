@@ -1,0 +1,15 @@
+        $(CMLIB)/cmlib.mlb
+
+        base58.sig
+        base58.sml
+        reader.sig
+        reader.sml
+        writer.sig
+        writer.sml
+        network.sml
+        script.sig
+        script.sml
+        transaction.sig
+        transaction.sml
+        protocol.sig
+        protocol.sml
