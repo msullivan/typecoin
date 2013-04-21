@@ -11,5 +11,5 @@
         script.sml
         transaction.sig
         transaction.sml
-        protocol.sig
-        protocol.sml
+        message.sig
+        message.sml

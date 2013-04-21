@@ -2,8 +2,8 @@
 val bth = Bytestring.toStringHex
 val bfh = Option.valOf o Bytestring.fromStringHex
 structure P = Protocol
-structure F = Format
 structure B = Bytestring
+structure BS = Bytesubstring
 
 (*
 val sha = SHA256.hashBytes
@@ -24,3 +24,5 @@ fun timeit f =
       (x, Timer.checkCPUTimes timer)
    end
 *)
+
+fun opn () = use "open.sml"

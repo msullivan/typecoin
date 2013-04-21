@@ -26,9 +26,10 @@ signature TRANSACTION =
 
       exception InvalidTransaction
 
-      val writeTxin : txin -> Writer.writer
-      val writeTxout : txout -> Writer.writer
-      val write : tx -> Writer.writer
-      val writeForSig : tx -> int -> Bytestring.string -> Bytestring.string -> Writer.writer
+      val writeTx : tx -> Writer.writer
+      val readTx : tx Reader.reader
+
+      (* transaction, input # to replace the script of, replacement script *)
+      val modifyForSig : tx -> int -> Bytestring.string -> tx
 
    end

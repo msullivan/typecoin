@@ -1,12 +1,19 @@
 
-structure Network =
+structure Network (* :> NETWORK *) =
    struct
 
-      type sock = (INetSock.inet, Socket.active Socket.stream) Socket.sock
+      type 'a sock = (INetSock.inet, 'a Socket.stream) Socket.sock
+      type psock = Socket.passive sock
+      type asock = Socket.active sock
+      type addr = NetHostDB.in_addr
+
+
+      val bufsize = 1024
+
       
       fun listen port =
          let
-            val s = INetSock.TCP.socket ()
+            val s : psock = INetSock.TCP.socket ()
             val () = Socket.bind (s, INetSock.any port)
             val () = Socket.listen (s, 5)
          in
@@ -26,23 +33,64 @@ structure Network =
       fun connect (addr, port) =
          let
             val saddr = INetSock.toAddr (addr, port)
-            val s : sock = INetSock.TCP.socket ()
+            val s : asock = INetSock.TCP.socket ()
          in
+            print "Connecting to ";
+            print (NetHostDB.toString addr);
+            print "\n";
             Socket.connect (s, saddr);
             s
          end
-      
-      fun send (s, str) =
-         Socket.sendVec (s, Bytesubstring.full str)
-      
-      fun recv s =
-         Socket.recvVec (s, 1024)
-      
-      fun recvNB s =
-         Socket.recvVecNB (s, 1024)
-      
+
+      val close = Socket.close
+
+      fun sendVec (sock, v) =
+         let
+            val n = Socket.sendVec (sock, v)
+         in
+            Bytesubstring.size v = n
+         end
+
+      val log : Bytestring.string list ref = ref []
+
+      fun recvVec s =
+         (case #rds (Socket.select {rds=[Socket.sockDesc s], wrs=[], exs=[], timeout=SOME (Time.fromMilliseconds 500)}) of
+             [] =>
+                (
+                print "timeout\n";
+                Bytestring.null
+                )
+           | _ :: _ =>
+                let
+                   val v = Socket.recvVec (s, bufsize)
+                in
+                   print "receive\n";
+                   log := v :: !log;
+                   v
+                end)
+
       fun dns str =
-         map NetHostDB.toString (NetHostDB.addrs (valOf (NetHostDB.getByName str)))
+         NetHostDB.addrs (valOf (NetHostDB.getByName str))
+
+      fun implodeAddr l =
+         let
+            val str = String.concatWith "." (map (Int.toString o Word8.toInt) l)
+         in
+            (case NetHostDB.getByName str of
+                NONE =>
+                   raise (Fail "bad IP address")
+              | SOME entry =>
+                   NetHostDB.addr entry)
+         end
+
+      fun explodeAddr addr =
+         let
+            val l = String.fields (fn ch => ch = #".") (NetHostDB.toString addr)
+         in
+            if length l = 4 then
+               map (Word8.fromInt o valOf o Int.fromString) l
+            else
+               raise (Fail "bad address string")
+         end
 
    end
-

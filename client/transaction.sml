@@ -2,9 +2,6 @@
 structure Transaction :> TRANSACTION =
    struct
 
-      structure B = Bytestring
-      structure W = Writer
-
       (* check architecture *)
       val () =
          let val w = 0wxffffffffffffffff : Word64.word
@@ -14,6 +11,26 @@ structure Transaction :> TRANSACTION =
             else
                raise (Fail "LargeInt.int is smaller than 64 bits.")
          end
+
+
+
+      structure B = Bytestring
+      structure W = Writer
+      structure R = Reader
+
+      fun >>= (r, f) = R.bind r f
+      fun >> (r, r') = R.seq r r'
+      fun >>> (w, w') = W.seq w w'
+      infixr 3 >>= >> >>>
+
+
+      (* constants *)
+      val theVersion : Word32.word = 0w1
+
+      (* precomputed values *)
+      val power32 = Word64.toLargeInt 0wx100000000
+      val maxAmount = Word64.toLargeInt 0wxffffffffffffffff
+
 
 
       type coord = Bytestring.string * Word32.word
@@ -40,45 +57,78 @@ structure Transaction :> TRANSACTION =
 
 
 
-
       exception InvalidTransaction
-
-      val version = ConvertWord.word32ToBytesL 0w1
-      val maxAmount = Word64.toLargeInt 0wxffffffffffffffff
-      val power32 = Word64.toLargeInt 0wx100000000
-
 
       fun writeTxin {from=(txid, n), script, sequence} =
          if B.size txid <> 32 then
             raise InvalidTransaction
          else
-            W.seql
-            [ W.bytes (B.rev txid),
-              W.word32L n,
-              W.bytesVar script,
-              W.word32L sequence ]
+            W.bytes (B.rev txid)
+            >>>
+            W.word32L n
+            >>>
+            W.bytesVar script
+            >>>
+            W.word32L sequence
+
+      val readTxin =
+         R.bytes 32
+         >>= (fn txid =>
+         R.word32L
+         >>= (fn n =>
+         R.bytesVar
+         >>= (fn script =>
+         R.word32L
+         >>= (fn sequence =>
+         R.return { from=(txid, n), script=script, sequence=sequence }
+         ))))
 
 
       fun writeTxout {amount, script} =
          if amount < 0 orelse amount > maxAmount then
             raise InvalidTransaction
          else
-            W.seq (W.word64L (Word64.fromLargeInt amount),
-                   W.bytesVar script)
+            W.word64L (Word64.fromLargeInt amount)
+            >>>
+            W.bytesVar script
+
+      val readTxout =
+         R.wrap Word64.toLargeInt R.word64L
+         >>= (fn amount =>
+         R.bytesVar
+         >>= (fn script =>
+         R.return { amount=amount, script=script }
+         ))
          
 
-      fun write ({inputs, outputs, lockTime}:tx) =
-         W.seql
-         [
-         W.bytes version,
-         W.bytes (W.sizemark (length inputs)),
-         W.seql (map writeTxin inputs),
-         W.bytes (W.sizemark (length outputs)),
-         W.seql (map writeTxout outputs),
+      fun writeTx ({inputs, outputs, lockTime}:tx) =
+         W.word32L theVersion
+         >>>
+         W.varlist writeTxin inputs
+         >>>
+         W.varlist writeTxout outputs
+         >>>
          W.word32L lockTime
-         ]
 
-      fun modifyForSig inputs i prevScript =
+      val readTx =
+         R.word32L
+         >>= (fn version =>
+         if version <> theVersion then
+            (* a different format, punt *)
+            raise Reader.SyntaxError
+         else
+            R.varlist readTxin
+            >>= (fn inputs =>
+            R.varlist readTxout
+            >>= (fn outputs =>
+            R.word32L
+            >>= (fn lockTime =>
+            R.return { inputs=inputs, outputs=outputs, lockTime=lockTime }
+            ))))
+
+
+
+      fun modifyInputsForSig inputs i prevScript =
          let
             fun loop j l =
                (case l of
@@ -101,8 +151,7 @@ structure Transaction :> TRANSACTION =
                loop 0 inputs
          end
 
-      fun writeForSig ({inputs, outputs, lockTime}:tx) i prevScript suffix =
-         W.seq (write {inputs=modifyForSig inputs i prevScript, outputs=outputs, lockTime=lockTime},
-                W.bytes suffix)
+      fun modifyForSig { inputs, outputs, lockTime } i prevScript =
+         { inputs=modifyInputsForSig inputs i prevScript, outputs=outputs, lockTime=lockTime }
 
    end

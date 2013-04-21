@@ -1,76 +1,30 @@
 
+structure B = Bytestring
+structure BS = Bytesubstring
+structure M = Message
 structure P = Protocol
 
+val bth = Bytestring.toStringHex
+val bfh = Option.valOf o Bytestring.fromStringHex
 fun println str = (print str; print "\n")
 
-val addr = NetHostDB.addr (valOf (NetHostDB.getByName "testnet-seed.bitcoin.petertodd.org"))
+val addr = hd (Network.dns "testnet-seed.bitcoin.petertodd.org")
+(*
+val addr = hd (Network.dns "173.208.219.162")
+*)
 val () = println (NetHostDB.toString addr)
-val saddr = INetSock.toAddr (addr, 18333)
+val self = map Word8.fromInt [96, 236, 225, 83]
 
-fun getip addr =
+
+fun f addr =
    let
-      val l = String.fields (fn ch => ch = #".") (NetHostDB.toString addr)
+      val ss as (sock, _) = valOf (P.connect addr)
+      val _ = Network.sendVec (sock, BS.full (M.writeMessage M.Getaddr))
+      val x = P.recvMessage ss
    in
-      if length l = 4 then
-         map (Word8.fromInt o valOf o Int.fromString) l
-      else
-         raise (Fail "bad address string")
-   end
+      P.close ss;
+      SOME (addr, x)
+   end handle NoMessage => NONE
 
-val self = [0wx60,0wxEC,0wxE1,0wx53] : Word8.word list
-val nonce = 0wxE7520FBEF1CA2BA0 : Word64.word
-
-
-val msg =
-   Writer.write
-   (P.writeMessage
-       (P.Version
-           (P.mkVersion
-               {
-               self = P.mkNetaddr self,
-               remote = P.mkNetaddr (getip addr),
-               nonce = nonce,
-               lastBlock = 0
-               })))
-   
-fun logall (s, timeout) =
-   let
-      val sd = Socket.sockDesc s
-      val t = Time.fromSeconds (timeout div 2)  (* SMLNJ bug *)
-
-      fun loop acc =
-         (case #rds (Socket.select {rds=[sd], wrs=[], exs=[], timeout=SOME t}) of
-             [] =>
-                (
-                println "timeout";
-                acc
-                )
-           | _ :: _ =>
-                let
-                   val str = Network.recv s
-                in
-                   if B.size str = 0 then
-                      (
-                      println "closed";
-                      acc
-                      )
-                   else
-                      (
-                      println ".";
-                      loop (str :: acc)
-                      )
-                end)
-   in
-      B.concat (rev (loop []))
-   end
-
-
-fun doit () =
-   let
-      val s = Network.connect (addr, 18333)
-      val _ = Network.send (s, msg)
-      val str = logall (s, 10)
-   in
-      Socket.close s;
-      str
-   end
+fun go () =
+   map f (Network.dns "testnet-seed.bitcoin.petertodd.org")

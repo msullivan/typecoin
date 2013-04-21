@@ -1,131 +1,150 @@
 
-structure Protocol :> PROTOCOL =
+structure Protocol (* :> PROTOCOL *) =
    struct
-
+   
       structure B = Bytestring
-      structure W = Writer
-      
-      type word8 = Word8.word
-      type word32 = Word32.word
-      type word64 = Word64.word
-
-
-      type ipaddr = word8 list  (* length 4 *)
-
-      type netaddr =
-         {
-         services : word64,
-         address : ipaddr,
-         port : int
-         }
-
-      type version =
-         {
-         version : int,
-         services : word64,
-         timestamp : LargeInt.int,
-         self : netaddr,
-         remote : netaddr,
-         nonce : word64,
-         agent : string,
-         lastBlock : int
-         }
-
-      exception InvalidMessage = W.InvalidData
+      structure BS = Bytesubstring
+      structure M = Message
 
       (* constants *)
-      val magicTestnet3 : word32 = 0wx0709110b
-      val portTestnet = 18333
-      val theVersion = 70001 
-      val theServices : word64 = 0w1
-      val theAgent = "/Satoshi:0.8.1/"
+      val serviceNetwork : Word64.word = 0w1
 
-      fun checksum s =
-         B.substring (SHA256.hashBytes (SHA256.hashBytes s), 0, 4)
+      (* precomputed values *)
+      val netAddrNull = M.mkNetaddr [0w0, 0w0, 0w0, 0w0]
+      val magic = BS.full (ConvertWord.word32ToBytesL Chain.magic)
+      val msgVerack = M.writeMessage M.Verack
 
 
-      fun mkNetaddr addr =
-         { services = theServices, address = addr, port = portTestnet }
+      type ssbuf = (int * BS.substring list) ref
+      type sstream = Network.asock * ssbuf
 
-      fun mkVersion { self, remote, nonce, lastBlock } =
-         {
-         version = theVersion,
-         services = theServices,
-         timestamp = Time.toSeconds (Time.now ()),
-         self = self,
-         remote = remote,
-         nonce = nonce,
-         agent = theAgent,
-         lastBlock = lastBlock
-         }
-      
+      fun close (sock, _) = Network.close sock
+         
+      exception NoMessage  (* I/O error, socket closed, or bad magic number *)
 
+      val lastMessage = ref B.null
 
-      fun writeNetAddr ({ services, address, port }:netaddr) =
-         if length address <> 4 then
-            raise InvalidMessage
-         else
-            W.seql
-            [
-            (* services *)
-            W.word64L services,
-            (* IPv6/4 *)
-            W.repeat 10 (W.byte 0w0), W.byte 0wxff, W.byte 0wxff, W.seql (map W.byte address),
-            (* port *)
-            W.word16B (Word.fromInt port)
-            ]
-
-      fun writeVersion ({version, services, timestamp, self, remote, nonce, agent, lastBlock}:version) =
-         W.seql
-         [
-         (* version *)
-         W.word32L (Word32.fromInt version),
-         (* services *)
-         W.word64L services,
-         (* timestamp *)
-         W.word64L (Word64.fromLargeInt timestamp),
-         (* remote *)
-         writeNetAddr remote,
-         (* self *)
-         writeNetAddr self,
-         (* nonce *)
-         W.word64L nonce,
-         (* user agent *)
-         W.bytesVar (B.fromString agent),
-         (* start height *)
-         W.word32L (Word32.fromInt lastBlock)
-         ]
-
-      fun writePayload (command, payload) =
+      fun recvMessage (sock, bufr) =
          let
-            val payload' = W.write payload
+            (* accumulate enough data to read the message *)
+            fun messageloop (sz, n, buf) =
+               if n >= sz then
+                  let
+                     val str = BS.concat (rev buf)
+                  in
+                     bufr := (n - sz, [BS.extract (str, sz, NONE)]);
+                     lastMessage := B.substring (str, 0, sz);
+                     M.readMessage (BS.substring (str, 0, sz))
+                  end
+               else
+                  let
+                     val v = Network.recvVec sock
+                     val m = B.size v
+                  in
+                     if m = 0 then
+                        (* socket closed *)
+                        raise NoMessage
+                     else
+                        messageloop (sz, n+m, BS.full v :: buf)
+                  end
+
+            (* accumulate enough data to read the header (normally will only take one packet) *)
+            fun headerloop (n, buf) =
+               if n >= 24 then
+                  let
+                     val str = BS.concat (rev buf)
+                  in
+                     if BS.eq (BS.substring (str, 0, 4), magic) then
+                        let
+                           val psz = Word32.toInt (ConvertWord.bytesToWord32SL (BS.substring (str, 16, 4)))
+                        in
+                           messageloop (psz+24, n, [BS.full str])
+                        end
+                     else
+                        (* bad magic number *)
+                        raise NoMessage
+                  end
+               else
+                  let
+                     val v = Network.recvVec sock
+                     val m = B.size v
+                  in
+                     if m = 0 then
+                        (* socket closed *)
+                        raise NoMessage
+                     else
+                        headerloop (n+m, BS.full v :: buf)
+                  end
          in
-            W.seql
-            [
-            (* magic *)
-            W.word32L magicTestnet3,
-            (* command *)
-            W.bytesPad 11 (B.fromString command), W.byte 0w0,
-            (* length *)
-            W.word32L (Word32.fromInt (B.size payload')),
-            (* checksum *)
-            W.bytes (checksum payload'),
-            (* payload *)
-            W.bytes payload'
-            ]
+            headerloop (!bufr)
+            handle OS.SysErr _ => raise NoMessage
          end
 
-      datatype message =
-         Version of version
-       | Unsupported of string
+         
 
-      exception InvalidMessage
+      fun connect addr =
+         let
+            val sock = Network.connect (addr, Chain.port)
+            val ss : sstream = (sock, ref (0, []))
 
-      fun writeMessage msg =
-         (case msg of
-             Version version =>
-                writePayload ("version", writeVersion version)
-           | Unsupported str =>
-                raise InvalidMessage)
+            val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
+
+            val msgVersion =
+               M.writeMessage
+                  (M.Version
+                      (M.mkVersion
+                          {
+                          self = netAddrNull,
+                          remote = M.mkNetaddr (Network.explodeAddr addr),
+                          nonce = nonce,
+                          lastBlock = 0
+                          }))
+         in
+            Network.sendVec (sock, BS.full msgVersion);
+            (case recvMessage ss of
+                M.Version {services, ...} =>
+                   if Word64.andb (services, serviceNetwork) = 0w0 then
+                      (* Ignore peers that don't offer the network service.  If there were a lot
+                         of them, it might be better  to use them for the services they do offer.
+                      *)
+                      NONE
+                   else
+                      (case recvMessage ss of
+                          M.Verack =>
+                             (
+                             Network.sendVec (sock, BS.full msgVerack);
+                             SOME ss
+                             )
+                        | _ =>
+                             NONE)
+              | _ => NONE)
+         end
+         handle NoMessage => NONE
+
+
+      fun getblocks (ss as (sock, _)) =
+         let
+            val msg = 
+               (M.writeMessage
+                   (M.Getblocks
+                       (M.mkGetblocks {
+                                      hashes = [Chain.genesis, Chain.genesis],
+                                      lastDesired = NONE
+                                      })))
+         in
+            Network.sendVec (sock, BS.full msg);
+            (case recvMessage ss of
+                M.Inv l => SOME l
+              | _ => NONE)
+         end
+         handle NoMessage => (close ss; NONE)
+              | OS.SysErr _ => (close ss; NONE)
+
+
+       fun getdata (ss as (sock, _)) x =
+          (
+          Network.sendVec (sock, BS.full (M.writeMessage (M.Getdata [x])));
+          recvMessage ss
+          )
 
    end
