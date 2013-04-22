@@ -2,7 +2,7 @@
 structure Reader : READER =
    struct
 
-      structure B = Bytesubstring
+      structure BS = Bytesubstring
 
       structure Parsing = ParsingFun (type token = Word8.word
                                       structure Streamable = BytesubstringMonoStreamable)
@@ -13,65 +13,65 @@ structure Reader : READER =
 
 
       fun byte str =
-         (case B.getc str of
+         (case BS.getc str of
              NONE =>
                 raise SyntaxError
            | SOME (b, str') =>
                 (b, str'))
 
       fun word16B str =
-         if B.size str < 2 then
+         if BS.size str < 2 then
             raise SyntaxError
          else
             let
                val w = 
-                  Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 0)), 0w8),
-                            ConvertWord.word8ToWord (B.sub (str, 1)))
+                  Word.orb (Word.<< (ConvertWord.word8ToWord (BS.sub (str, 0)), 0w8),
+                            ConvertWord.word8ToWord (BS.sub (str, 1)))
             in
-               (w, B.slice (str, 2, NONE))
+               (w, BS.slice (str, 2, NONE))
             end
 
       fun word16L str =
-         if B.size str < 2 then
+         if BS.size str < 2 then
             raise SyntaxError
          else
             let
                val w = 
-                  Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 1)), 0w8),
-                            ConvertWord.word8ToWord (B.sub (str, 0)))
+                  Word.orb (Word.<< (ConvertWord.word8ToWord (BS.sub (str, 1)), 0w8),
+                            ConvertWord.word8ToWord (BS.sub (str, 0)))
             in
-               (w, B.slice (str, 2, NONE))
+               (w, BS.slice (str, 2, NONE))
             end
 
       fun word32L str =
-         if B.size str < 4 then
+         if BS.size str < 4 then
             raise SyntaxError
          else
-            (ConvertWord.bytesToWord32SL (B.slice (str, 0, SOME 4)),
-             B.slice (str, 4, NONE))
+            (ConvertWord.bytesToWord32SL (BS.slice (str, 0, SOME 4)),
+             BS.slice (str, 4, NONE))
 
       fun word64L str =
-         if B.size str < 8 then
+         if BS.size str < 8 then
             raise SyntaxError
          else
-            (ConvertWord.bytesToWord64SL (B.slice (str, 0, SOME 8)),
-             B.slice (str, 8, NONE))
+            (ConvertWord.bytesToWord64SL (BS.slice (str, 0, SOME 8)),
+             BS.slice (str, 8, NONE))
 
       fun bytesS n str =
-         if B.size str < n then
+         if BS.size str < n then
             raise SyntaxError
          else
-            (B.slice (str, 0, SOME n),
-             B.slice (str, n, NONE))
+            (BS.slice (str, 0, SOME n),
+             BS.slice (str, n, NONE))
 
-      fun all str = (str, B.null)
+      fun all str = (str, BS.null)
 
 
       fun bytes n str =
          let
             val (b, str') = bytesS n str
          in
-            (B.string b, str')
+            (BS.string b, str')
          end
 
       val varint =
@@ -106,7 +106,7 @@ structure Reader : READER =
          let
             val (x, str') = f str
          in
-            if B.isEmpty str' then
+            if BS.isEmpty str' then
                x
             else
                raise SyntaxError

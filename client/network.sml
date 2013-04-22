@@ -1,5 +1,5 @@
 
-structure Network :> NETWORK =
+structure Network (* :> NETWORK *) =
    struct
 
       type 'a sock = (INetSock.inet, 'a Socket.stream) Socket.sock
@@ -12,13 +12,6 @@ structure Network :> NETWORK =
       val bufsize = 1024
 
 
-      val print = Platform.print
-
-      fun handl f x =
-         f x
-         handle exn => (print ("uncaught exception " ^ exnMessage exn ^ "\n"); raise exn)
-
-      
       fun listen port =
          let
             val s : psock = INetSock.TCP.socket ()
@@ -42,20 +35,18 @@ structure Network :> NETWORK =
          let
             val saddr = INetSock.toAddr (addr, port)
             val s : asock = INetSock.TCP.socket ()
-            val mask = MLton.Signal.Mask.getBlocked ()
          in
-            print (if !MLton.Signal.restart then "true\n" else "false\n");
             print "Connecting to ";
             print (NetHostDB.toString addr);
             print "\n";
-            MLton.Signal.Mask.block MLton.Signal.Mask.all;
-            handl Socket.connect (s, saddr);
-            MLton.Signal.Mask.setBlocked mask;
+            Socket.connect (s, saddr);
             print "Connected\n";
             s
          end
 
-      val close = Platform.Socket_close
+      val close = Socket.close
+      
+      fun tryClose sock = (close sock handle OS.SysErr _ => ())
 
       fun sendVec (sock, v) =
          let
@@ -64,13 +55,23 @@ structure Network :> NETWORK =
             Bytesubstring.size v = n
          end
 
+(*
+      val log : (asock * Bytestring.string) list ref = ref []
+*)
+
       fun recvVec s =
          let
             val v = Socket.recvVec (s, bufsize)
          in
-            print "[rec]";
+            print ".";
+(*
+            log := (s, v) :: !log;
+*)
             v
          end
+
+
+
 
       fun dns str =
          NetHostDB.addrs (valOf (NetHostDB.getByName str))

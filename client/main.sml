@@ -2,54 +2,53 @@
 structure Main =
    struct
 
-      (* constants *)
-      val timeslice = Time.fromMilliseconds 20
-
       val log : Message.message list ref = ref []
 
-      fun loop evt =
-         (case CML.sync evt of
-             NONE =>
+      fun messageHdlr (peer, msg) =
+         log := msg :: !log;
+
+
+
+      val toContact : Network.addr list ref = ref []
+
+      fun timeoutHdlr () =
+         (case !toContact of
+             [] =>
+                Scheduler.setTimeout (Time.fromSeconds 5) Scheduler.shutdown
+           | addr :: rest =>
                 (
-                Platform.print "\n";
-                Platform.print (Int.toString (length (!log)));
-                RunCML.shutdown OS.Process.success
-                )
-           | SOME (_, msg) =>
-                (
-                log := msg :: !log;
-                loop evt
+                print "adding peer\n";
+                toContact := rest;
+                Scheduler.setTimeout (Time.fromMilliseconds 30) timeoutHdlr;
+                Commo.addPeer addr
+                   (fn peer =>
+                       (
+                       print "handshake successful\n";
+                       Commo.sendMessage peer Message.Getaddr;
+                       ()
+                       ))
                 ))
+
 
       fun main () =
          let
-            val () = MLton.Signal.restart := false
+            val () = Scheduler.cleanup ()
+            val () = Scheduler.setTimeout (Time.fromSeconds 10) timeoutHdlr
+            val () = Commo.initialize messageHdlr
+            val () = toContact := Network.dns "testnet-seed.bitcoin.petertodd.org"
+            
+            val () = Scheduler.start ()
 
-            val ch = Commo.initialize ()
+            val l =
+               List.concat (map (fn Message.Addr l => l | _ => []) (!log))
 
-            val l = Network.dns "testnet-seed.bitcoin.petertodd.org"
-
-            val () =
-               List.app
-               (fn addr =>
-                   (case Commo.addPeer addr of
-                       NONE => ()
-                     | SOME peer =>
-                          (
-                          Commo.sendMessage peer Message.Getaddr;
-                          ()
-                          )))
-               l
-
-            val timeout = CML.atTimeEvt (Time.+ (Time.now (), Time.fromSeconds 25))
-            val evt =
-               CML.choose [CML.wrap (timeout, (fn () => NONE)),
-                           CML.wrap (CML.recvEvt ch, SOME)]
+            val (m, n) =
+               foldl (fn (a, (m, n)) => (case #address (#2 a) of Message.V4 _ => (m+1, n) | Message.V6 _ => (m, n+1))) (0, 0) l
          in
-            loop evt
+            print (Int.toString m);
+            print " V4s and ";
+            print (Int.toString n);
+            print " V6s\n"
          end
-
-      fun go () =
-         RunCML.doit (main, SOME timeslice)
 
    end

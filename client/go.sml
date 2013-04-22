@@ -1,2 +1,2 @@
 
-Main.go () ;
+Main.main () ;

@@ -4,10 +4,9 @@ signature COMMO =
 
       type peer
 
-      val initialize : unit -> (peer * Message.message) CML.chan
-      val cleanup : unit -> unit
+      val initialize : (peer * Message.message -> unit) -> unit
 
-      val addPeer : NetHostDB.in_addr -> peer option
+      val addPeer : NetHostDB.in_addr -> (peer -> unit) -> unit
       val sendMessage : peer -> Message.message -> bool
 
    end

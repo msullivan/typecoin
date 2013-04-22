@@ -1,6 +1,5 @@
 
-        $(CMLIB)/cmlib-mlton.mlb
-        $(SML_LIB)/cml/cml.mlb
+        $(CMLIB)/cmlib.mlb
 
         platform.sig
         platform-mlton.sml
@@ -14,14 +13,16 @@
         writer.sml
         network.sig
         network.sml
+        scheduler.sig
+        scheduler.sml
+        sink.sig
+        sink.sml
         script.sig
         script.sml
         transaction.sig
         transaction.sml
         message.sig
         message.sml
-        protocol.sig
-        protocol.sml
         commo.sig
         commo.sml
         main.sml

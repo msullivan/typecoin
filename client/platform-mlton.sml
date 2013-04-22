@@ -2,10 +2,7 @@
 structure Platform :> PLATFORM =
    struct
 
-      val atomically = MLton.Thread.atomically
-
-      fun print str = atomically (fn () => TextIO.print str)
-      fun Socket_connect x = atomically (fn () => Socket.connect x)
-      fun Socket_close sock = atomically (fn () => Socket.close sock)
+      val Socket_sameDesc = Socket.sameDesc
+      fun adjustSelectTimeout x = x
 
    end
