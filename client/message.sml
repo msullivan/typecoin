@@ -1,5 +1,5 @@
 
-structure Message :> MESSAGE =
+structure Message (* :> MESSAGE *) =
    struct
 
       structure B = Bytestring
@@ -50,7 +50,9 @@ structure Message :> MESSAGE =
 
 
 
-      type ipaddr = word8 list  (* length 4 *)
+      datatype ipaddr = 
+         V4 of word8 list  (* length 4 *)
+       | V6 of word8 list  (* length 16 *)
 
       type netaddr =
          {
@@ -108,40 +110,60 @@ structure Message :> MESSAGE =
 
 
 
+      val ipV4Prefix =
+         valOf (B.fromStringHex "00000000000000000000ffff")
+         
+      fun writeIPaddr a =
+         (case a of
+             V4 l =>
+                if length l <> 4 then
+                   raise InvalidMessage
+                else
+                   W.bytes ipV4Prefix >>> W.list W.byte l
+           | V6 l =>
+                if length l <> 16 then
+                   raise InvalidMessage
+                else
+                   W.list W.byte l)
+
+      val readIPaddr =
+         R.or
+         (R.wrap V4
+             (R.require_ (fn prefix => BS.eq (BS.full ipV4Prefix, prefix)) (R.bytesS 12)
+              >>
+              R.count 4 R.byte))
+         (R.wrap V6 (R.count 16 R.byte))
+ 
+
+
       fun mkNetaddr (addr : ipaddr) =
          { services = theServices, address = addr, port = Chain.port }
 
-      val ipPrefix =
-         valOf (B.fromStringHex "00000000000000000000ffff")
-         
       fun writeNetAddr ({ services, address, port }:netaddr) =
-         if length address <> 4 then
-            raise InvalidMessage
-         else
-            (* services *)
-            W.word64L services
-            >>>
-            (* IPv6/4 *)
-            W.bytes ipPrefix >>> W.seql (map W.byte address)
-            >>>
-            W.word16B (Word.fromInt port)
-
-      fun writeTNetAddr (timestamp, addr) =
-         W.word32L (Word32.fromLargeInt timestamp)
+         (* services *)
+         W.word64L services
          >>>
-         writeNetAddr addr
+         (* IPv6/4 *)
+         writeIPaddr address
+         >>>
+         W.word16B (Word.fromInt port)
 
       val readNetAddr : netaddr R.reader =
          R.word64L
          >>= (fn services =>
-         R.require_ (fn prefix => BS.eq (BS.full ipPrefix, prefix)) (R.bytesS 12)
-         >>
-         R.count 4 R.byte
+         readIPaddr      
          >>= (fn address =>
          R.wrap Word.toInt R.word16B
          >>= (fn port =>
          R.return {services=services, address=address, port=port}
          )))
+
+
+
+      fun writeTNetAddr (timestamp, addr) =
+         W.word32L (Word32.fromLargeInt timestamp)
+         >>>
+         writeNetAddr addr
 
       val readTNetAddr =
          R.wrap Word32.toLargeInt R.word32L

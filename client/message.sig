@@ -8,7 +8,9 @@ signature MESSAGE =
 
       exception InvalidMessage
 
-      type ipaddr = word8 list  (* length 4 *)
+      datatype ipaddr = 
+         V4 of word8 list  (* length 4 *)
+       | V6 of word8 list  (* length 16 *)
 
       type netaddr =
          {

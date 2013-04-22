@@ -1,11 +1,18 @@
-        $(CMLIB)/cmlib.mlb
 
+        $(CMLIB)/cmlib-mlton.mlb
+        $(SML_LIB)/cml/cml.mlb
+
+        platform.sig
+        platform-mlton.sml
+        chain.sig
+        chain.sml
         base58.sig
         base58.sml
         reader.sig
         reader.sml
         writer.sig
         writer.sml
+        network.sig
         network.sml
         script.sig
         script.sml
@@ -13,3 +20,9 @@
         transaction.sml
         message.sig
         message.sml
+        protocol.sig
+        protocol.sml
+        commo.sig
+        commo.sml
+        main.sml
+        go.sml

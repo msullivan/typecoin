@@ -1,6 +1,6 @@
 Group
         source(-)
-        library($CMLIB/cmlib.cm)
+        library($CMLIB/cmlib-cml.cm)
 is
         base58.sig
         base58.sml
@@ -8,10 +8,15 @@ is
         block.sml
         chain.sig
         chain.sml
+        commo.sig
+        commo.sml
+        main.sml
         message.sig
         message.sml
         network.sig
         network.sml
+        platform.sig
+        platform-nj.sml
         protocol.sig
         protocol.sml
         reader.sig
@@ -23,4 +28,5 @@ is
         writer.sig
         writer.sml
 
-        $CMLIB/cmlib.cm
+        $cml/cml.cm
+        $CMLIB/cmlib-cml.cm

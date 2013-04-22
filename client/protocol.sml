@@ -1,5 +1,5 @@
 
-structure Protocol (* :> PROTOCOL *) =
+structure Protocol :> PROTOCOL =
    struct
    
       structure B = Bytestring
@@ -10,19 +10,15 @@ structure Protocol (* :> PROTOCOL *) =
       val serviceNetwork : Word64.word = 0w1
 
       (* precomputed values *)
-      val netAddrNull = M.mkNetaddr [0w0, 0w0, 0w0, 0w0]
+      val netAddrNull = M.mkNetaddr (M.V4 [0w0, 0w0, 0w0, 0w0])
       val magic = BS.full (ConvertWord.word32ToBytesL Chain.magic)
       val msgVerack = M.writeMessage M.Verack
 
 
-      type ssbuf = (int * BS.substring list) ref
-      type sstream = Network.asock * ssbuf
+      type buffer = (int * BS.substring list) ref
+      type bufsock = Network.asock * buffer
 
-      fun close (sock, _) = Network.close sock
-         
       exception NoMessage  (* I/O error, socket closed, or bad magic number *)
-
-      val lastMessage = ref B.null
 
       fun recvMessage (sock, bufr) =
          let
@@ -33,7 +29,6 @@ structure Protocol (* :> PROTOCOL *) =
                      val str = BS.concat (rev buf)
                   in
                      bufr := (n - sz, [BS.extract (str, sz, NONE)]);
-                     lastMessage := B.substring (str, 0, sz);
                      M.readMessage (BS.substring (str, 0, sz))
                   end
                else
@@ -82,10 +77,10 @@ structure Protocol (* :> PROTOCOL *) =
 
          
 
-      fun connect addr =
+      fun handshake addr =
          let
             val sock = Network.connect (addr, Chain.port)
-            val ss : sstream = (sock, ref (0, []))
+            val ss : bufsock = (sock, ref (0, []))
 
             val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
 
@@ -95,7 +90,7 @@ structure Protocol (* :> PROTOCOL *) =
                       (M.mkVersion
                           {
                           self = netAddrNull,
-                          remote = M.mkNetaddr (Network.explodeAddr addr),
+                          remote = M.mkNetaddr (M.V4 (Network.explodeAddr addr)),
                           nonce = nonce,
                           lastBlock = 0
                           }))
@@ -120,31 +115,5 @@ structure Protocol (* :> PROTOCOL *) =
               | _ => NONE)
          end
          handle NoMessage => NONE
-
-
-      fun getblocks (ss as (sock, _)) =
-         let
-            val msg = 
-               (M.writeMessage
-                   (M.Getblocks
-                       (M.mkGetblocks {
-                                      hashes = [Chain.genesis, Chain.genesis],
-                                      lastDesired = NONE
-                                      })))
-         in
-            Network.sendVec (sock, BS.full msg);
-            (case recvMessage ss of
-                M.Inv l => SOME l
-              | _ => NONE)
-         end
-         handle NoMessage => (close ss; NONE)
-              | OS.SysErr _ => (close ss; NONE)
-
-
-       fun getdata (ss as (sock, _)) x =
-          (
-          Network.sendVec (sock, BS.full (M.writeMessage (M.Getdata [x])));
-          recvMessage ss
-          )
 
    end

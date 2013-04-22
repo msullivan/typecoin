@@ -2,6 +2,7 @@
 val bth = Bytestring.toStringHex
 val bfh = Option.valOf o Bytestring.fromStringHex
 structure P = Protocol
+structure M = Message
 structure B = Bytestring
 structure BS = Bytesubstring
 

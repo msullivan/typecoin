@@ -2,14 +2,12 @@
 signature PROTOCOL =
    sig
 
-      type ssbuf
-      type sstream = Network.asock * ssbuf
+      type buffer
+      type bufsock = Network.asock * buffer
 
-      val recvMessage : sstream -> Message.message
-      val close : sstream -> unit
+      exception NoMessage
+      val recvMessage : bufsock -> Message.message
 
-      val connect : Network.addr -> sstream option
-      val getblocks : sstream -> Message.inv list option
-      val getdata : sstream -> Message.inv -> Message.message option
+      val handshake : Network.addr -> bufsock option
       
    end
