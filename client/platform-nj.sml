@@ -9,4 +9,7 @@ structure Platform :> PLATFORM =
       (* On Windows, NJ waits twice the indicated timeout. *)
       fun adjustSelectTimeout t = Time.fromMilliseconds (Time.toMilliseconds t div 2)
 
+      fun hashWord32 w =
+         MJHash.hashInc (ConvertWord.word32ToWord w) (ConvertWord.word32ToWord (Word32.>> (w, 0w1)))
+
    end

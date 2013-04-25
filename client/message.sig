@@ -8,18 +8,14 @@ signature MESSAGE =
 
       exception InvalidMessage
 
-      datatype ipaddr = 
-         V4 of word8 list  (* length 4 *)
-       | V6 of word8 list  (* length 16 *)
-
       type netaddr =
          {
          services : word64,
-         address : ipaddr,
+         address : Address.addr,
          port : int
          }
 
-      val mkNetaddr : ipaddr -> netaddr
+      val mkNetaddr : Address.addr -> netaddr
 
       type version =
          {

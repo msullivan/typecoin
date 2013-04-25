@@ -21,26 +21,28 @@ structure Scheduler :> SCHEDULER =
          (* Should we catch exceptions here? *)
 
 
-      val socks : S.sock_desc list ref = ref []
+      val rsocks : S.sock_desc list ref = ref []
+      val wsocks : S.sock_desc list ref = ref []
       val callbacks : (S.sock_desc * (unit -> unit)) list ref = ref []
       val timeout = ref Time.zeroTime
       val timecall : (unit -> unit) ref = ref (fn () => raise Shutdown)
 
       fun cleanup () =
          (
-         socks := [];
+         rsocks := [];
+         wsocks := [];
          callbacks := [];
          timeout := Time.zeroTime;
          timecall := (fn () => raise Shutdown)
          )
 
       fun start () =
-         (case S.select {rds=(!socks), wrs=[], exs=[], timeout=SOME (!timeout)} of
-             {rds=[], ...} =>
+         (case S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=SOME (!timeout)} of
+             {rds=[], wrs=[], ...} =>
                 (case dispatch (!timecall) of
                     SHUTDOWN => ()
                   | YIELD => start ())
-           | {rds=ready, ...} =>
+           | {rds=rready, wrs=wready, ...} =>
                 let
                    (* Note that if a socket is deleted after it becomes ready but before it is
                       served, it is still served.  Is this the behavior we want?
@@ -59,7 +61,7 @@ structure Scheduler :> SCHEDULER =
                                         SHUTDOWN => ()
                                       | YIELD => loop rest)))
                 in
-                   loop ready
+                   loop (wready @ rready)
                 end)
 
 
@@ -69,26 +71,32 @@ structure Scheduler :> SCHEDULER =
          timecall := f
          )
 
-      fun insertSock sock f =
+      fun insertRead sock f =
          let
             val sd = S.sockDesc sock
-
-            val callbacks' =
-               (sd, f) :: List.filter (fn (sd', _) => not (sameDesc (sd, sd'))) (!callbacks)
          in
-            callbacks := callbacks';
-            socks := map #1 callbacks'
+            callbacks := (sd, f) :: List.filter (fn (sd', _) => not (sameDesc (sd, sd'))) (!callbacks);
+            rsocks := sd :: List.filter (fn sd' => not (sameDesc (sd, sd'))) (!rsocks)
          end
 
-      fun deleteSock sock =
+      fun insertWrite sock f =
+         let
+            val sd = S.sockDesc sock
+         in
+            callbacks := (sd, f) :: List.filter (fn (sd', _) => not (sameDesc (sd, sd'))) (!callbacks);
+            wsocks := sd :: List.filter (fn sd' => not (sameDesc (sd, sd'))) (!wsocks)
+         end
+
+      fun delete sock =
          let
             val sd = S.sockDesc sock
 
             val callbacks' =
                List.filter (fn (sd', _) => not (sameDesc (sd, sd'))) (!callbacks)
          in
-            callbacks := callbacks';
-            socks := map #1 callbacks'
+            callbacks := List.filter (fn (sd', _) => not (sameDesc (sd, sd'))) (!callbacks);
+            rsocks := List.filter (fn sd' => not (sameDesc (sd, sd'))) (!rsocks);
+            wsocks := List.filter (fn sd' => not (sameDesc (sd, sd'))) (!wsocks)
          end
 
    end

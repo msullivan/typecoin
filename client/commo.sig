@@ -2,11 +2,11 @@
 signature COMMO =
    sig
 
-      type peer
+      type conn
 
-      val initialize : (peer * Message.message -> unit) -> unit
+      val openConn : Peer.peer -> (conn -> unit) -> unit
+      val sendMessage : conn -> Message.message -> bool
 
-      val addPeer : NetHostDB.in_addr -> (peer -> unit) -> unit
-      val sendMessage : peer -> Message.message -> bool
+      val initialize : (conn * Message.message -> unit) -> unit
 
    end

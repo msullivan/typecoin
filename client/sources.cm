@@ -2,6 +2,8 @@ Group
         source(-)
         library($CMLIB/cmlib.cm)
 is
+        address.sig
+        address.sml
         base58.sig
         base58.sml
         block.sig
@@ -15,8 +17,12 @@ is
         message.sml
         network.sig
         network.sml
+        peer.sig
+        peer.sml
         platform.sig
         platform-nj.sml
+        process.sig
+        process.sml
         reader.sig
         reader.sml
         script.sig
@@ -25,6 +31,8 @@ is
         scheduler.sml
         sink.sig
         sink.sml
+        timeout.sig
+        timeout.sml
         transaction.sig
         transaction.sml
         writer.sig

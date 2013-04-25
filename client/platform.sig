@@ -4,5 +4,6 @@ signature PLATFORM =
 
       val Socket_sameDesc : Socket.sock_desc * Socket.sock_desc -> bool
       val adjustSelectTimeout : Time.time -> Time.time
+      val hashWord32 : Word32.word -> Word.word
 
    end

@@ -37,7 +37,7 @@ structure Sink :> SINK =
                                       DONE =>
                                          (
                                          Network.tryClose sock;
-                                         Scheduler.deleteSock sock
+                                         Scheduler.delete sock
                                          )
                                     | MORE (req', f') =>
                                          loop (have-goal) [B.extract (str, goal, NONE)] req' f')
@@ -50,7 +50,7 @@ structure Sink :> SINK =
                                (* Socket has gone bad, shut it down. *)
                                (
                                Network.tryClose sock;
-                               Scheduler.deleteSock sock;
+                               Scheduler.delete sock;
                                Scheduler.yield ()
                                )
 
@@ -60,13 +60,13 @@ structure Sink :> SINK =
                             (* Socket is closed, exit. *)
                             (
                             Network.tryClose sock;
-                            Scheduler.deleteSock sock
+                            Scheduler.delete sock
                             )
                          else
                             loop (!haver + sz) (v :: !bufr) (!goalr) (!kr)
                       end
                 in
-                   Scheduler.insertSock sock service
+                   Scheduler.insertRead sock service
                 end)
 
    end

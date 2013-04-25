@@ -1,5 +1,5 @@
 
-structure Network (* :> NETWORK *) =
+structure Network :> NETWORK =
    struct
 
       type 'a sock = (INetSock.inet, 'a Socket.stream) Socket.sock
@@ -9,7 +9,7 @@ structure Network (* :> NETWORK *) =
 
 
       (* constants *)
-      val bufsize = 1024
+      val bufsize = 4096
 
 
       fun listen port =
@@ -40,8 +40,18 @@ structure Network (* :> NETWORK *) =
             print (NetHostDB.toString addr);
             print "\n";
             Socket.connect (s, saddr);
-            print "Connected\n";
             s
+         end
+
+      fun connectNB (addr, port) =
+         let
+            val saddr = INetSock.toAddr (addr, port)
+            val s : asock = INetSock.TCP.socket ()
+         in
+            print "Connecting to ";
+            print (NetHostDB.toString addr);
+            print "\n";
+            (s, Socket.connectNB (s, saddr))
          end
 
       val close = Socket.close
@@ -71,30 +81,7 @@ structure Network (* :> NETWORK *) =
          end
 
 
-
-
       fun dns str =
-         NetHostDB.addrs (valOf (NetHostDB.getByName str))
-
-      fun implodeAddr l =
-         let
-            val str = String.concatWith "." (map (Int.toString o Word8.toInt) l)
-         in
-            (case NetHostDB.getByName str of
-                NONE =>
-                   raise (Fail "bad IP address")
-              | SOME entry =>
-                   NetHostDB.addr entry)
-         end
-
-      fun explodeAddr addr =
-         let
-            val l = String.fields (fn ch => ch = #".") (NetHostDB.toString addr)
-         in
-            if length l = 4 then
-               map (Word8.fromInt o valOf o Int.fromString) l
-            else
-               raise (Fail "bad address string")
-         end
+         getOpt (Option.map NetHostDB.addrs (NetHostDB.getByName str), [])
 
    end

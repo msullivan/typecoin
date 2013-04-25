@@ -2,12 +2,12 @@
 structure B = Bytestring
 structure BS = Bytesubstring
 structure M = Message
-structure P = Protocol
 structure N = Network
 structure S = Scheduler
 
 val bth = Bytestring.toStringHex
 val bfh = Option.valOf o Bytestring.fromStringHex
+
 fun println str = (print str; print "\n")
 
 (*
@@ -32,6 +32,7 @@ fun go () =
 
 
 
+(*
 fun serve port sock =
    let
       fun action () =
@@ -87,3 +88,10 @@ fun go () =
    )
 
 val () = go ()
+*)
+
+
+val l1 = List.filter (fn (_, {port, ...}) => port = 18333) l
+val l2 = List.filter (fn (_, {address, ...}) => case address of M.V4 _ => true | _ => false) l1
+val l3 = Mergesort.sort (fn ((x, _), (y, _)) => IntInfOrdered.compare (y, x)) l2
+val l4 = map (fn (_, {address=M.V4 ad, ...}) => Network.implodeAddr ad) (List.take (l3, 100))
