@@ -158,6 +158,8 @@ structure Message (* :> MESSAGE *) =
          relay = true
          }
 
+      val serviceNetwork : Word64.word = 0w1
+
       fun writeVersion ({version, services, timestamp, self, remote, nonce, agent, lastBlock, relay}:version) =
          W.word32L (Word32.fromInt version)            (* version *)
          >>>

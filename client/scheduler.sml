@@ -27,21 +27,12 @@ structure Scheduler :> SCHEDULER =
       val timeout = ref Time.zeroTime
       val timecall : (unit -> unit) ref = ref (fn () => raise Shutdown)
 
-      fun cleanup () =
-         (
-         rsocks := [];
-         wsocks := [];
-         callbacks := [];
-         timeout := Time.zeroTime;
-         timecall := (fn () => raise Shutdown)
-         )
-
-      fun start () =
+      fun mainloop () =
          (case S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=SOME (!timeout)} of
              {rds=[], wrs=[], ...} =>
                 (case dispatch (!timecall) of
                     SHUTDOWN => ()
-                  | YIELD => start ())
+                  | YIELD => mainloop ())
            | {rds=rready, wrs=wready, ...} =>
                 let
                    (* Note that if a socket is deleted after it becomes ready but before it is
@@ -50,7 +41,7 @@ structure Scheduler :> SCHEDULER =
                    fun loop ready =
                       (case ready of
                           nil =>
-                             start ()
+                             mainloop ()
                         | sd :: rest =>
                              (* I wish we didn't need a linear search, but equality is the only test we have. *)
                              (case List.find (fn (sd', _) => sameDesc (sd, sd')) (!callbacks) of
@@ -63,6 +54,20 @@ structure Scheduler :> SCHEDULER =
                 in
                    loop (wready @ rready)
                 end)
+
+
+      fun start f =
+         (
+         rsocks := [];
+         wsocks := [];
+         callbacks := [];
+         timeout := Time.zeroTime;
+         timecall := (fn () => raise Shutdown);
+
+         (case dispatch f of
+             SHUTDOWN => ()
+           | YIELD => mainloop ())
+         )
 
 
       fun setTimeout t f =

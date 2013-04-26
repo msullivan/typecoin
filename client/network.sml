@@ -25,9 +25,7 @@ structure Network :> NETWORK =
          let
             val (s', a) = Socket.accept s
          in
-            print "Connection from ";
-            print (NetHostDB.toString (#1 (INetSock.fromAddr a)));
-            print "\n";
+            Log.log (fn () => "Connection from " ^ NetHostDB.toString (#1 (INetSock.fromAddr a)) ^ "\n");
             s'
          end
       
@@ -36,9 +34,7 @@ structure Network :> NETWORK =
             val saddr = INetSock.toAddr (addr, port)
             val s : asock = INetSock.TCP.socket ()
          in
-            print "Connecting to ";
-            print (NetHostDB.toString addr);
-            print "\n";
+            Log.log (fn () => "Connecting to " ^ NetHostDB.toString addr ^ "\n");
             Socket.connect (s, saddr);
             s
          end
@@ -48,9 +44,7 @@ structure Network :> NETWORK =
             val saddr = INetSock.toAddr (addr, port)
             val s : asock = INetSock.TCP.socket ()
          in
-            print "Connecting to ";
-            print (NetHostDB.toString addr);
-            print "\n";
+            Log.log (fn () => "Connecting to " ^ NetHostDB.toString addr ^ "\n");
             (s, Socket.connectNB (s, saddr))
          end
 
@@ -65,18 +59,11 @@ structure Network :> NETWORK =
             Bytesubstring.size v = n
          end
 
-(*
-      val log : (asock * Bytestring.string) list ref = ref []
-*)
-
       fun recvVec s =
          let
             val v = Socket.recvVec (s, bufsize)
          in
-            print ".";
-(*
-            log := (s, v) :: !log;
-*)
+            Log.log (fn () => ".");
             v
          end
 

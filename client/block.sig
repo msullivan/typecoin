@@ -14,6 +14,9 @@ signature BLOCK =
          transactions : Transaction.tx list
          }
 
+      exception InvalidBlock
+
+      val writeBlock : block -> Writer.writer
       val readBlock : block Reader.reader
 
    end

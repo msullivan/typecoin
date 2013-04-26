@@ -1,5 +1,5 @@
 
-structure Peer (* :> PEER *) =
+structure Peer :> PEER =
    struct
 
       (* Constants *)
@@ -7,15 +7,26 @@ structure Peer (* :> PEER *) =
       val maxPeers = 1000
       val tableSize = 2003  (* roughly twice maxPeers *)
 
-      val maintenanceInterval = Time.fromSeconds 60
-      val tooOld = Time.fromSeconds (12 * 60 * 60)         (* 12 hours *)
-      val tooOldToRelay = Time.fromSeconds (3 * 60 * 60)   (* 3 hours *)
-      val relayedPenalty = Time.fromSeconds (2 * 60 * 60)  (* 2 hours *)
+      (* Execute maintenance this often. *)
+      val maintenanceInterval = Time.fromSeconds (10 * 60)  (* 10 minutes *)
 
-      (* must be greater than tooOldToRelay, but less than tooOld *)
-      val dnsPenalty = Time.fromSeconds (4 * 60 * 60)      (* 4 hours *)
+      (* Throw out anything this old. *)
+      val tooOld = Time.fromSeconds (24 * 60 * 60)          (* 24 hours (Satoshi uses 14 days!) *)
 
-      val dnsInterval = Time.fromSeconds (15 * 60)         (* 15 minutes *)
+      (* Don't relay anything this old. *)
+      val tooOldToRelay = Time.fromSeconds (3 * 60 * 60)    (* 3 hours *)
+
+      (* Dock the timestamp of incoming relayed peers this much. *)
+      val relayedPenalty = Time.fromSeconds (2 * 60 * 60)   (* 2 hours *)
+
+      (* Give dns-acquired peers with a timestamp this long before now.
+         This must be greater than tooOldToRelay (so dns-acquired peers are
+         not relayed), but less than tooOld (so we can still use them).
+      *)
+      val dnsPenalty = Time.fromSeconds (4 * 60 * 60)       (* 4 hours *)
+
+      (* Use dns at most this often. *)
+      val dnsInterval = Time.fromSeconds (15 * 60)          (* 15 minutes *)
 
 
       structure H = HashTable (structure Key = Address.Hashable)
@@ -169,7 +180,7 @@ structure Peer (* :> PEER *) =
 
       fun maintenance () =
          let
-            val () = print "Peer maintenance\n"
+            val () = Log.log (fn () => "Peer maintenance\n")
             val (old, recent) = DT.partitiongt (!theOrder) (Time.- (Time.now (), tooOld))
          in
             theOrder := recent;

@@ -15,12 +15,10 @@ signature MESSAGE =
          port : int
          }
 
-      val mkNetaddr : Address.addr -> netaddr
-
       type version =
          {
          version : int,
-         services : word64,
+         services : word64,  (* bitfield *)
          timestamp : LargeInt.int,
          self : netaddr,
          remote : netaddr,
@@ -30,8 +28,7 @@ signature MESSAGE =
          relay : bool
          }
 
-      val mkVersion :
-         { self : netaddr, remote : netaddr, nonce : word64, lastBlock : int } -> version
+      val serviceNetwork : word64
 
       type tnetaddr = LargeInt.int * netaddr
 
@@ -42,9 +39,6 @@ signature MESSAGE =
          lastDesired : Bytestring.string option
          }
          
-      val mkGetblocks :
-         { hashes : Bytestring.string list, lastDesired : Bytestring.string option } -> getblocks
-
       datatype objtp = ERR | TX | BLOCK
 
       type inv = objtp * Bytestring.string
@@ -71,6 +65,18 @@ signature MESSAGE =
        | Unsupported of Bytestring.string
        | Illformed of Bytestring.string
 
+
+
+      val mkNetaddr : Address.addr -> netaddr
+
+      val mkVersion :
+         { self : netaddr, remote : netaddr, nonce : word64, lastBlock : int } -> version
+
+      val mkGetblocks :
+         { hashes : Bytestring.string list, lastDesired : Bytestring.string option } -> getblocks
+
+
+
       val writeMessage : message -> Bytestring.string
 
       (* precondition: magic number and message size are correct *)
@@ -89,4 +95,5 @@ signature MESSAGE =
                          comment : string,
                          statusBar : string,
                          reserved : Bytestring.string } Reader.reader
+
    end

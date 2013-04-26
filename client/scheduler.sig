@@ -10,7 +10,7 @@ signature SCHEDULER =
       val insertWrite : 'mode Network.sock -> (unit -> unit) -> unit
       val delete : 'mode Network.sock -> unit
 
-      val start : unit -> unit
-      val cleanup : unit -> unit
+      (* Starts the scheduler, passing control to the given continuation. *)
+      val start : (unit -> unit) -> unit
 
    end

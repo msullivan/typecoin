@@ -28,6 +28,28 @@ structure Block :> BLOCK =
          transactions : Transaction.tx list
          }
 
+      exception InvalidBlock
+
+      fun writeBlock ({version, previous, root, timestamp, difficulty, nonce, count, transactions}:block) =
+         if B.size previous <> 32 orelse B.size root <> 32 orelse length transactions <> count then
+            raise InvalidBlock
+         else
+            W.word32L (Word32.fromInt version)
+            >>>
+            W.bytes (B.rev previous)
+            >>>
+            W.bytes (B.rev root)
+            >>>
+            W.word32L timestamp
+            >>>
+            W.word32L difficulty
+            >>>
+            W.word32L nonce
+            >>>
+            W.varint count
+            >>>
+            W.list Transaction.writeTx transactions
+
       val readBlock =
          R.wrap Word32.toInt R.word32L
          >>= (fn version =>

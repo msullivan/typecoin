@@ -3,8 +3,8 @@ structure Process :> PROCESS =
    struct
 
       (* Constants *)
+
       val pollInterval = Time.fromSeconds 30  (* Contact a new peer this often.  XX make higher *)
-      val serviceNetwork : Word64.word = 0w1
 
 
       structure M = Message
@@ -30,7 +30,7 @@ structure Process :> PROCESS =
                                 orelse
                                 port <> Chain.port
                                 orelse
-                                Word64.andb (services, serviceNetwork) = 0w0
+                                Word64.andb (services, Message.serviceNetwork) = 0w0
                              then
                                 (* Ignore peers with null addresses, or at a non-standard port,
                                    or that don't offer the network service. *)
@@ -60,11 +60,11 @@ structure Process :> PROCESS =
              NONE => ()
            | SOME peer =>
                 (
-                print "Adding peer\n";
+                Log.log (fn () => "Adding peer\n");
                 Commo.openConn peer
                    (fn conn =>
                        (
-                       print "Handshake successful\n";
+                       Log.log (fn () => "Handshake successful\n");
 
                        if Peer.wantPeers () > 0 then
                           (Commo.sendMessage conn Message.Getaddr; ())

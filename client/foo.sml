@@ -91,7 +91,35 @@ val () = go ()
 *)
 
 
+(*
 val l1 = List.filter (fn (_, {port, ...}) => port = 18333) l
 val l2 = List.filter (fn (_, {address, ...}) => case address of M.V4 _ => true | _ => false) l1
 val l3 = Mergesort.sort (fn ((x, _), (y, _)) => IntInfOrdered.compare (y, x)) l2
 val l4 = map (fn (_, {address=M.V4 ad, ...}) => Network.implodeAddr ad) (List.take (l3, 100))
+*)
+
+val block : Block.block =
+   {
+   version = 1,
+   previous = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   root = bfh "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+   timestamp = 0w1296688602,
+   difficulty = 0wx1D00FFFF,
+   nonce = 0wx18AEA41A,
+   count = 1,
+   transactions =
+      [{
+       inputs = [{
+                 from = (bfh "0000000000000000000000000000000000000000000000000000000000000000", 0wxffffffff),
+                 script = bfh "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73",
+                 sequence = 0wxffffffff
+                 }],
+       outputs = [{
+                  amount = 5000000000,
+                  script = bfh "4104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac"
+                  }],
+       lockTime = 0w0
+       }]
+   }
+
+val bl = Writer.write (Block.writeBlock block)

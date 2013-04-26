@@ -1,0 +1,79 @@
+
+Main components
+
+Scheduler (scheduler.sml)
+Main loop for dispatching events.  Global state: started in Main.
+
+Timeout (timeout.sml)
+Timeout manager: activates timeout functions at specified times.
+Global state: initialized in Main.
+
+Sink (sink.sml)
+Buffers incoming transmissions and dispatches them to the appropriate
+handler.  Per-socket state.
+
+Peer (peer.sml)
+Peer manager: manages known peers.  Global state: initialized in Main.
+
+Commo (commo.sml)
+Communication manager: Maintains connections to active peers.  Global
+state: initialized in Process.
+
+Process (process.sml)
+Processes incoming messages and periodically polls the network.
+Global state: initialized in Main.
+
+Main (main.sml)
+Starts everything up.
+
+Go (go.sml)
+For standalone execution, calls Main.main.
+
+
+
+
+Bitcoin auxiliaries
+
+Base58 (base58.sml)
+Bitcoin's idiosyncratic base-58 encoding.
+
+Chain (chain.sml)
+Chain-specific (Bitcoin vs. Testnet) definitions.
+
+Block
+Datatype of Bitcoin blocks, and deserialization functions.
+
+Message
+Datatype of Bitcoin protocol messages, and serialization/deserialization
+functions.
+
+Script
+Datatype of Bitcoin scripts, and serialization/deserialization
+functions.
+
+Transaction
+Datatype of Bitcoin transactions, and serialization/deserialization
+functions.
+
+
+
+
+Libraries
+
+Address (address.sml)
+An abstraction of internet addresses.
+
+Log (log.sml)
+Logging operations.
+
+Network (network.sml)
+Network facilities, wraps the Basis's socket facilities.
+
+Platform
+Platform-specific (SML/NJ vs. MLton) definitions.
+
+Reader (reader.sml)
+Deserialization combinators.
+
+Writer (writer.sml)
+Serialization combinators.
