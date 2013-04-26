@@ -33,8 +33,6 @@ is
         scheduler.sml
         sink.sig
         sink.sml
-        timeout.sig
-        timeout.sml
         transaction.sig
         transaction.sml
         writer.sig

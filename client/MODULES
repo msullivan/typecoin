@@ -4,10 +4,6 @@ Main components
 Scheduler (scheduler.sml)
 Main loop for dispatching events.  Global state: started in Main.
 
-Timeout (timeout.sml)
-Timeout manager: activates timeout functions at specified times.
-Global state: initialized in Main.
-
 Sink (sink.sml)
 Buffers incoming transmissions and dispatches them to the appropriate
 handler.  Per-socket state.

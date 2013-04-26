@@ -213,7 +213,7 @@ structure Peer :> PEER =
          lastDns := Time.zeroTime;
 
          maintenance ();
-         Timeout.repeating maintenanceInterval maintenance;
+         Scheduler.repeating maintenanceInterval maintenance;
          ()
          )
 

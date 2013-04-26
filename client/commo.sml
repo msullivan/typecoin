@@ -110,7 +110,7 @@ structure Commo :> COMMO =
             else
                let
                   val tid =
-                     Timeout.once connectTimeout
+                     Scheduler.once connectTimeout
                      (fn () =>
                          (
                          Log.log (fn () => "Failed to connect to " ^ Address.toString addr ^ "\n");
@@ -122,7 +122,7 @@ structure Commo :> COMMO =
                   Scheduler.insertWrite sock
                   (fn () =>
                       (
-                      Timeout.cancel tid;
+                      Scheduler.cancel tid;
                       Scheduler.delete sock;
                       handshake ()
                       ))
@@ -235,7 +235,7 @@ structure Commo :> COMMO =
          (
          theCallback := callback;
          allConnections := [];
-         Timeout.repeating reapInterval reapIdleConnections;
+         Scheduler.repeating reapInterval reapIdleConnections;
          ()
          )
 

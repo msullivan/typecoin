@@ -17,8 +17,6 @@
         network.sml
         scheduler.sig
         scheduler.sml
-        timeout.sig
-        timeout.sml
         sink.sig
         sink.sml
         script.sig

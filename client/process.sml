@@ -85,7 +85,7 @@ structure Process :> PROCESS =
          pollNewPeer ();
          pollNewPeer ();
          pollNewPeer ();
-         Timeout.repeating pollInterval pollNewPeer;
+         Scheduler.repeating pollInterval pollNewPeer;
          ()
          )
 
