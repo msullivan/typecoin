@@ -98,28 +98,133 @@ val l3 = Mergesort.sort (fn ((x, _), (y, _)) => IntInfOrdered.compare (y, x)) l2
 val l4 = map (fn (_, {address=M.V4 ad, ...}) => Network.implodeAddr ad) (List.take (l3, 100))
 *)
 
+(*
 val block : Block.block =
    {
-   version = 1,
-   previous = bfh "0000000000000000000000000000000000000000000000000000000000000000",
-   root = bfh "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
-   timestamp = 0w1296688602,
-   difficulty = 0wx1D00FFFF,
-   nonce = 0wx18AEA41A,
+   version = 2,
+   previous = bfh "82c7aad66f518fc33bc80e16d2b7c8e77f25a94bbcdd76e9827e950300000000",
+   root = bfh "7235f506846862a118a8dd55fd3791c4c3e2149a1601b74ac1489624271bded6",
+   timestamp = 0w1367090911,
+   difficulty = 0w470159668,
+   nonce = 0w1018098699,
    count = 1,
    transactions =
       [{
        inputs = [{
                  from = (bfh "0000000000000000000000000000000000000000000000000000000000000000", 0wxffffffff),
-                 script = bfh "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73",
+                 script = bfh "03200b010110062f503253482f",
                  sequence = 0wxffffffff
                  }],
        outputs = [{
                   amount = 5000000000,
-                  script = bfh "4104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac"
+                  script = bfh "210362fe4a63daeeaeb5645454099e253b12e6990cbbdaf11f1b935266a51cf33b96ac"
                   }],
        lockTime = 0w0
        }]
    }
 
+val blh = Writer.write (Block.writeBlockHeader block)
 val bl = Writer.write (Block.writeBlock block)
+val t = hd (#transactions block)
+val str = Writer.write (Transaction.writeTx t)
+*)
+
+val block1 : Block.block =
+   {
+   version = 1,
+   previous = Chain.genesisHash,
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w0,
+   count = 0,
+   transactions = []
+}
+
+val hash1 = dhash (Writer.write (Block.writeBlockHeader block1))
+
+val block2 : Block.block =
+   {
+   version = 1,
+   previous = hash1,
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w0,
+   count = 0,
+   transactions = []
+}
+
+val hash2 = dhash (Writer.write (Block.writeBlockHeader block2))
+
+val block3 : Block.block =
+   {
+   version = 1,
+   previous = hash2,
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w0,
+   count = 0,
+   transactions = []
+}
+
+val hash3 = dhash (Writer.write (Block.writeBlockHeader block3))
+
+val block1' : Block.block =
+   {
+   version = 1,
+   previous = Chain.genesisHash,
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w1,
+   count = 0,
+   transactions = []
+}
+
+val hash1' = dhash (Writer.write (Block.writeBlockHeader block1'))
+
+val block2' : Block.block =
+   {
+   version = 1,
+   previous = hash1',
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w1,
+   count = 0,
+   transactions = []
+}
+
+val hash2' = dhash (Writer.write (Block.writeBlockHeader block2'))
+
+val block3' : Block.block =
+   {
+   version = 1,
+   previous = hash2',
+   root = bfh "0000000000000000000000000000000000000000000000000000000000000000",
+   timestamp = 0w0,
+   difficulty = 0w0,
+   nonce = 0w1,
+   count = 0,
+   transactions = []
+}
+
+val hash3' = dhash (Writer.write (Block.writeBlockHeader block3'))
+
+val bl1 = Writer.write (Block.writeBlock block1)
+val bl2 = Writer.write (Block.writeBlock block2)
+val bl3 = Writer.write (Block.writeBlock block3)
+val bl1' = Writer.write (Block.writeBlock block1')
+val bl2' = Writer.write (Block.writeBlock block2')
+val bl3' = Writer.write (Block.writeBlock block3')
+;
+
+BC.initialize ();
+BC.insertBlock hash2 bl2;
+BC.insertBlock hash1 bl1;
+BC.insertBlock hash1' bl1';
+BC.insertBlock hash2 bl2;
+BC.insertBlock hash2' bl2';
+BC.insertBlock hash3' bl3';

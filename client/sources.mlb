@@ -31,6 +31,8 @@
         peer.sml
         commo.sig
         commo.sml
+        blockchain.sig
+        blockchain.sml
         process.sig
         process.sml
         main.sml

@@ -1,10 +1,13 @@
 
 val bth = Bytestring.toStringHex
 val bfh = Option.valOf o Bytestring.fromStringHex
+val dhash = SHA256.hashBytes o SHA256.hashBytes
 structure M = Message
 structure N = Network
 structure B = Bytestring
 structure BS = Bytesubstring
+structure BC = Blockchain
+
 
 (*
 val sha = SHA256.hashBytes

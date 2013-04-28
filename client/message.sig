@@ -41,7 +41,7 @@ signature MESSAGE =
          
       datatype objtp = ERR | TX | BLOCK
 
-      type inv = objtp * Bytestring.string
+      type inv = objtp * Bytestring.string  (* length = 32 *)
 
       type rawalert = Bytestring.string * Bytestring.string
 

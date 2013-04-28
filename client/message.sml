@@ -1,5 +1,5 @@
 
-structure Message (* :> MESSAGE *) =
+structure Message :> MESSAGE =
    struct
 
       structure B = Bytestring
@@ -15,11 +15,6 @@ structure Message (* :> MESSAGE *) =
       fun >> (r, r') = R.seq r r'
       fun >>> (w, w') = W.seq w w'
       infixr 3 >>= >> >>>
-
-      (* for debugging *)
-      fun dot s = (print ".\n"; ((), s))
-      val sv = ref (BS.full B.null)
-      fun save s = (sv := s; ((), s))
 
 
 
@@ -226,20 +221,20 @@ structure Message (* :> MESSAGE *) =
       fun writeGetblocks { version, hashes, lastDesired } =
          W.word32L (Word32.fromInt version)        (* version *)
          >>>
-         W.varlist (W.bytesFixed 32 o B.rev) hashes
+         W.varlist (W.bytesFixed 32) hashes
          >>>
          (case lastDesired of
              NONE =>
                 W.bytes nullhash
            | SOME hash =>
-                W.bytesFixed 32 (B.rev hash))
+                W.bytesFixed 32 hash)
 
       val readGetblocks =
          R.wrap Word32.toInt R.word32L
          >>= (fn version =>
-         R.varlist (R.wrap B.rev (R.bytes 32))
+         R.varlist (R.bytes 32)
          >>= (fn hashes =>
-         R.wrap (fn str => if B.eq (str, nullhash) then NONE else SOME (B.rev str)) (R.bytes 32)
+         R.wrap (fn str => if B.eq (str, nullhash) then NONE else SOME str) (R.bytes 32)
          >>= (fn lastDesired =>
          R.return (Getblocks { version=version, hashes=hashes, lastDesired=lastDesired })
          )))
@@ -255,7 +250,7 @@ structure Message (* :> MESSAGE *) =
       fun writeInv1 (objtp, hash) =
          writeObjtp objtp
          >>>
-         W.bytes (B.rev hash)
+         W.bytes hash
 
       fun writeInv l = W.varlist writeInv1 l
 
@@ -267,7 +262,7 @@ structure Message (* :> MESSAGE *) =
          >>= (fn objtp =>
          R.bytes 32
          >>= (fn hash =>
-         R.return (objtp, B.rev hash)
+         R.return (objtp, hash)
          ))
 
       fun readInv f = R.wrap f (R.varlist readInv1)

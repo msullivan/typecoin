@@ -239,4 +239,7 @@ structure Commo :> COMMO =
          ()
          )
 
+
+      fun lastBlock ({lastBlock, ...}:conn) = lastBlock
+
    end

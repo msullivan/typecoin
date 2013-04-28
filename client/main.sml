@@ -15,6 +15,8 @@ structure Main =
 
       fun main () =
          (
+         Blockchain.initialize ();
+
          (* start the scheduler and immediately call main' *)
          Scheduler.start main';
          (* done, cleaning up *)

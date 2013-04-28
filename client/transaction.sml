@@ -63,7 +63,7 @@ structure Transaction :> TRANSACTION =
          if B.size txid <> 32 then
             raise InvalidTransaction
          else
-            W.bytes (B.rev txid)
+            W.bytes txid
             >>>
             W.word32L n
             >>>

@@ -8,6 +8,8 @@ is
         base58.sml
         block.sig
         block.sml
+        blockchain.sig
+        blockchain.sml
         chain.sig
         chain.sml
         commo.sig

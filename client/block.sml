@@ -30,21 +30,27 @@ structure Block :> BLOCK =
 
       exception InvalidBlock
 
-      fun writeBlock ({version, previous, root, timestamp, difficulty, nonce, count, transactions}:block) =
-         if B.size previous <> 32 orelse B.size root <> 32 orelse length transactions <> count then
+      fun writeBlockHeader ({version, previous, root, timestamp, difficulty, nonce, ...}:block) =
+         if B.size previous <> 32 orelse B.size root <> 32 then
             raise InvalidBlock
          else
             W.word32L (Word32.fromInt version)
             >>>
-            W.bytes (B.rev previous)
+            W.bytes previous
             >>>
-            W.bytes (B.rev root)
+            W.bytes root
             >>>
             W.word32L timestamp
             >>>
             W.word32L difficulty
             >>>
             W.word32L nonce
+
+      fun writeBlock (block as {version, previous, root, timestamp, difficulty, nonce, count, transactions}:block) =
+         if length transactions <> count then
+            raise InvalidBlock
+         else
+            writeBlockHeader block
             >>>
             W.varint count
             >>>
@@ -53,9 +59,9 @@ structure Block :> BLOCK =
       val readBlock =
          R.wrap Word32.toInt R.word32L
          >>= (fn version =>
-         R.wrap B.rev (R.bytes 32)
+         R.bytes 32
          >>= (fn previous =>
-         R.wrap B.rev (R.bytes 32)
+         R.bytes 32
          >>= (fn root =>
          R.word32L
          >>= (fn timestamp =>
