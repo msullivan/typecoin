@@ -137,7 +137,7 @@ structure Commo :> COMMO =
          peer : Peer.peer,
          lastHeard : Time.time ref,  (* zero indicates forcibly closed *)
          lastBlock : int,
-         tag : unit ref              (* for quick equality test *)
+         opn : bool ref              (* still open? also used for quick equality test *)
          }
 
       val theCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
@@ -151,7 +151,7 @@ structure Commo :> COMMO =
             val cutoff = Time.- (Time.now (), idleTimeout)
          in
             allConnections
-               := foldl (fn (conn as {sock, peer, lastHeard, ...}:conn, l) =>
+               := foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, l) =>
                             if Time.>= (!lastHeard, cutoff) then
                                conn :: l
                             else if !lastHeard = Time.zeroTime then
@@ -165,6 +165,7 @@ structure Commo :> COMMO =
                                Peer.enqueue peer;
                                Network.tryClose sock;
                                Scheduler.delete sock;
+                               opn := false;
                                l
                                )) [] (!allConnections)
          end
@@ -192,7 +193,7 @@ structure Commo :> COMMO =
          (fn (sock, {lastBlock, ...}:M.version) =>
              let
                 val lastHeard = ref (Time.now ())
-                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, lastBlock=lastBlock, tag=ref () }
+                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, lastBlock=lastBlock, opn=ref true }
 
                 fun loop () =
                    recvMessage
@@ -215,21 +216,26 @@ structure Commo :> COMMO =
              end)
 
 
-      fun sendMessage ({sock, ...}:conn) msg =
-         let
-            val success =
-               Network.sendVec (sock, BS.full (Message.writeMessage msg))
-         in
-            if success then
-               ()
-            else
-               (
-               Network.tryClose sock;
-               Scheduler.delete sock
-               );
-            success
-         end
+      fun sendMessage' ({sock, opn, ...}:conn) msg =
+         if !opn then
+            let
+               val success =
+                  Network.sendVec (sock, BS.full (Message.writeMessage msg))
+            in
+               if success then
+                  ()
+               else
+                  (
+                  Network.tryClose sock;
+                  Scheduler.delete sock;
+                  opn := false
+                  );
+               success
+            end
+         else
+            false
 
+      fun sendMessage conn msg = (sendMessage' conn msg; ())
 
 
       fun initialize callback =
@@ -243,6 +249,6 @@ structure Commo :> COMMO =
 
       fun lastBlock ({lastBlock, ...}:conn) = lastBlock
 
-      fun eq ({tag, ...}:conn, {tag=tag', ...}:conn) = tag = tag'
+      fun eq ({opn=r, ...}:conn, {opn=r', ...}:conn) = r = r'
 
    end

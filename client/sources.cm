@@ -14,7 +14,6 @@ is
         chain.sml
         commo.sig
         commo.sml
-        constants.sml
         log.sig
         log.sml
         main.sml

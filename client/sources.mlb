@@ -23,6 +23,8 @@
         script.sml
         transaction.sig
         transaction.sml
+        block.sig
+        block.sml
         address.sig
         address.sml
         message.sig
