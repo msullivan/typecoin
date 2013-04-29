@@ -9,7 +9,7 @@ structure Commo :> COMMO =
 
       (* constants *)
 
-      (* Update a peer's timeout at most this often. *)
+      (* Update a peer's timestamp at most this often. *)
       val peerUpdateThreshold = Time.fromSeconds (5 * 60)  (* 5 minutes *)
 
       (* When this long for a connection to go through. *)
@@ -59,7 +59,7 @@ structure Commo :> COMMO =
 
             fun handshake () =
                let
-                  val () = Log.log (fn () => "Connected to " ^ Address.toString addr ^ "\n")
+                  val () = Log.long (fn () => "Connected to " ^ Address.toString addr)
                
                   val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
       
@@ -113,7 +113,7 @@ structure Commo :> COMMO =
                      Scheduler.once connectTimeout
                      (fn () =>
                          (
-                         Log.log (fn () => "Failed to connect to " ^ Address.toString addr ^ "\n");
+                         Log.long (fn () => "Failed to connect to " ^ Address.toString addr);
                          Network.tryClose sock;
                          Scheduler.delete sock;
                          fk ()
@@ -136,38 +136,49 @@ structure Commo :> COMMO =
          sock : Network.asock,
          peer : Peer.peer,
          lastHeard : Time.time ref,  (* zero indicates forcibly closed *)
+         opn : bool ref,             (* still open?  also used for quick equality test *)
+
+         (* Data held for other modules.  If there's too many of these, we should functorize over them. *)
          lastBlock : int,
-         opn : bool ref              (* still open? also used for quick equality test *)
+         orphanage : Blockchain.orphanage
          }
 
       val theCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
       val allConnections : conn list ref = ref []
 
 
+      fun closeConn ({sock, peer, opn, ...}:conn) withPrejudice =
+         if !opn then
+            (
+            Network.tryClose sock;
+            Scheduler.delete sock;
+            opn := false;
+            if withPrejudice then
+               (* Closed with prejudice, don't re-enqueue it. *)
+               ()
+            else
+               Peer.enqueue peer
+            )
+         else
+            (* already closed *)
+            ()
+
 
       fun reapIdleConnections () =
          let
-            val () = Log.log (fn () => "Reaping\n")
+            val () = Log.long (fn () => "Reaping")
             val cutoff = Time.- (Time.now (), idleTimeout)
          in
             allConnections
-               := foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, l) =>
-                            if Time.>= (!lastHeard, cutoff) then
-                               conn :: l
-                            else if !lastHeard = Time.zeroTime then
-                               (* Connection has been forcibly closed.  The socket has already been
-                                  closed and the peer deleted.  Don't want to enqueue it.
-                               *)
-                               l
-                            else
-                               (
-                               Log.log (fn () => "Disconnecting " ^ Address.toString (Peer.address peer) ^ "\n");
-                               Peer.enqueue peer;
-                               Network.tryClose sock;
-                               Scheduler.delete sock;
-                               opn := false;
-                               l
-                               )) [] (!allConnections)
+               := 
+               foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, l) =>
+                         if Time.>= (!lastHeard, cutoff) then
+                            conn :: l
+                         else 
+                            (
+                            Log.long (fn () => "Disconnecting " ^ Address.toString (Peer.address peer));
+                            closeConn conn false;
+                            l)) [] (!allConnections)
          end
 
 
@@ -193,14 +204,15 @@ structure Commo :> COMMO =
          (fn (sock, {lastBlock, ...}:M.version) =>
              let
                 val lastHeard = ref (Time.now ())
-                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, lastBlock=lastBlock, opn=ref true }
+                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, opn=ref true,
+                             lastBlock=lastBlock, orphanage=Blockchain.newOrphanage () }
 
                 fun loop () =
                    recvMessage
                    (fn () =>
                        (
                        Peer.delete peer;
-                       lastHeard := Time.zeroTime;
+                       closeConn conn true;
                        Sink.DONE
                        ))
                    (fn msg =>
@@ -216,7 +228,7 @@ structure Commo :> COMMO =
              end)
 
 
-      fun sendMessage' ({sock, opn, ...}:conn) msg =
+      fun sendMessage' (conn as {sock, opn, ...}:conn) msg =
          if !opn then
             let
                val success =
@@ -225,17 +237,15 @@ structure Commo :> COMMO =
                if success then
                   ()
                else
-                  (
-                  Network.tryClose sock;
-                  Scheduler.delete sock;
-                  opn := false
-                  );
+                  closeConn conn true;
+
                success
             end
          else
             false
 
       fun sendMessage conn msg = (sendMessage' conn msg; ())
+
 
 
       fun initialize callback =
@@ -247,8 +257,10 @@ structure Commo :> COMMO =
          )
 
 
+      fun eq ({opn=r, ...}:conn, {opn=r', ...}:conn) = r = r'
+
       fun lastBlock ({lastBlock, ...}:conn) = lastBlock
 
-      fun eq ({opn=r, ...}:conn, {opn=r', ...}:conn) = r = r'
+      fun orphanage ({orphanage, ...}:conn) = orphanage
 
    end

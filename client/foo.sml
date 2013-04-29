@@ -129,6 +129,7 @@ val t = hd (#transactions block)
 val str = Writer.write (Transaction.writeTx t)
 *)
 
+(*
 val block1 : Block.block =
    {
    version = 1,
@@ -228,3 +229,20 @@ BC.insertBlock hash1' bl1';
 BC.insertBlock hash2 bl2;
 BC.insertBlock hash2' bl2';
 BC.insertBlock hash3' bl3';
+*)
+
+
+fun removedups' eq x l =
+   (case l of
+       [] => [x]
+     | h :: t =>
+          if eq (x, h) then
+             removedups' eq x t
+          else
+             x :: removedups' eq h t)
+
+fun removedups eq l =
+   (case l of
+       [] => []
+     | h :: t =>
+          removedups' eq h t)

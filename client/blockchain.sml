@@ -5,8 +5,8 @@ structure Blockchain :> BLOCKCHAIN =
       (* Constants *)
       val tableSize = 0x100000
       val primaryForkSize = 0x080000
-      val orphanTableSize = 61
-      val maxOrphans = 30         (* Only keep this many orphans around. *)
+
+      val orphanTableSize = 7
 
 
       structure A = Array
@@ -30,10 +30,8 @@ structure Blockchain :> BLOCKCHAIN =
       val dummyOutstream = BinIO.mkOutstream (BinIO.StreamIO.mkOutstream (RAIO.toWriter RAIO.dummyOut, IO.NO_BUF))
 
       val theOutstream = ref dummyOutstream
+      val theOutPos : Position.int ref = ref 0
       val theRainstream = ref RAIO.dummyIn
-
-      fun getOutPos outs = BinIO.StreamIO.filePosOut (BinIO.StreamIO.getPosOut (BinIO.getOutstream outs))
-      fun getInPos ins = BinIO.StreamIO.filePosIn (BinIO.getInstream ins)
 
       fun rainput pos n =
          let
@@ -48,13 +46,15 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun outputBlock hash blstr =
          let
-            val pos = getOutPos (!theOutstream)
+            val pos = !theOutPos
             val outs = !theOutstream
+            val sz = B.size blstr
          in
             BinIO.output (outs, hash);
-            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size blstr)));
+            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt sz));
             BinIO.output (outs, blstr);
             BinIO.flushOut outs;
+            theOutPos := pos + 36 + sz;
             pos
          end
 
@@ -96,6 +96,8 @@ structure Blockchain :> BLOCKCHAIN =
       structure T = HashTable (structure Key = HashHashable)
 
 
+      type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
+
       datatype lineage =
          (* block is on the primary fork: block number *)
          Nil of int
@@ -108,11 +110,9 @@ structure Blockchain :> BLOCKCHAIN =
 
       val lastblock = ref 0
       val lasthash = ref Chain.genesisHash
-      val theTable : lineage T.table ref = ref (T.table 1)
+      val theTable : lineage T.table = T.table tableSize
       val thePrimaryFork : pos A.array = A.array (primaryForkSize, 0)
 
-      val theOrphanTable : B.string T.table = T.table orphanTableSize
-      val theOrphanPredTable : hash T.table = T.table orphanTableSize
 
 
       (* Takes a hash and lineage of a block to put on the primary fork, displacing
@@ -132,38 +132,36 @@ structure Blockchain :> BLOCKCHAIN =
                    val oldlin = Cons (oldpos, num, oldpred, oldpredlin)
                 in
                    Array.update (thePrimaryFork, num, pos);
-                   T.insert (!theTable) hash (Nil num);
-                   T.insert (!theTable) oldhash oldlin;
+                   T.insert theTable hash (Nil num);
+                   T.insert theTable oldhash oldlin;
                    (oldhash, oldlin)
                 end)
 
 
-      fun insertBlockMain hash blstr poso =
-         if T.member (!theTable) hash then
-            false
-         else if T.member theOrphanTable hash then
-            true
+      datatype result = ORPHAN | NOEXTEND | EXTEND
+
+      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr poso =
+         if T.member theTable hash then
+            NOEXTEND
+         else if T.member orphanTable hash then
+            ORPHAN
          else
             let
                val prev = B.substring (blstr, 4, 32)
             in
-               (case T.find (!theTable) prev of
+               (case T.find theTable prev of
                    NONE =>
                       (* Previous block is not in the table. This is an orphan block. *)
-                      (
-                      if T.size theOrphanTable >= maxOrphans then
-                         (* Don't want to be burdened with tons of orphans, so purge the table. *)
-                         (
-                         T.reset theOrphanTable orphanTableSize;
-                         T.reset theOrphanPredTable orphanTableSize
-                         )
-                      else
-                         ();
-
-                      T.insert theOrphanTable hash blstr;
-                      T.insert theOrphanPredTable prev hash;
-                      true
-                      )
+                      (case poso of
+                          SOME _ =>
+                             (* Shouldn't see orphans when loading, but if we do, ignore them. *)
+                             ORPHAN
+                        | NONE =>
+                             (
+                             T.insert orphanTable hash blstr;
+                             T.insert orphanPredTable prev hash;
+                             ORPHAN
+                             ))
                  | SOME lineage =>
                       let
                          val pos =
@@ -182,67 +180,76 @@ structure Blockchain :> BLOCKCHAIN =
                          if num > !lastblock then
                             (* Extending the longest chain. *)
                             (
-                            if num mod 100 = 0 then
-                               Log.log (fn () => "Block " ^ Int.toString num ^ "\n")
-                            else
-                               ();
-
                             makePrimary prev lineage;
                             Array.update (thePrimaryFork, num, pos);
-                            T.insert (!theTable) hash (Nil num);
+                            T.insert theTable hash (Nil num);
                             lastblock := num;
-                            lasthash := hash
+                            lasthash := hash;
+                            EXTEND
                             )
                          else
                             (* On a secondary fork. *)
                             (
-                            T.insert (!theTable) hash (Cons (pos, num, prev, lineage));
+                            T.insert theTable hash (Cons (pos, num, prev, lineage));
                             
                             (case lineage of
-                                Nil _ => Log.log (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash) ^ "\n")
-                              | _ => ())
-                            );
+                                Nil _ => Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
+                              | _ => ());
 
-                         false
+                            NOEXTEND
+                            )
                       end)
             end
 
 
-      fun insertBlock hash blstr =
-         if insertBlockMain hash blstr NONE then
-            true
-         else
-            (* Check whether hash is the predecessor to an orphan.  It so, insert it too. *)
-            (case T.find theOrphanPredTable hash of
-                SOME hash' =>
-                   let
-                      val blstr' = T.lookup theOrphanTable hash'
-                   in
-                      T.remove theOrphanPredTable hash;
-                      T.remove theOrphanTable hash';
+      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr =
+         let
+            val result = insertBlockMain orphanage hash blstr NONE
+         in
+            (case result of
+                ORPHAN => ORPHAN
+              | _ =>
+                   (* hash is not an orphan; check whether hash is the predecessor to an orphan,
+                      If so, insert the successor too.
+                   *)
+                   (case T.find orphanPredTable hash of
+                       SOME hash' =>
+                          let
+                             val blstr' = T.lookup orphanTable hash'
+                          in
+                             T.remove orphanPredTable hash;
+                             T.remove orphanTable hash';
+       
+                             insertBlockMain orphanage hash' blstr' NONE
+                             (* Our result is the result for hash'.  It can't be ORPHAN, since we just
+                                inserted its predecesor (ie, hash), and if it's EXTENDS we want it.
+                             *)
+                          end
+                     | NONE =>
+                          result))
+         end
 
-                      insertBlockMain hash' blstr' NONE
-                      (* hash' cannot be be an orphan, because we've just inserted its predecessor
-                         (ie, hash itself), therefore this call must return false.
-                      *)
-                   end
-              | NONE =>
-                   false)
 
+      val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
       fun loadBlock hash blstr pos =
-         (
-         insertBlockMain hash blstr (SOME pos);
-         ()
-         )
+         (case insertBlockMain dummyOrphanage hash blstr (SOME pos) of
+             EXTEND =>
+                if !lastblock mod 10000 = 0 then
+                   Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
+                else
+                   ()
+           | _ => ())
 
-      fun loadFile instream =
+      fun loadFile pos instream =
          let
-            val pos = getInPos instream
             val hash = BinIO.inputN (instream, 32)
          in
             if B.size hash = 0 then
-               BinIO.closeIn instream
+               (
+               BinIO.closeIn instream;
+               theOutPos := pos
+               )
             else if B.size hash <> 32 then
                raise BlockchainIO
             else
@@ -257,7 +264,7 @@ structure Blockchain :> BLOCKCHAIN =
                   if B.size blstr = sz then
                      (
                      loadBlock hash blstr pos;
-                     loadFile instream
+                     loadFile (pos+36+sz) instream
                      )
                   else
                      raise BlockchainIO
@@ -268,9 +275,7 @@ structure Blockchain :> BLOCKCHAIN =
          (
          lastblock := 0;
          lasthash := Chain.genesisHash;
-         theTable := T.table tableSize;
-         T.reset theOrphanTable orphanTableSize;
-         T.reset theOrphanPredTable orphanTableSize;
+         T.reset theTable;
 
          if fileExists "blockchain" then
             let
@@ -286,12 +291,12 @@ structure Blockchain :> BLOCKCHAIN =
                else
                   raise BlockchainIO;
 
-               T.insert (!theTable) Chain.genesisHash (Nil 0);
+               T.insert theTable Chain.genesisHash (Nil 0);
                A.update (thePrimaryFork, 0, 0);
 
-               Log.log (fn () => "Loading blockchain file\n");
-               loadFile instream;
-               Log.log (fn () => "Load complete\n")
+               Log.long (fn () => "Loading blockchain file");
+               loadFile (B.size genesisRecord) instream;
+               Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
             end
          else
             (* start a new blockchain record *)
@@ -300,11 +305,12 @@ structure Blockchain :> BLOCKCHAIN =
             in
                theOutstream := outstream;
                theRainstream := RAIO.fromInstream (BinIO.openIn "blockchain");
+               theOutPos := 0;
    
                BinIO.output (outstream, genesisRecord);
                BinIO.flushOut outstream;
-               Log.log (fn () => "Created new blockchain file\n");
-               T.insert (!theTable) Chain.genesisHash (Nil 0);
+               Log.long (fn () => "Created new blockchain file");
+               T.insert theTable Chain.genesisHash (Nil 0);
                A.update (thePrimaryFork, 0, 0)
             end
          )
@@ -321,16 +327,16 @@ structure Blockchain :> BLOCKCHAIN =
 
       exception Absent = T.Absent
 
-      fun member hash = T.member (!theTable) hash
+      fun member hash = T.member theTable hash
 
       fun blockPosition hash =
-         (case T.lookup (!theTable) hash of
+         (case T.lookup theTable hash of
              Nil num =>
                 A.sub (thePrimaryFork, num)
            | Cons (pos, _, _, _) => pos)
 
       fun blockNumber hash =
-         (case T.lookup (!theTable) hash of
+         (case T.lookup theTable hash of
              Nil num => num
            | Cons (_, num, _, _) => num)
 
@@ -352,6 +358,13 @@ structure Blockchain :> BLOCKCHAIN =
          else
             inputData (A.sub (thePrimaryFork, num))
 
-      fun knownOrphan hash = T.member theOrphanTable hash
+
+
+      fun newOrphanage () =
+         (T.table orphanTableSize, T.table orphanTableSize)
+
+      fun orphanageMember (orphanTable, _) hash = T.member orphanTable hash
+
+      fun orphanageSize (orphanTable, _) = T.size orphanTable
 
    end

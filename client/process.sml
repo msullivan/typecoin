@@ -9,14 +9,19 @@ structure Process :> PROCESS =
       val syncTimeout = Time.fromSeconds 30   (* Check sync throughput this often. *)
       val syncThroughput = 500                (* Want to receive at least this many blocks per syncTimeout. *)
 
+      val maxOrphans = 50                     (* Accept at most this many orphans from any one connection. *)
+
 
       structure B = Bytestring
       structure BS = Bytesubstring
       structure M = Message
 
 
-      (* XX *)
-      val log : Message.message list ref = ref []
+
+      (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
+         use one peer exclusively as long as we're happy with the progress we're making.
+      *)
+      val syncing = ref false
 
 
       fun sendGetBlocks conn goal =
@@ -44,8 +49,6 @@ structure Process :> PROCESS =
 
 
       fun processMessage (conn, msg) =
-         (
-         log := msg :: !log;
          (case msg of
 
              M.Addr l =>
@@ -77,11 +80,11 @@ structure Process :> PROCESS =
 
 
            | M.Inv [inv as (M.BLOCK, hash)] =>
-                (* In the weirdo blockchain download protocol, a single block inventory message can have
+                (* In the weirdo blockchain download protocol, a single block inventory message can have the
                    special purpose of indicating the final block.  If we've already identified it as such,
                    request another sheaf of ancestors without bothering to download the final block again.
                 *)
-                if Blockchain.knownOrphan hash then
+                if Blockchain.orphanageMember (Commo.orphanage conn) hash then
                    sendGetBlocks conn (SOME hash)
                 else if Blockchain.member hash then
                    ()
@@ -105,12 +108,26 @@ structure Process :> PROCESS =
                 let
                    val blstr' = BS.string blstr
                    val hash = Block.hashBlockString blstr'
+                   val orphanage = Commo.orphanage conn
+                   val oldlastblock = Blockchain.lastBlock ()
+
+                   val result = Blockchain.insertBlock orphanage hash blstr'
                 in
-                   if Blockchain.insertBlock hash blstr' then
-                      (* Orphan, request its ancestors. *)
-                      sendGetBlocks conn (SOME hash)
-                   else
-                      ()
+                   (case result of
+                       Blockchain.ORPHAN =>
+                          if Blockchain.orphanageSize orphanage <= maxOrphans then
+                             (* request the ancestors of the orphan *)
+                             sendGetBlocks conn (SOME hash)
+                          else
+                             (* too many orphans from this connection, drop it *)
+                             Commo.closeConn conn false
+                     | Blockchain.NOEXTEND => ()
+                     | Blockchain.EXTEND =>
+                          (* Log the block, perhaps unless syncing. *)
+                          if !syncing andalso Blockchain.lastBlock () mod 100 <> 0 then
+                             ()
+                          else
+                             Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ())))
                 end
 
            | M.Ping nonce =>
@@ -121,14 +138,7 @@ structure Process :> PROCESS =
 
            | _ =>
                 ())
-         )
 
-
-
-      (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
-         use one peer exclusively as long as we're happy with the progress we're making.
-      *)
-      val syncing = ref false
 
 
       fun monitorSync remoteblocks oldblocks =
@@ -138,7 +148,8 @@ structure Process :> PROCESS =
             if blocks >= remoteblocks then
                (* Done *)
                (
-               Log.log (fn () => "Sync complete\n");
+               Log.long (fn () => "Sync complete at block " ^ Int.toString blocks);
+               Scheduler.onceAbs Time.zeroTime pollNewPeer;
                syncing := false
                )
             else if blocks - oldblocks >= syncThroughput then
@@ -150,54 +161,60 @@ structure Process :> PROCESS =
             else
                (* Unsatisfactory sync throughput.  Try other peers. *)
                (
-               Log.log (fn () => "Unsatisfactory sync throughput (" ^ Int.toString (blocks-oldblocks) ^ ")\n");
+               Log.long (fn () => "Unsatisfactory sync throughput (" ^ Int.toString (blocks-oldblocks) ^ ")");
+               Scheduler.onceAbs Time.zeroTime pollNewPeer;
                syncing := false
                )
          end
 
 
-      fun pollNewPeer () =
-         (case Peer.next () of
-             NONE => ()
-           | SOME peer =>
-                (
-                Log.log (fn () => "Adding peer\n");
-                Commo.openConn peer
-                   (fn conn =>
-                       let
-                          val remoteblocks = Commo.lastBlock conn
-                          val lastblock = Blockchain.lastBlock ()
-                       in
-                          Log.log (fn () => "Handshake successful\n");
+      and pollNewPeer () =
+         if !syncing then
+            (* Don't poll new peers while syncing. *)
+            ()
+         else
+            (case Peer.next () of
+                NONE => ()
+              | SOME peer =>
+                   (
+                   Log.long (fn () => "Adding peer");
+                   Commo.openConn peer
+                      (fn conn =>
+                          let
+                             val remoteblocks = Commo.lastBlock conn
+                             val lastblock = Blockchain.lastBlock ()
+                          in
+                             Log.long (fn () => "Handshake successful");
+                          
+                             if not (!syncing) andalso remoteblocks > lastblock then
+                                (
+                                Log.long (fn () => "Syncing");
+                                sendGetBlocks conn NONE;
+                                Scheduler.once syncTimeout (fn () => monitorSync remoteblocks lastblock);
+                                syncing := true
+                                )
+                             else
+                                ();
 
-                       
-                          if not (!syncing) andalso remoteblocks > lastblock then
-                             (
-                             Log.log (fn () => "Syncing\n");
-                             sendGetBlocks conn NONE;
-                             Scheduler.once syncTimeout (fn () => monitorSync remoteblocks lastblock);
-                             syncing := true
-                             )
-                          else if Peer.wantPeers () > 0 then
-                             (
-                             Commo.sendMessage conn M.Getaddr;
-                             ()
-                             )
-                          else
-                             ()
-                       end)
-                ))
+                             if Peer.wantPeers () > 0 then
+                                (
+                                Commo.sendMessage conn M.Getaddr;
+                                ()
+                                )
+                             else
+                                ();
 
+                             ()
+                          end)
+                   ))
+
+
+      val x = ref 1
 
       fun initialize () =
          (
          syncing := false;
          Commo.initialize processMessage;
-         (* start with five peers *)
-         pollNewPeer ();
-         pollNewPeer ();
-         pollNewPeer ();
-         pollNewPeer ();
          pollNewPeer ();
          Scheduler.repeating pollInterval pollNewPeer;
          ()

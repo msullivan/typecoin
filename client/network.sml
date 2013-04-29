@@ -25,7 +25,7 @@ structure Network :> NETWORK =
          let
             val (s', a) = Socket.accept s
          in
-            Log.log (fn () => "Connection from " ^ NetHostDB.toString (#1 (INetSock.fromAddr a)) ^ "\n");
+            Log.long (fn () => "Connection from " ^ NetHostDB.toString (#1 (INetSock.fromAddr a)));
             s'
          end
       
@@ -34,7 +34,7 @@ structure Network :> NETWORK =
             val saddr = INetSock.toAddr (addr, port)
             val s : asock = INetSock.TCP.socket ()
          in
-            Log.log (fn () => "Connecting to " ^ NetHostDB.toString addr ^ "\n");
+            Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             Socket.connect (s, saddr);
             s
          end
@@ -44,7 +44,7 @@ structure Network :> NETWORK =
             val saddr = INetSock.toAddr (addr, port)
             val s : asock = INetSock.TCP.socket ()
          in
-            Log.log (fn () => "Connecting to " ^ NetHostDB.toString addr ^ "\n");
+            Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             (s, Socket.connectNB (s, saddr))
          end
 
@@ -57,15 +57,24 @@ structure Network :> NETWORK =
             val n = Socket.sendVec (sock, v)
          in
             Bytesubstring.size v = n
-         end
+         end handle OS.SysErr (err, _) =>
+            (
+            Log.long (fn () => "Send error: " ^ err);
+            false
+            )
+                                       
 
       fun recvVec s =
          let
             val v = Socket.recvVec (s, bufsize)
          in
-            Log.log (fn () => ".");
+            Log.short ".";
             v
-         end
+         end handle OS.SysErr (err, _) =>
+            (
+            Log.long (fn () => "Receive error: " ^ err);
+            Bytestring.null
+            )
 
 
       fun dns str =

@@ -1,5 +1,6 @@
 
 signature LOG =
    sig
-      val log : (unit -> string) -> unit
+      val short : string -> unit
+      val long : (unit -> string) -> unit
    end

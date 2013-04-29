@@ -9,6 +9,7 @@ signature ADDRESS =
 
       val null : addr
       val eq : addr * addr -> bool
+      val compare : addr * addr -> order
 
       val toInAddr : addr -> NetHostDB.in_addr
       val fromInAddr : NetHostDB.in_addr -> addr

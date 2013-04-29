@@ -46,18 +46,11 @@ structure Sink :> SINK =
 
                          val v =
                             Network.recvVec sock
-                            handle OS.SysErr _ =>
-                               (* Socket has gone bad, shut it down. *)
-                               (
-                               Network.tryClose sock;
-                               Scheduler.delete sock;
-                               Scheduler.yield ()
-                               )
 
                          val sz = B.size v
                       in
                          if sz = 0 then
-                            (* Socket is closed, exit. *)
+                            (* Socket is closed or gone bad, exit. *)
                             (
                             Network.tryClose sock;
                             Scheduler.delete sock

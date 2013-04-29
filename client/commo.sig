@@ -7,9 +7,11 @@ signature COMMO =
       val openConn : Peer.peer -> (conn -> unit) -> unit
       val sendMessage : conn -> Message.message -> unit
       val sendMessage' : conn -> Message.message -> bool
+      val closeConn : conn -> bool -> unit               (* bool=true if closed "with prejudice" *)
 
-      val lastBlock : conn -> int
       val eq : conn * conn -> bool
+      val lastBlock : conn -> int
+      val orphanage : conn -> Blockchain.orphanage
 
       val initialize : (conn * Message.message -> unit) -> unit
 

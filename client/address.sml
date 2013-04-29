@@ -8,6 +8,8 @@ structure Address :> ADDRESS =
 
       fun eq (x:addr, y) = x = y
 
+      val compare = Word32.compare
+
       structure Ordered =
          struct
             type t = addr

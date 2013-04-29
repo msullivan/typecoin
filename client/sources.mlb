@@ -31,10 +31,10 @@
         message.sml
         peer.sig
         peer.sml
-        commo.sig
-        commo.sml
         blockchain.sig
         blockchain.sml
+        commo.sig
+        commo.sml
         process.sig
         process.sml
         main.sml

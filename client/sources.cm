@@ -1,6 +1,6 @@
 Group
         source(-)
-        library($CMLIB/cmlib.cm)
+        library(../../cmlib/lib/cmlib.cm)
 is
         address.sig
         address.sml
@@ -24,7 +24,6 @@ is
         peer.sig
         peer.sml
         platform.sig
-        platform-nj.sml
         process.sig
         process.sml
         reader.sig
@@ -40,4 +39,6 @@ is
         writer.sig
         writer.sml
 
-        $CMLIB/cmlib.cm
+        platform-nj.sml
+
+        ../../cmlib/lib/cmlib.cm
