@@ -136,7 +136,8 @@ structure Commo :> COMMO =
          sock : Network.asock,
          peer : Peer.peer,
          lastHeard : Time.time ref,  (* zero indicates forcibly closed *)
-         lastBlock : int
+         lastBlock : int,
+         tag : unit ref              (* for quick equality test *)
          }
 
       val theCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
@@ -191,7 +192,7 @@ structure Commo :> COMMO =
          (fn (sock, {lastBlock, ...}:M.version) =>
              let
                 val lastHeard = ref (Time.now ())
-                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, lastBlock=lastBlock }
+                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, lastBlock=lastBlock, tag=ref () }
 
                 fun loop () =
                    recvMessage
@@ -241,5 +242,7 @@ structure Commo :> COMMO =
 
 
       fun lastBlock ({lastBlock, ...}:conn) = lastBlock
+
+      fun eq ({tag, ...}:conn, {tag=tag', ...}:conn) = tag = tag'
 
    end

@@ -216,7 +216,7 @@ structure Message :> MESSAGE =
 
 
       fun mkGetblocks { hashes, lastDesired } =
-         { version=theVersion, hashes=hashes, lastDesired=lastDesired }
+         { version=Constants.theVersion, hashes=hashes, lastDesired=lastDesired }
 
       fun writeGetblocks { version, hashes, lastDesired } =
          W.word32L (Word32.fromInt version)        (* version *)

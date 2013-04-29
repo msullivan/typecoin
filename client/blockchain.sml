@@ -232,7 +232,9 @@ structure Blockchain :> BLOCKCHAIN =
                T.insert (!theTable) Chain.genesisHash (Nil 0);
                A.update (thePrimaryFork, 0, 0);
 
-               loadFile instream
+               Log.log (fn () => "Loading blockchain file\n");
+               loadFile instream;
+               Log.log (fn () => "Load complete\n")
             end
          else
             (* start a new blockchain record *)
@@ -246,6 +248,7 @@ structure Blockchain :> BLOCKCHAIN =
    
                BinIO.output (outstream, genesisRecord);
                BinIO.flushOut outstream;
+               Log.log (fn () => "Created new blockchain file\n");
                T.insert (!theTable) Chain.genesisHash (Nil 0);
                A.update (thePrimaryFork, 0, 0)
             end

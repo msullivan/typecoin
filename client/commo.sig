@@ -8,6 +8,7 @@ signature COMMO =
       val sendMessage : conn -> Message.message -> bool
 
       val lastBlock : conn -> int
+      val eq : conn * conn -> bool
 
       val initialize : (conn * Message.message -> unit) -> unit
 

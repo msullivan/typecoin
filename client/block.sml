@@ -77,4 +77,7 @@ structure Block :> BLOCK =
                     difficulty=difficulty, nonce=nonce, count=count, transactions=transactions }
          ))))))))
 
+      fun hashBlockString str =
+         SHA256.hashBytes (SHA256.hash (Stream.fromTable Bytesubstring.sub (BS.substring (str, 0, 80)) 0))
+
    end

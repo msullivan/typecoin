@@ -20,4 +20,6 @@ signature BLOCK =
       val writeBlockHeader : block -> Writer.writer
       val readBlock : block Reader.reader
 
+      val hashBlockString : Bytestring.string -> Bytestring.string
+
    end
