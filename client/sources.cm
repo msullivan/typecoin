@@ -24,6 +24,7 @@ is
         peer.sig
         peer.sml
         platform.sig
+        platform-nj.sml
         process.sig
         process.sml
         reader.sig
@@ -38,7 +39,5 @@ is
         transaction.sml
         writer.sig
         writer.sml
-
-        platform-nj.sml
 
         ../../cmlib/lib/cmlib.cm

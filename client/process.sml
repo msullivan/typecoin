@@ -209,8 +209,6 @@ structure Process :> PROCESS =
                    ))
 
 
-      val x = ref 1
-
       fun initialize () =
          (
          syncing := false;

@@ -54,7 +54,7 @@ structure Blockchain :> BLOCKCHAIN =
             BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt sz));
             BinIO.output (outs, blstr);
             BinIO.flushOut outs;
-            theOutPos := pos + 36 + sz;
+            theOutPos := pos + 36 + Position.fromInt sz;
             pos
          end
 
@@ -193,7 +193,11 @@ structure Blockchain :> BLOCKCHAIN =
                             T.insert theTable hash (Cons (pos, num, prev, lineage));
                             
                             (case lineage of
-                                Nil _ => Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
+                                Nil _ =>
+                                   (case poso of
+                                       NONE =>
+                                          Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
+                                     | SOME _ => ())
                               | _ => ());
 
                             NOEXTEND
@@ -264,7 +268,7 @@ structure Blockchain :> BLOCKCHAIN =
                   if B.size blstr = sz then
                      (
                      loadBlock hash blstr pos;
-                     loadFile (pos+36+sz) instream
+                     loadFile (pos + 36 + Position.fromInt sz) instream
                      )
                   else
                      raise BlockchainIO
@@ -295,7 +299,7 @@ structure Blockchain :> BLOCKCHAIN =
                A.update (thePrimaryFork, 0, 0);
 
                Log.long (fn () => "Loading blockchain file");
-               loadFile (B.size genesisRecord) instream;
+               loadFile (Position.fromInt (B.size genesisRecord)) instream;
                Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
             end
          else
