@@ -16,6 +16,9 @@ structure Process :> PROCESS =
       (* Accept at most this many orphans from any one connection. *)
       val maxOrphans = 50
 
+      (* Accept at most this many addresses from one peer. *)
+      val maxPeersFromSource = 40
+
 
       structure B = Bytestring
       structure BS = Bytesubstring
@@ -44,12 +47,13 @@ structure Process :> PROCESS =
                   loopGeom acc 2 num
                else
                   loop (Blockchain.hashByNumber num :: acc) (n-1) (num-1)
+
+            val hashes = loop [] 10 (Blockchain.lastBlock ())
          in
             Commo.sendMessage conn
             (M.Getblocks
                 (M.mkGetblocks
-                    { hashes = loop [] 10 (Blockchain.lastBlock ()),
-                      lastDesired = goal }))
+                    { hashes = hashes, lastDesired = goal }))
          end
 
 
@@ -88,8 +92,6 @@ structure Process :> PROCESS =
                    val remoteblocks = Commo.lastBlock conn
                    val lastblock = Blockchain.lastBlock ()
                 in
-                   Log.long (fn () => "Handshake successful");
-                
                    if not (!syncing) andalso remoteblocks > lastblock then
                       (
                       Log.long (fn () => "Syncing");
@@ -101,10 +103,7 @@ structure Process :> PROCESS =
                       ();
 
                    if Peer.wantPeers () > 0 then
-                      (
-                      Commo.sendMessage conn M.Getaddr;
-                      ()
-                      )
+                      Commo.sendMessage conn M.Getaddr
                    else
                       ();
 
@@ -117,31 +116,32 @@ structure Process :> PROCESS =
          (case msg of
 
              M.Addr l =>
-                let
-                   fun loop l =
-                      (case l of
-                          [] => ()
-                        | (timestamp, { services, address, port }) :: rest =>
-                             if Peer.wantPeers () <= 0 then
-                                ()
-                             else if
-                                Address.eq (address, Address.null)
-                                orelse
-                                port <> Chain.port
-                                orelse
-                                Word64.andb (services, M.serviceNetwork) = 0w0
-                             then
-                                (* Ignore peers with null addresses, or at a non-standard port,
-                                   or that don't offer the network service. *)
-                                loop rest
-                             else
+                if Peer.wantPeers () <= 0 then
+                   ()
+                else
+                   let
+                      val l' =
+                         Mergesort.sort (fn ((t1, _), (t2, _)) => LargeInt.compare (t2, t1))
+                         (List.filter
+                          (fn (_, { services, address, port }) =>
+                              not (Address.eq (address, Address.null)
+                                   orelse
+                                   port <> Chain.port
+                                   orelse
+                                   Word64.andb (services, M.serviceNetwork) = 0w0)) l)
+                      
+                      fun loop n l =
+                         (case l of
+                             [] => ()
+                           | (timestamp, {address, ...}:M.netaddr) :: rest =>
                                 (
                                 Peer.new address (Time.- (Time.fromSeconds timestamp, Peer.relayedPenalty));
-                                loop rest
+                                loop (n-1) rest
                                 ))
-                in
-                   loop l
-                end
+                   in
+                      (* Avoid getting too many addresses (that might be bad) from a single source. *)
+                      loop (Int.min (Peer.wantPeers (), maxPeersFromSource)) l'
+                   end
 
 
            | M.Inv [inv as (M.BLOCK, hash)] =>
@@ -165,8 +165,7 @@ structure Process :> PROCESS =
                            | _ => false)
                          invs
                 in
-                   Commo.sendMessage conn (M.Getdata invs');
-                   ()
+                   Commo.sendMessage conn (M.Getdata invs')
                 end
 
 
@@ -175,7 +174,6 @@ structure Process :> PROCESS =
                    val blstr' = BS.string blstr
                    val hash = Block.hashBlockString blstr'
                    val orphanage = Commo.orphanage conn
-                   val oldlastblock = Blockchain.lastBlock ()
 
                    val result = Blockchain.insertBlock orphanage hash blstr'
                 in
@@ -214,10 +212,7 @@ structure Process :> PROCESS =
 
 
            | M.Ping nonce =>
-                (
-                Commo.sendMessage conn (M.Pong nonce);
-                ()
-                )
+                Commo.sendMessage conn (M.Pong nonce)
 
 
            | _ =>

@@ -98,6 +98,31 @@ structure Blockchain :> BLOCKCHAIN =
 
       type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
 
+
+      (* Since the blockchain is really a tree with very few limbs off the main trunk, the most
+         natural way to represented it is as a tree with each node pointing to its predecessor.
+         That is, as a bunch of lists (where the tree's branching arises by multiple list nodes
+         sharing the same tail).  However, this won't do, for two related reasons: (1) It's
+         wasteful, since almost all the nodes lie on the (current) primary fork, and (2) it
+         doesn't give us a good way of determining whether a node is on the primary fork or a
+         secondary one.
+
+         Instead, we represent the blockchain using an array containing what is currently believed
+         to be the primary fork.  Element i of the array gives the position (in the record) of the
+         ith block.  When we look up a hash in the table, we are given a lineage.  A lineage is
+         either (Nil num) -- indicating that the block is #num on the main fork -- or it is
+         (Cons (pos, num, pred, predlin)) -- indicating that the block is on a secondary fork.  In
+         the latter case, pos is the position (in the record) of the block, num is the number the
+         block would be if it were on the main form, pred is the predecessor block's hash, and
+         predlin is the predecessor's lineage.
+
+         Thus, if a block has lineage (Cons (_, _, _, Nil _)) it is the first block on a fork.  Only
+         very rarely will a fork contain even two blocks.
+
+         Note that a secondary fork can become the primary fork it it becomes longer.  Then the
+         array and lineages must be adjusted accordingly.
+      *)
+
       datatype lineage =
          (* block is on the primary fork: block number *)
          Nil of int
@@ -151,7 +176,17 @@ structure Blockchain :> BLOCKCHAIN =
             in
                (case T.find theTable prev of
                    NONE =>
-                      (* Previous block is not in the table. This is an orphan block. *)
+                      (* Previous block is not in the table.  This is an orphan block.
+
+                         We don't store orphans in the main data structure at all.  Instead, each
+                         connection has an orphanage containing orphans received from that connection.
+                         If we eventually receive an orphan's predecessor from that connection,
+                         the orphan will automatically be linked in.  Otherwise, the orphanage will
+                         be gc'ed away when the connection closes.
+
+                         We wouldn't bother to do this, except that the blockchain download protocol
+                         depends on it.
+                      *)
                       (case poso of
                           SOME _ =>
                              (* Shouldn't see orphans when loading, but if we do, ignore them. *)
@@ -309,10 +344,10 @@ structure Blockchain :> BLOCKCHAIN =
             in
                theOutstream := outstream;
                theRainstream := RAIO.fromInstream (BinIO.openIn "blockchain");
-               theOutPos := 0;
    
                BinIO.output (outstream, genesisRecord);
                BinIO.flushOut outstream;
+               theOutPos := Position.fromInt (B.size genesisRecord);
                Log.long (fn () => "Created new blockchain file");
                T.insert theTable Chain.genesisHash (Nil 0);
                A.update (thePrimaryFork, 0, 0)

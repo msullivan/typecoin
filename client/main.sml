@@ -20,6 +20,14 @@ structure Main =
                    ()
                    ));
 
+         Scheduler.repeating (Time.fromSeconds 30)
+         (fn () => Log.long (fn () => "Heartbeat "
+                                      ^ Int.toString (Scheduler.numberOfTimeouts ())
+                                      ^ " "
+                                      ^ Int.toString (Peer.wantPeers ())
+                                      ^ " "
+                                      ^ Int.toString (Commo.numberOfConnections ())));
+
          (* Initialize Peer before Process, so that there are peers in the queue for Process. *)
          Peer.initialize ();
          Process.initialize ();

@@ -32,6 +32,7 @@ structure Scheduler :> SCHEDULER =
       val wsocks : S.sock_desc list ref = ref []
       val callbacks : (S.sock_desc * (unit -> unit)) list ref = ref []
       val theQueue : tid Q.pq ref = ref (Q.empty ())
+      val queueSize = ref 0
 
 
       fun timeloop () =
@@ -42,6 +43,7 @@ structure Scheduler :> SCHEDULER =
                 if Time.>= (Time.now (), t) then
                    (
                    theQueue := #2 (Q.deleteMin (!theQueue));
+                   queueSize := !queueSize - 1;
                    (case dispatch (!fr) of
                        SHUTDOWN => ()
                      | YIELD => timeloop ())
@@ -81,6 +83,7 @@ structure Scheduler :> SCHEDULER =
          wsocks := [];
          callbacks := [];
          theQueue := Q.empty ();
+         queueSize := 0;
 
          (case dispatch f of
              SHUTDOWN => ()
@@ -127,6 +130,7 @@ structure Scheduler :> SCHEDULER =
             val fr = ref f
          in
             theQueue := Q.insert (time, fr) (!theQueue);
+            queueSize := !queueSize + 1;
             fr
          end
 
@@ -135,6 +139,7 @@ structure Scheduler :> SCHEDULER =
             val fr = ref f
          in
             theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+            queueSize := !queueSize + 1;
             fr
          end
 
@@ -145,14 +150,18 @@ structure Scheduler :> SCHEDULER =
             fun loop () =
                (
                theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+               queueSize := !queueSize + 1;
                f ()
                )
          in
             fr := loop;
             theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+            queueSize := !queueSize + 1;
             fr
          end
 
       fun cancel fr = fr := skip
+
+      fun numberOfTimeouts () = !queueSize
 
    end

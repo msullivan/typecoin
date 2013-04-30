@@ -11,7 +11,7 @@ structure Peer (* :> PEER *) =
       val maintenanceInterval = Time.fromSeconds (10 * 60)  (* 10 minutes *)
 
       (* Throw out anything this old. *)
-      val tooOld = Time.fromSeconds (24 * 60 * 60)          (* 24 hours (Satoshi uses 14 days!) *)
+      val tooOld = Time.fromSeconds (14 * 24 * 60 * 60)     (* 14 days *)
 
       (* Don't relay anything this old. *)
       val tooOldToRelay = Time.fromSeconds (3 * 60 * 60)    (* 3 hours *)
@@ -25,8 +25,8 @@ structure Peer (* :> PEER *) =
       *)
       val dnsPenalty = Time.fromSeconds (4 * 60 * 60)       (* 4 hours *)
 
-      (* Use dns at most this often. *)
-      val dnsInterval = Time.fromSeconds (15 * 60)          (* 15 minutes *)
+      (* Use DNS at most this often. *)
+      val dnsInterval = Time.fromSeconds (3 * 60)           (* 3 minutes *)
 
 
       structure H = HashTable (structure Key = Address.Hashable)
@@ -50,7 +50,7 @@ structure Peer (* :> PEER *) =
       val theTable : peer H.table = H.table tableSize
       val theOrder : peer DA.dict DT.dict ref = ref DT.empty
       val theQueue : peer Q.ideque = Q.ideque ()
-      val numPeers = ref 0
+      val queuedPeers = ref 0
       val lastDns = ref Time.zeroTime
 
       (* We do not require that the time or peer are already in the dictionary. *)
@@ -80,8 +80,8 @@ structure Peer (* :> PEER *) =
             (
             H.remove theTable addr;
             removeOrder (!timer) peer;
-            (Q.delete (!noder) handle Q.Orphan => ());
-            numPeers := !numPeers - 1;
+            ((Q.delete (!noder); queuedPeers := !queuedPeers - 1)
+                handle Q.Orphan => ());
             valid := false
             )
          else
@@ -105,23 +105,23 @@ structure Peer (* :> PEER *) =
 
 
       fun new addr newtime =
-         if !numPeers >= maxPeers then
+         if !queuedPeers >= maxPeers then
             ()
          else
             let
-               val (peer as {noder, ...}:peer, old) =
-                  H.lookupOrInsert' theTable addr
+               val peer as {noder, ...}:peer =
+                  H.lookupOrInsert theTable addr
                   (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref true})
             in
                update peer newtime;
 
-               if old then
-                  ()
-               else
+               if Q.orphan (!noder) then
                   (
                   noder := Q.insertBackNode theQueue peer;
-                  numPeers := !numPeers + 1
+                  queuedPeers := !queuedPeers + 1
                   )
+               else
+                  ()
             end
 
 
@@ -129,6 +129,8 @@ structure Peer (* :> PEER *) =
          let
             val peer as {timer, noder, ...}:peer = Q.removeFront theQueue
          in
+            queuedPeers := !queuedPeers - 1;
+
             if Time.<= (!timer, Time.- (Time.now (), tooOld)) then
                (
                delete peer;
@@ -148,7 +150,7 @@ structure Peer (* :> PEER *) =
 
 
       fun wantPeers () =
-         maxPeers - !numPeers 
+         maxPeers - !queuedPeers 
 
 
       fun relayable () =
@@ -191,13 +193,14 @@ structure Peer (* :> PEER *) =
                        DA.app (fn (_, {addr, noder, ...}:peer) =>
                                   (
                                   H.remove theTable addr;
-                                  (Q.delete (!noder) handle Q.Orphan => ());
-                                  numPeers := !numPeers - 1
+                                  ((Q.delete (!noder); queuedPeers := !queuedPeers - 1)
+                                       handle Q.Orphan => ())
                                   )) d) old;
 
             (* If we need peers, and we haven't used dns too recently, then do so. *)
-            if !numPeers < minPeers andalso Time.>= (Time.now (), Time.+ (!lastDns, dnsInterval)) then
+            if !queuedPeers < minPeers andalso Time.>= (Time.now (), Time.+ (!lastDns, dnsInterval)) then
                (
+               Log.long (fn () => "DNS seeding");
                lastDns := Time.now ();
                reseed (Time.- (Time.now (), dnsPenalty)) (map Network.dns Chain.seeds) []
                )
@@ -206,6 +209,7 @@ structure Peer (* :> PEER *) =
          end
 
 
+(*
       val seeds =
          ["5.9.2.145","23.23.45.26","24.50.2.175","46.4.24.198","62.87.179.182",
           "62.213.207.209","67.20.120.210","78.47.138.172","80.69.77.225",
@@ -215,15 +219,15 @@ structure Peer (* :> PEER *) =
           "173.230.150.38","173.236.193.117","176.9.218.166","178.63.48.141",
           "192.30.35.174","198.199.70.246","199.26.85.40","212.238.236.21",
           "213.5.71.38"]
+*)
 
       fun initialize () =
          (
          H.reset theTable;
          theOrder := DT.empty;
          Q.reset theQueue;
-         numPeers := 0;
+         queuedPeers := 0;
          lastDns := Time.zeroTime;
-         app (fn addr => new (valOf (Address.fromString addr)) (Time.now ())) seeds;
 
          maintenance ();
          Scheduler.repeating maintenanceInterval maintenance;

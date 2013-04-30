@@ -19,12 +19,12 @@ structure Commo :> COMMO =
       val idleTimeout = Time.fromSeconds (10 * 60)         (* 10 minutes *)
 
       (* Reap reapable connections this often. *)
-      val reapInterval = Time.fromSeconds (5 * 60)         (* 5 minute *)
+      val reapInterval = Time.fromSeconds (5 * 60)         (* 5 minutes *)
 
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
 
       (* Contact as many as this many peers at once when connections aren't going through. *)
-      val batchLimit = 8
+      val batchLimit = 16
 
 
       (* precomputed values *)
@@ -62,8 +62,6 @@ structure Commo :> COMMO =
 
             fun handshake () =
                let
-                  val () = Log.long (fn () => "Connected to " ^ Address.toString addr)
-               
                   val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
       
                   val msgVersion =
@@ -88,10 +86,13 @@ structure Commo :> COMMO =
                             else
                                recvMessage fk
                                (fn M.Verack =>
-                                      (
-                                      Network.sendVec (sock, BS.full msgVerack);
-                                      sk (sock, ver)
-                                      )
+                                      if Network.sendVec (sock, BS.full msgVerack) then
+                                         (
+                                         Log.long (fn () => "Handshake successful with " ^ Address.toString addr);
+                                         sk (sock, ver)
+                                         )
+                                      else
+                                         (fk (); Sink.DONE)
                                  | _ =>
                                       (* Did not handshake correctly. *)
                                       (fk (); Sink.DONE))
@@ -101,8 +102,10 @@ structure Commo :> COMMO =
       
                in
                   (* Send version, expect version and verack, then send verack. *)
-                  Network.sendVec (sock, BS.full msgVersion);
-                  Sink.register sock (recvMessage fk k)
+                  if Network.sendVec (sock, BS.full msgVersion) then
+                     Sink.register sock (recvMessage fk k)
+                  else
+                     fk ()
                end
          in
             if already then
@@ -146,6 +149,7 @@ structure Commo :> COMMO =
 
       val theCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
       val allConnections : conn list ref = ref []
+      val numConnections = ref 0
 
 
       fun closeConn ({sock, peer, opn, ...}:conn) withPrejudice =
@@ -169,17 +173,20 @@ structure Commo :> COMMO =
          let
             val () = Log.long (fn () => "Reaping")
             val cutoff = Time.- (Time.now (), idleTimeout)
-         in
-            allConnections
-               := 
-               foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, l) =>
+
+            val (n, l) =
+               foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, (n, l)) =>
                          if Time.>= (!lastHeard, cutoff) then
-                            conn :: l
+                            (n+1, conn :: l)
                          else 
                             (
                             Log.long (fn () => "Disconnecting " ^ Address.toString (Peer.address peer));
                             closeConn conn false;
-                            l)) [] (!allConnections)
+                            (n, l)))
+               (0, []) (!allConnections)
+         in
+            numConnections := n;
+            allConnections := l
          end
 
 
@@ -230,6 +237,7 @@ structure Commo :> COMMO =
                        ))
              in
                 Peer.update peer (Time.now ());
+                numConnections := !numConnections + 1;
                 allConnections := conn :: !allConnections;
                 k conn;
                 loop ()
@@ -242,7 +250,11 @@ structure Commo :> COMMO =
                   ()
                else
                   (case Peer.next () of
-                      NONE => ()
+                      NONE =>
+                         (
+                         batch := !batch + 1;
+                         Log.long (fn () => "No more known peers to contact")
+                         )
                     | SOME peer =>
                          (
                          openConn peer k;
@@ -252,36 +264,30 @@ structure Commo :> COMMO =
             val n = !batch
          in
             batch := 1;
-            Log.long (fn () => if n = 1 then "Adding peer" else "Adding " ^ Int.toString n ^ " peers");
+            Log.long (fn () => if n = 1 then "Contacting peer" else "Contacting " ^ Int.toString n ^ " peers");
             loop n
          end
 
 
 
-      fun sendMessage' (conn as {sock, opn, ...}:conn) msg =
+      fun sendMessage (conn as {sock, opn, ...}:conn) msg =
          if !opn then
-            let
-               val success =
-                  Network.sendVec (sock, BS.full (Message.writeMessage msg))
-            in
-               if success then
-                  ()
-               else
-                  closeConn conn true;
-
-               success
-            end
+            if Network.sendVec (sock, BS.full (Message.writeMessage msg)) then
+               ()
+            else
+               closeConn conn false
          else
-            false
+            ()
 
-      fun sendMessage conn msg = (sendMessage' conn msg; ())
 
+      fun numberOfConnections () = !numConnections
 
 
       fun initialize callback =
          (
          theCallback := callback;
          allConnections := [];
+         numConnections := 0;
          batch := 1;
          Scheduler.repeating reapInterval reapIdleConnections;
          ()
