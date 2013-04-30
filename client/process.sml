@@ -5,7 +5,7 @@ structure Process :> PROCESS =
       (* Constants *)
 
       (* Contact a new peer this often. *)
-      val pollInterval = Time.fromSeconds (2 * 60)   (* 2 minutes *)
+      val pollInterval = Time.fromSeconds 30         (* 30 seconds (should be higher?) *)
 
       (* Check sync throughput this often. *)
       val syncTimeout = Time.fromSeconds 30          (* 30 seconds *)    

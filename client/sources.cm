@@ -1,6 +1,6 @@
 Group
         source(-)
-        library(../../cmlib/lib/cmlib.cm)
+        library($CMLIB/cmlib.cm)
 is
         address.sig
         address.sml
@@ -40,4 +40,4 @@ is
         writer.sig
         writer.sml
 
-        ../../cmlib/lib/cmlib.cm
+        $CMLIB/cmlib.cm
