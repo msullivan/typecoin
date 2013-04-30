@@ -24,10 +24,6 @@ structure Main =
          Peer.initialize ();
          Process.initialize ();
 
-(*
-         (* XX Ending the world after 40 seconds. *)
-         Scheduler.once (Time.fromSeconds 40) Scheduler.shutdown;
-*)
          ()
          )
 

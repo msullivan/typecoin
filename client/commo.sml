@@ -16,10 +16,10 @@ structure Commo :> COMMO =
       val connectTimeout = Time.fromSeconds 30             (* 30 seconds *)
 
       (* Connections become reapable when idle this long. *)
-      val idleTimeout = Time.fromSeconds 60                (* 1 minute, XX would typically be larger *)
+      val idleTimeout = Time.fromSeconds (10 * 60)         (* 10 minutes *)
 
       (* Reap reapable connections this often. *)
-      val reapInterval = Time.fromSeconds 60               (* 1 minute *)
+      val reapInterval = Time.fromSeconds (5 * 60)         (* 5 minute *)
 
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
 

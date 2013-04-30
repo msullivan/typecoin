@@ -4,12 +4,17 @@ structure Process :> PROCESS =
 
       (* Constants *)
 
-      val pollInterval = Time.fromSeconds 30  (* Contact a new peer this often.  XX make higher *)
+      (* Contact a new peer this often. *)
+      val pollInterval = Time.fromSeconds (2 * 60)   (* 2 minutes *)
 
-      val syncTimeout = Time.fromSeconds 30   (* Check sync throughput this often. *)
-      val syncThroughput = 500                (* Want to receive at least this many blocks per syncTimeout. *)
+      (* Check sync throughput this often. *)
+      val syncTimeout = Time.fromSeconds 30          (* 30 seconds *)    
 
-      val maxOrphans = 50                     (* Accept at most this many orphans from any one connection. *)
+      (* Want to receive at least this many blocks per syncTimeout. *)
+      val syncThroughput = 500                     
+
+      (* Accept at most this many orphans from any one connection. *)
+      val maxOrphans = 50
 
 
       structure B = Bytestring
