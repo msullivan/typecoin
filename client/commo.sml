@@ -23,6 +23,9 @@ structure Commo :> COMMO =
 
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
 
+      (* Contact as many as this many peers at once when connections aren't going through. *)
+      val batchLimit = 8
+
 
       (* precomputed values *)
       val netAddrNull = M.mkNetaddr Address.null
@@ -38,15 +41,15 @@ structure Commo :> COMMO =
                      val sz = Word32.toInt (ConvertWord.bytesToWord32SL (BS.slice (str, 16, SOME 4)))
                   in
                      if sz > maximumPayload then
-                        fk ()
+                        (fk (); Sink.DONE)
                      else
-                        Sink.MORE (sz, (fn str' => sk (M.readMessage (BS.full (BS.concat [str, str'])))))
+                        Sink.MORE (sz, fk, (fn str' => sk (M.readMessage (BS.full (BS.concat [str, str'])))))
                   end
                else
                   (* bad magic number *)
-                  fk ()
+                  (fk (); Sink.DONE)
          in
-            Sink.MORE (24, k)
+            Sink.MORE (24, fk, k)
          end
 
 
@@ -74,8 +77,6 @@ structure Commo :> COMMO =
                                 lastBlock = 0
                                 }))
       
-                  fun fsink () = (fk (); Sink.DONE)
-
                   fun k msg =
                      (case msg of
                          M.Version (ver as {services, ...}) =>
@@ -83,9 +84,9 @@ structure Commo :> COMMO =
                                (* Ignore peers that don't offer the network service.  If there were a lot
                                   of them, it might be better to use them for the services they do offer.
                                *)
-                               fsink ()
+                               (fk (); Sink.DONE)
                             else
-                               recvMessage fsink
+                               recvMessage fk
                                (fn M.Verack =>
                                       (
                                       Network.sendVec (sock, BS.full msgVerack);
@@ -93,15 +94,15 @@ structure Commo :> COMMO =
                                       )
                                  | _ =>
                                       (* Did not handshake correctly. *)
-                                      fsink ())
+                                      (fk (); Sink.DONE))
                        | _ =>
                             (* Did not handshake correctly. *)
-                            fsink ())
+                            (fk (); Sink.DONE))
       
                in
                   (* Send version, expect version and verack, then send verack. *)
                   Network.sendVec (sock, BS.full msgVersion);
-                  Sink.register sock (recvMessage fsink k)
+                  Sink.register sock (recvMessage fk k)
                end
          in
             if already then
@@ -113,7 +114,7 @@ structure Commo :> COMMO =
                      Scheduler.once connectTimeout
                      (fn () =>
                          (
-                         Log.long (fn () => "Failed to connect to " ^ Address.toString addr);
+                         Log.long (fn () => "Timeout connecting to " ^ Address.toString addr);
                          Network.tryClose sock;
                          Scheduler.delete sock;
                          fk ()
@@ -155,7 +156,7 @@ structure Commo :> COMMO =
             opn := false;
             if withPrejudice then
                (* Closed with prejudice, don't re-enqueue it. *)
-               ()
+               Peer.delete peer
             else
                Peer.enqueue peer
             )
@@ -198,9 +199,21 @@ structure Commo :> COMMO =
          end
 
 
+      val batch = ref 1
+
       fun openConn peer k =
          contact (Peer.address peer) Chain.port
-         (fn () => Peer.delete peer)
+         (fn () =>
+             (* Couldn't contact this peer.  Delete it from the peer set, and add
+                one to the next batch to make up for it.
+             *)
+             (
+             Peer.delete peer;
+             if !batch < batchLimit then
+                batch := !batch + 1
+             else
+                ()
+             ))
          (fn (sock, {lastBlock, ...}:M.version) =>
              let
                 val lastHeard = ref (Time.now ())
@@ -209,12 +222,7 @@ structure Commo :> COMMO =
 
                 fun loop () =
                    recvMessage
-                   (fn () =>
-                       (
-                       Peer.delete peer;
-                       closeConn conn true;
-                       Sink.DONE
-                       ))
+                   (fn () => closeConn conn true)
                    (fn msg =>
                        (
                        processMessage conn msg;
@@ -226,6 +234,28 @@ structure Commo :> COMMO =
                 k conn;
                 loop ()
              end)
+
+      fun openConns k =
+         let
+            fun loop n =
+               if n <= 0 then
+                  ()
+               else
+                  (case Peer.next () of
+                      NONE => ()
+                    | SOME peer =>
+                         (
+                         openConn peer k;
+                         loop (n-1)
+                         ))
+
+            val n = !batch
+         in
+            batch := 1;
+            Log.long (fn () => if n = 1 then "Adding peer" else "Adding " ^ Int.toString n ^ " peers");
+            loop n
+         end
+
 
 
       fun sendMessage' (conn as {sock, opn, ...}:conn) msg =
@@ -252,6 +282,7 @@ structure Commo :> COMMO =
          (
          theCallback := callback;
          allConnections := [];
+         batch := 1;
          Scheduler.repeating reapInterval reapIdleConnections;
          ()
          )

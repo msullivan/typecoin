@@ -40,7 +40,7 @@ structure Main =
          Scheduler.start main';
          (* done, cleaning up *)
 
-         print (Int.toString (Peer.wantPeers ()))
+         ()
          )
 
    end

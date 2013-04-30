@@ -38,7 +38,8 @@ structure Peer (* :> PEER *) =
          {
          addr : Address.addr,
          timer : Time.time ref,
-         noder : Q.idequeNode ref
+         noder : Q.idequeNode ref,
+         valid : bool ref
          }
 
       fun address ({addr, ...}:peer) = addr
@@ -74,13 +75,14 @@ structure Peer (* :> PEER *) =
                  (fn d => DA.insert d addr peer)))
 
 
-      fun delete (peer as {addr, timer, noder, ...}:peer) =
+      fun delete (peer as {addr, timer, noder, valid, ...}:peer) =
          if H.member theTable addr then
             (
             H.remove theTable addr;
             removeOrder (!timer) peer;
             (Q.delete (!noder) handle Q.Orphan => ());
-            numPeers := !numPeers - 1
+            numPeers := !numPeers - 1;
+            valid := false
             )
          else
             ()
@@ -109,7 +111,7 @@ structure Peer (* :> PEER *) =
             let
                val (peer as {noder, ...}:peer, old) =
                   H.lookupOrInsert' theTable addr
-                  (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy})
+                  (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref true})
             in
                update peer newtime;
 
@@ -137,11 +139,11 @@ structure Peer (* :> PEER *) =
          end handle Q.Empty => NONE
 
 
-      fun enqueue (peer as {noder, ...}:peer) =
-         if Q.orphan (!noder) then
+      fun enqueue (peer as {noder, valid, ...}:peer) =
+         if !valid andalso Q.orphan (!noder) then
             noder := Q.insertBackNode theQueue peer
          else
-            (* already in the queue, ignore *)
+            (* invalid or already in the queue, ignore *)
             ()
 
 

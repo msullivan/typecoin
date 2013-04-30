@@ -4,10 +4,10 @@ signature COMMO =
 
       type conn
 
-      val openConn : Peer.peer -> (conn -> unit) -> unit
+      val openConns : (conn -> unit) -> unit
       val sendMessage : conn -> Message.message -> unit
       val sendMessage' : conn -> Message.message -> bool
-      val closeConn : conn -> bool -> unit               (* bool=true if closed "with prejudice" *)
+      val closeConn : conn -> bool -> unit                (* bool=true if closed "with prejudice" *)
 
       val eq : conn * conn -> bool
       val lastBlock : conn -> int

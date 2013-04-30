@@ -15,7 +15,7 @@ signature SINK =
 
       datatype sink =
          DONE
-       | MORE of int * (Bytesubstring.substring -> sink)
+       | MORE of int * (unit -> unit) * (Bytesubstring.substring -> sink)  (* desired, failure, success *)
 
       val register : Network.asock -> sink -> unit
 

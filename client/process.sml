@@ -48,6 +48,66 @@ structure Process :> PROCESS =
          end
 
 
+
+      fun monitorSync remoteblocks oldblocks =
+         let
+            val blocks = Blockchain.lastBlock ()
+         in
+            if blocks >= remoteblocks then
+               (* Done *)
+               ()
+            else if blocks - oldblocks >= syncThroughput then
+               (* Acceptable progress *)
+               (
+               Scheduler.once syncTimeout (fn () => monitorSync remoteblocks blocks);
+               ()
+               )
+            else
+               (* Unsatisfactory sync throughput.  Try other peers, starting one immediately. *)
+               (
+               Log.long (fn () => "Unsatisfactory sync throughput (" ^ Int.toString (blocks-oldblocks) ^ ")");
+               Scheduler.onceAbs Time.zeroTime pollNewPeer;
+               syncing := false
+               )
+         end
+
+
+      and pollNewPeer () =
+         if !syncing then
+            (* Don't poll new peers while syncing. *)
+            ()
+         else
+            Commo.openConns
+            (fn conn =>
+                let
+                   val remoteblocks = Commo.lastBlock conn
+                   val lastblock = Blockchain.lastBlock ()
+                in
+                   Log.long (fn () => "Handshake successful");
+                
+                   if not (!syncing) andalso remoteblocks > lastblock then
+                      (
+                      Log.long (fn () => "Syncing");
+                      sendGetBlocks conn NONE;
+                      Scheduler.once syncTimeout (fn () => monitorSync remoteblocks lastblock);
+                      syncing := true
+                      )
+                   else
+                      ();
+
+                   if Peer.wantPeers () > 0 then
+                      (
+                      Commo.sendMessage conn M.Getaddr;
+                      ()
+                      )
+                   else
+                      ();
+
+                   ()
+                end)
+
+
+
       fun processMessage (conn, msg) =
          (case msg of
 
@@ -104,6 +164,7 @@ structure Process :> PROCESS =
                    ()
                 end
 
+
            | M.Block blstr =>
                 let
                    val blstr' = BS.string blstr
@@ -124,11 +185,28 @@ structure Process :> PROCESS =
                      | Blockchain.NOEXTEND => ()
                      | Blockchain.EXTEND =>
                           (* Log the block, perhaps unless syncing. *)
-                          if !syncing andalso Blockchain.lastBlock () mod 100 <> 0 then
-                             ()
+                          if !syncing then
+                             let
+                                val blocks = Blockchain.lastBlock ()
+                             in
+                                if blocks mod 100 = 0 then
+                                   Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))
+                                else
+                                   ();
+
+                                if blocks >= Commo.lastBlock conn then
+                                   (
+                                   Log.long (fn () => "Sync complete at block " ^ Int.toString blocks);
+                                   Scheduler.onceAbs Time.zeroTime pollNewPeer;
+                                   syncing := false
+                                   )
+                                else
+                                   ()
+                             end
                           else
                              Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ())))
                 end
+
 
            | M.Ping nonce =>
                 (
@@ -136,77 +214,10 @@ structure Process :> PROCESS =
                 ()
                 )
 
+
            | _ =>
                 ())
 
-
-
-      fun monitorSync remoteblocks oldblocks =
-         let
-            val blocks = Blockchain.lastBlock ()
-         in
-            if blocks >= remoteblocks then
-               (* Done *)
-               (
-               Log.long (fn () => "Sync complete at block " ^ Int.toString blocks);
-               Scheduler.onceAbs Time.zeroTime pollNewPeer;
-               syncing := false
-               )
-            else if blocks - oldblocks >= syncThroughput then
-               (* Acceptable progress *)
-               (
-               Scheduler.once syncTimeout (fn () => monitorSync remoteblocks blocks);
-               ()
-               )
-            else
-               (* Unsatisfactory sync throughput.  Try other peers. *)
-               (
-               Log.long (fn () => "Unsatisfactory sync throughput (" ^ Int.toString (blocks-oldblocks) ^ ")");
-               Scheduler.onceAbs Time.zeroTime pollNewPeer;
-               syncing := false
-               )
-         end
-
-
-      and pollNewPeer () =
-         if !syncing then
-            (* Don't poll new peers while syncing. *)
-            ()
-         else
-            (case Peer.next () of
-                NONE => ()
-              | SOME peer =>
-                   (
-                   Log.long (fn () => "Adding peer");
-                   Commo.openConn peer
-                      (fn conn =>
-                          let
-                             val remoteblocks = Commo.lastBlock conn
-                             val lastblock = Blockchain.lastBlock ()
-                          in
-                             Log.long (fn () => "Handshake successful");
-                          
-                             if not (!syncing) andalso remoteblocks > lastblock then
-                                (
-                                Log.long (fn () => "Syncing");
-                                sendGetBlocks conn NONE;
-                                Scheduler.once syncTimeout (fn () => monitorSync remoteblocks lastblock);
-                                syncing := true
-                                )
-                             else
-                                ();
-
-                             if Peer.wantPeers () > 0 then
-                                (
-                                Commo.sendMessage conn M.Getaddr;
-                                ()
-                                )
-                             else
-                                ();
-
-                             ()
-                          end)
-                   ))
 
 
       fun initialize () =
