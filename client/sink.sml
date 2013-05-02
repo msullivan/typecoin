@@ -38,8 +38,8 @@ structure Sink :> SINK =
                                   (case sk (BS.substring (str, 0, goal)) of
                                       DONE =>
                                          (
-                                         Network.tryClose sock;
-                                         Scheduler.delete sock
+                                         Scheduler.delete sock;
+                                         Network.close sock
                                          )
                                     | MORE (req', fk', sk') =>
                                          loop (have-goal) [B.extract (str, goal, NONE)] req' fk' sk')
@@ -54,8 +54,8 @@ structure Sink :> SINK =
                          if sz = 0 then
                             (* Socket is closed or gone bad, exit. *)
                             (
-                            Network.tryClose sock;
                             Scheduler.delete sock;
+                            Network.close sock;
                             fk ()
                             )
                          else

@@ -4,9 +4,12 @@ signature COMMO =
 
       type conn
 
-      val openConns : (conn -> unit) -> unit
       val sendMessage : conn -> Message.message -> unit
+      val broadcastMessage : Message.message -> unit
       val closeConn : conn -> bool -> unit                (* bool=true if closed "with prejudice" *)
+
+      val suspendPolling : unit -> unit
+      val resumePolling : unit -> unit
 
       val eq : conn * conn -> bool
       val lastBlock : conn -> int
@@ -14,6 +17,7 @@ signature COMMO =
 
       val numberOfConnections : unit -> int
 
-      val initialize : (conn * Message.message -> unit) -> unit
+      (* first callback is for new connections, second is for messages over existing ones *)
+      val initialize : (conn -> unit) -> (conn * Message.message -> unit) -> unit
 
    end

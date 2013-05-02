@@ -35,8 +35,15 @@ structure Main =
          ()
          )
 
+      fun cleanup () =
+         (
+         Blockchain.close ();
+         Log.cleanup ()
+         )
+
       fun main () =
          (
+         Log.initialize ();
          Log.long (fn () => Date.toString (Date.fromTimeLocal (Time.now ())));
          Blockchain.initialize ();
 
@@ -44,7 +51,7 @@ structure Main =
          Scheduler.start main';
          (* done, cleaning up *)
 
-         ()
+         cleanup ()
          )
 
    end

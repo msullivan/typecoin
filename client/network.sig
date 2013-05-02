@@ -12,7 +12,6 @@ signature NETWORK =
       val connectNB : NetHostDB.in_addr * int -> asock * bool
 
       val close : 'a sock -> unit
-      val tryClose : 'a sock -> unit
 
       val sendVec : asock * Bytesubstring.substring -> bool
       val recvVec : asock -> Bytestring.string

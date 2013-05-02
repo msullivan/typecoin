@@ -1,5 +1,5 @@
 
-structure Peer (* :> PEER *) =
+structure Peer :> PEER =
    struct
 
       (* Constants *)
@@ -19,14 +19,14 @@ structure Peer (* :> PEER *) =
       (* Dock the timestamp of incoming relayed peers this much. *)
       val relayedPenalty = Time.fromSeconds (2 * 60 * 60)   (* 2 hours *)
 
-      (* Give dns-acquired peers with a timestamp this long before now.
+      (* Give dns-acquired peers a timestamp this long before now.
          This must be greater than tooOldToRelay (so dns-acquired peers are
          not relayed), but less than tooOld (so we can still use them).
       *)
       val dnsPenalty = Time.fromSeconds (4 * 60 * 60)       (* 4 hours *)
 
-      (* Use DNS at most this often. *)
-      val dnsInterval = Time.fromSeconds (3 * 60)           (* 3 minutes *)
+      (* After this many connection failures, pull a peer from the verified queue. *)
+      val verifiedQueueThreshold = 4
 
 
       structure H = HashTable (structure Key = Address.Hashable)
@@ -48,38 +48,15 @@ structure Peer (* :> PEER *) =
 
 
       val theTable : peer H.table = H.table tableSize
-      val theOrder : peer DA.dict DT.dict ref = ref DT.empty
       val theQueue : peer Q.ideque = Q.ideque ()
+      val theVerifiedQueue : peer Q.ideque = Q.ideque ()  (* requeued peers, more likely to be active *)
       val queuedPeers = ref 0
-      val lastDns = ref Time.zeroTime
-
-      (* We do not require that the time or peer are already in the dictionary. *)
-      fun removeOrder time ({addr, ...}:peer) =
-         theOrder :=
-         (#3 (DT.operate' (!theOrder) time
-                 (fn () => NONE)
-                 (fn d =>
-                     let
-                        val d' = DA.remove d addr
-                     in
-                        if DA.isEmpty d' then
-                           NONE
-                        else
-                           SOME d'
-                     end)))
-      
-      fun insertOrder time (peer as {addr, ...}:peer) =
-         theOrder :=
-         (#3 (DT.operate (!theOrder) time
-                 (fn () => DA.singleton addr peer)
-                 (fn d => DA.insert d addr peer)))
-
+      val relayablePeers : Address.addr list ref = ref []
 
       fun delete (peer as {addr, timer, noder, valid, ...}:peer) =
          if H.member theTable addr then
             (
             H.remove theTable addr;
-            removeOrder (!timer) peer;
             ((Q.delete (!noder); queuedPeers := !queuedPeers - 1)
                 handle Q.Orphan => ());
             valid := false
@@ -90,18 +67,10 @@ structure Peer (* :> PEER *) =
 
       fun update (peer as {timer, ...}:peer) newtime =
          (* update the time if the new time is more recent *)
-         let
-            val oldtime = !timer
-         in
-            if Time.<= (newtime, oldtime) then
-               ()
-            else
-               (
-               removeOrder oldtime peer;
-               insertOrder newtime peer;
-               timer := newtime
-               )
-         end
+         if Time.< (newtime, !timer) then
+            ()
+         else
+            timer := newtime
 
 
       fun new addr newtime =
@@ -125,16 +94,22 @@ structure Peer (* :> PEER *) =
             end
 
 
-      fun next () =
+      fun next failures =
          let
-            val peer as {timer, noder, ...}:peer = Q.removeFront theQueue
+            val peer as {timer, noder, ...}:peer =
+               if failures >= verifiedQueueThreshold then
+                  Q.removeFront theVerifiedQueue
+                  handle Q.Empty => Q.removeFront theQueue
+               else
+                  Q.removeFront theQueue
+                  handle Q.Empty => Q.removeFront theVerifiedQueue
          in
             queuedPeers := !queuedPeers - 1;
 
             if Time.<= (!timer, Time.- (Time.now (), tooOld)) then
                (
                delete peer;
-               next ()
+               next failures
                )
             else
                SOME peer
@@ -143,7 +118,7 @@ structure Peer (* :> PEER *) =
 
       fun enqueue (peer as {noder, valid, ...}:peer) =
          if !valid andalso Q.orphan (!noder) then
-            noder := Q.insertBackNode theQueue peer
+            noder := Q.insertBackNode theVerifiedQueue peer
          else
             (* invalid or already in the queue, ignore *)
             ()
@@ -153,17 +128,7 @@ structure Peer (* :> PEER *) =
          maxPeers - !queuedPeers 
 
 
-      fun relayable () =
-         let
-            val cutoff = Time.- (Time.now (), tooOldToRelay)
-         in
-            DT.foldr (fn (_, d, l) =>
-                         DA.foldr (fn (_, peer as {timer, ...}:peer, l) =>
-                                      if Time.>= (!timer, cutoff) then
-                                         peer :: l
-                                      else
-                                         l) l d) [] (!theOrder)
-         end
+      fun relayable () = !relayablePeers
             
 
       (* stripe the seed list so we don't favor one server over another *)
@@ -184,28 +149,36 @@ structure Peer (* :> PEER *) =
 
       fun maintenance () =
          let
-            val () = Log.long (fn () => "Peer maintenance")
-            val (old, recent) = DT.partitiongt (!theOrder) (Time.- (Time.now (), tooOld))
-         in
-            theOrder := recent;
-            
-            DT.app (fn (_, d) =>
-                       DA.app (fn (_, {addr, noder, ...}:peer) =>
-                                  (
-                                  H.remove theTable addr;
-                                  ((Q.delete (!noder); queuedPeers := !queuedPeers - 1)
-                                       handle Q.Orphan => ())
-                                  )) d) old;
+            val () = Log.long (fn () => "Peer maintenance");
 
-            (* If we need peers, and we haven't used dns too recently, then do so. *)
-            if !queuedPeers < minPeers andalso Time.>= (Time.now (), Time.+ (!lastDns, dnsInterval)) then
+            val now = Time.now ()
+            val purgeCutoff = Time.- (now, tooOld)
+            val relayCutoff = Time.- (now, tooOldToRelay)
+
+            val (relayable, todelete) =
+               H.fold
+                  (fn (addr, peer as {timer, noder, valid, ...}:peer, (relayable, todelete)) =>
+                      if Time.< (!timer, purgeCutoff) then
+                         (relayable, peer :: todelete)
+                      else if Time.< (!timer, relayCutoff) then
+                         (relayable, todelete)
+                      else
+                         (addr :: relayable, todelete))
+                  ([], []) theTable
+         in
+            relayablePeers := relayable;
+            app delete todelete;
+
+            (* If we need peers, try dns. *)
+            if !queuedPeers < minPeers then
                (
                Log.long (fn () => "DNS seeding");
-               lastDns := Time.now ();
                reseed (Time.- (Time.now (), dnsPenalty)) (map Network.dns Chain.seeds) []
                )
             else
-               ()
+               ();
+
+            Log.long (fn () => "Peer maintenance complete")
          end
 
 
@@ -224,10 +197,10 @@ structure Peer (* :> PEER *) =
       fun initialize () =
          (
          H.reset theTable;
-         theOrder := DT.empty;
          Q.reset theQueue;
+         Q.reset theVerifiedQueue;
          queuedPeers := 0;
-         lastDns := Time.zeroTime;
+         relayablePeers := [];
 
          maintenance ();
          Scheduler.repeating maintenanceInterval maintenance;

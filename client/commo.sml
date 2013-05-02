@@ -21,10 +21,18 @@ structure Commo :> COMMO =
       (* Reap reapable connections this often. *)
       val reapInterval = Time.fromSeconds (5 * 60)         (* 5 minutes *)
 
+      (* Reject any message with a payload larger than this. *)
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
 
-      (* Contact as many as this many peers at once when connections aren't going through. *)
-      val batchLimit = 16
+      (* Keep contact peers until you have this many connections. *)
+      val desiredConnections = 24
+
+      (* Contact a new peer this often. *)
+      val pollInterval = Time.fromSeconds 30               (* 30 seconds *)
+
+      (* Ping all connections this often. *)
+      val keepAliveInterval = Time.fromSeconds 30          (* 30 seconds *)
+
 
 
       (* precomputed values *)
@@ -60,6 +68,12 @@ structure Commo :> COMMO =
          let
             val (sock, already) = Network.connectNB (Address.toInAddr addr, port)
 
+            fun fk' () =
+               (
+               Log.long (fn () => "Handshake failed with " ^ Address.toString addr);
+               fk ()
+               )
+
             fun handshake () =
                let
                   val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
@@ -82,9 +96,9 @@ structure Commo :> COMMO =
                                (* Ignore peers that don't offer the network service.  If there were a lot
                                   of them, it might be better to use them for the services they do offer.
                                *)
-                               (fk (); Sink.DONE)
+                               (fk' (); Sink.DONE)
                             else
-                               recvMessage fk
+                               recvMessage fk'
                                (fn M.Verack =>
                                       if Network.sendVec (sock, BS.full msgVerack) then
                                          (
@@ -92,20 +106,20 @@ structure Commo :> COMMO =
                                          sk (sock, ver)
                                          )
                                       else
-                                         (fk (); Sink.DONE)
+                                         (fk' (); Sink.DONE)
                                  | _ =>
                                       (* Did not handshake correctly. *)
-                                      (fk (); Sink.DONE))
+                                      (fk' (); Sink.DONE))
                        | _ =>
                             (* Did not handshake correctly. *)
-                            (fk (); Sink.DONE))
+                            (fk' (); Sink.DONE))
       
                in
                   (* Send version, expect version and verack, then send verack. *)
                   if Network.sendVec (sock, BS.full msgVersion) then
-                     Sink.register sock (recvMessage fk k)
+                     Sink.register sock (recvMessage fk' k)
                   else
-                     fk ()
+                     fk' ()
                end
          in
             if already then
@@ -118,8 +132,8 @@ structure Commo :> COMMO =
                      (fn () =>
                          (
                          Log.long (fn () => "Timeout connecting to " ^ Address.toString addr);
-                         Network.tryClose sock;
                          Scheduler.delete sock;
+                         Network.close sock;
                          fk ()
                          ))
                in
@@ -147,21 +161,25 @@ structure Commo :> COMMO =
          orphanage : Blockchain.orphanage
          }
 
-      val theCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
+
+      val theMsgCallback : (conn * Message.message -> unit) ref = ref (fn _ => ())
+      val theConnCallback : (conn -> unit) ref = ref (fn _ => ())
       val allConnections : conn list ref = ref []
       val numConnections = ref 0
+      val pollingTid = ref Scheduler.dummy
 
 
       fun closeConn ({sock, peer, opn, ...}:conn) withPrejudice =
          if !opn then
             (
-            Network.tryClose sock;
             Scheduler.delete sock;
+            Network.close sock;
             opn := false;
             if withPrejudice then
-               (* Closed with prejudice, don't re-enqueue it. *)
+               (* Closed with prejudice, delete the peer. *)
                Peer.delete peer
             else
+               (* Closed without prejudice, re-enqueue it. *)
                Peer.enqueue peer
             )
          else
@@ -202,24 +220,17 @@ structure Commo :> COMMO =
             else
                ();
    
-            !theCallback (conn, msg)
+            !theMsgCallback (conn, msg)
          end
 
 
-      val batch = ref 1
-
-      fun openConn peer k =
+      fun openConn peer fk sk =
          contact (Peer.address peer) Chain.port
          (fn () =>
-             (* Couldn't contact this peer.  Delete it from the peer set, and add
-                one to the next batch to make up for it.
-             *)
+             (* Couldn't contact this peer.  Delete it from the peer set. *)
              (
              Peer.delete peer;
-             if !batch < batchLimit then
-                batch := !batch + 1
-             else
-                ()
+             fk ()
              ))
          (fn (sock, {lastBlock, ...}:M.version) =>
              let
@@ -239,34 +250,46 @@ structure Commo :> COMMO =
                 Peer.update peer (Time.now ());
                 numConnections := !numConnections + 1;
                 allConnections := conn :: !allConnections;
-                k conn;
+                sk conn;
                 loop ()
              end)
 
-      fun openConns k =
-         let
-            fun loop n =
-               if n <= 0 then
-                  ()
-               else
-                  (case Peer.next () of
-                      NONE =>
-                         (
-                         batch := !batch + 1;
-                         Log.long (fn () => "No more known peers to contact")
-                         )
-                    | SOME peer =>
-                         (
-                         openConn peer k;
-                         loop (n-1)
-                         ))
 
-            val n = !batch
-         in
-            batch := 1;
-            Log.long (fn () => if n = 1 then "Contacting peer" else "Contacting " ^ Int.toString n ^ " peers");
-            loop n
-         end
+
+      fun pollPeers () =
+         if !numConnections >= desiredConnections then
+            pollingTid := Scheduler.once pollInterval pollPeers
+         else
+            pollLoop 0
+            
+      and pollLoop failures = 
+         (case Peer.next failures of
+             NONE =>
+                (
+                Log.long (fn () => "No more known peers to contact");
+                pollingTid := Scheduler.once pollInterval pollPeers
+                )
+           | SOME peer =>
+                (
+                Log.long (fn () => "Contacting peer");
+                openConn peer
+                   (fn () =>
+                       (* We might have gotten another connection while we waited for this one. *)
+                       if !numConnections >= desiredConnections then
+                          pollingTid := Scheduler.once pollInterval pollPeers
+                       else
+                          pollLoop (failures+1))
+                   (fn conn =>
+                       (
+                       pollingTid := Scheduler.once pollInterval pollPeers;
+                       !theConnCallback conn
+                       ))
+                ))
+
+      fun suspendPolling () = Scheduler.cancel (!pollingTid)
+
+      fun resumePolling () =
+         pollingTid := Scheduler.onceAbs Time.zeroTime pollPeers
 
 
 
@@ -280,16 +303,40 @@ structure Commo :> COMMO =
             ()
 
 
+      fun broadcastMessage msg =
+         let
+            val str = BS.full (Message.writeMessage msg)
+         in
+            app (fn conn as {sock, opn, ...}:conn =>
+                    if !opn then
+                       if Network.sendVec (sock, str) then
+                          ()
+                       else
+                          closeConn conn false
+                    else
+                       ()) (!allConnections)
+         end
+
+      fun broadcastPing () =
+         (
+         Log.short "(ping)";
+         broadcastMessage (M.Ping (ConvertWord.intInfToWord64 (MTRand.randBits 64)))
+         )
+            
+
+
       fun numberOfConnections () = !numConnections
 
 
-      fun initialize callback =
+      fun initialize connCallback msgCallback =
          (
-         theCallback := callback;
+         theConnCallback := connCallback;
+         theMsgCallback := msgCallback;
          allConnections := [];
          numConnections := 0;
-         batch := 1;
          Scheduler.repeating reapInterval reapIdleConnections;
+         pollingTid := Scheduler.once Time.zeroTime pollPeers;
+         Scheduler.repeating keepAliveInterval broadcastPing;
          ()
          )
 

@@ -231,7 +231,7 @@ BC.insertBlock hash2' bl2';
 BC.insertBlock hash3' bl3';
 *)
 
-
+(*
 fun removedups' eq x l =
    (case l of
        [] => [x]
@@ -246,3 +246,24 @@ fun removedups eq l =
        [] => []
      | h :: t =>
           removedups' eq h t)
+*)
+
+
+val block = {
+            version=1,
+            previous=bfh "0000000000000000000000000000000000000000000000000000000000000000",
+            root = B.rev (bfh "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"),
+            timestamp = 0w1231006505,
+            nonce = 0w2083236893,
+            difficulty=0w486604799,
+            count = 1,
+            transactions =
+               [{ inputs = [{ from=(bfh "0000000000000000000000000000000000000000000000000000000000000000", 0wxffffffff),
+                              script = bfh "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73",
+                              sequence = 0wxffffffff }],
+                  outputs = [ {amount=5000000000,
+                               script = bfh "4104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac"} ],
+                  lockTime = 0w0 }]
+            } : Block.block
+
+            

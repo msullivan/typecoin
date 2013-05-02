@@ -2,22 +2,59 @@
 structure Log :> LOG =
    struct
 
-      fun short str = print str
+      val theOutstream = ref TextIO.stdErr
+
+      fun short str =
+         (
+         TextIO.output (!theOutstream, str);
+         print str
+         )
 
       fun long f =
          let
             val date = Date.fromTimeLocal (Time.now ())
+            fun pr str =
+               (
+               print str;
+               TextIO.output (!theOutstream, str)
+               )
          in
-            print (f ());
-            print " [";
-            print (Int.toString (Date.hour date));
-            print ":";
+            pr (f ());
+            pr " [";
+            pr (Int.toString (Date.hour date));
+            pr ":";
             if Date.minute date < 10 then
-               print "0"
+               pr "0"
             else
                ();
-            print (Int.toString (Date.minute date));
-            print "]\n"
+            pr (Int.toString (Date.minute date));
+            pr "]\n";
+            TextIO.flushOut (!theOutstream)
          end
+
+      fun fileExists filename =
+         (OS.FileSys.fileSize filename; true)
+         handle OS.SysErr _ => false
+
+      fun initialize () =
+         let
+            val outs =
+               (* This test shouldn't be necessary, but not every platform implements
+                  openAppend according to spec.
+               *)
+               if fileExists "log" then
+                  TextIO.openAppend "log"
+               else
+                  TextIO.openOut "log"
+               
+         in
+            theOutstream := outs
+         end
+
+      fun cleanup () =
+         (
+         TextIO.closeOut (!theOutstream);
+         theOutstream := TextIO.stdErr
+         )
 
    end

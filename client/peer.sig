@@ -13,11 +13,11 @@ signature PEER =
       val update : peer -> Time.time -> unit
       val delete : peer -> unit
 
-      val next : unit -> peer option
+      val next : int -> peer option  (* int = number of consecutive failures *)
       val enqueue : peer -> unit
 
       val wantPeers : unit -> int
-      val relayable : unit -> peer list
+      val relayable : unit -> Address.addr list
 
       val initialize : unit -> unit
       val maintenance : unit -> unit

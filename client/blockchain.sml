@@ -274,7 +274,7 @@ structure Blockchain :> BLOCKCHAIN =
       fun loadBlock hash blstr pos =
          (case insertBlockMain dummyOrphanage hash blstr (SOME pos) of
              EXTEND =>
-                if !lastblock mod 10000 = 0 then
+                if !lastblock mod 1000 = 0 then
                    Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
                 else
                    ()
@@ -316,13 +316,13 @@ structure Blockchain :> BLOCKCHAIN =
          lasthash := Chain.genesisHash;
          T.reset theTable;
 
-         if fileExists "blockchain" then
+         if fileExists Chain.blockchainFile then
             let
-               val instream = BinIO.openIn "blockchain"
+               val instream = BinIO.openIn Chain.blockchainFile
                val gensz = B.size Chain.genesisBlock
             in
-               theOutstream := BinIO.openAppend "blockchain";
-               theRainstream := RAIO.fromInstream (BinIO.openIn "blockchain");
+               theOutstream := BinIO.openAppend Chain.blockchainFile;
+               theRainstream := RAIO.fromInstream (BinIO.openIn Chain.blockchainFile);
 
                (* Verify that the first record looks right. *)
                if B.eq (BinIO.inputN (instream, B.size genesisRecord), genesisRecord) then
@@ -340,10 +340,10 @@ structure Blockchain :> BLOCKCHAIN =
          else
             (* start a new blockchain record *)
             let
-               val outstream = BinIO.openOut "blockchain"
+               val outstream = BinIO.openOut Chain.blockchainFile
             in
                theOutstream := outstream;
-               theRainstream := RAIO.fromInstream (BinIO.openIn "blockchain");
+               theRainstream := RAIO.fromInstream (BinIO.openIn Chain.blockchainFile);
    
                BinIO.output (outstream, genesisRecord);
                BinIO.flushOut outstream;

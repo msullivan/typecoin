@@ -28,6 +28,10 @@ structure Scheduler :> SCHEDULER =
          (* Should we catch exceptions here? *)
 
 
+
+      exception SchedulerException of exn
+
+
       val rsocks : S.sock_desc list ref = ref []
       val wsocks : S.sock_desc list ref = ref []
       val callbacks : (S.sock_desc * (unit -> unit)) list ref = ref []
@@ -55,6 +59,7 @@ structure Scheduler :> SCHEDULER =
          let
             val {rds=rready, wrs=wready, ...} =
                S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=SOME heartbeatInterval}
+               handle exn => raise (SchedulerException exn)
          in
             sockloop (wready @ rready)
          end

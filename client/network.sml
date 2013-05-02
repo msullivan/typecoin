@@ -11,6 +11,9 @@ structure Network :> NETWORK =
       (* constants *)
       val bufsize = 4096
 
+      
+      exception NetworkException of string * exn
+
 
       fun listen port =
          let
@@ -19,7 +22,7 @@ structure Network :> NETWORK =
             val () = Socket.listen (s, 5)
          in
             s
-         end
+         end handle exn => raise (NetworkException ("listen", exn))
       
       fun accept s =
          let
@@ -27,7 +30,7 @@ structure Network :> NETWORK =
          in
             Log.long (fn () => "Connection from " ^ NetHostDB.toString (#1 (INetSock.fromAddr a)));
             s'
-         end
+         end handle exn => raise (NetworkException ("accept", exn))
       
       fun connect (addr, port) =
          let
@@ -37,7 +40,7 @@ structure Network :> NETWORK =
             Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             Socket.connect (s, saddr);
             s
-         end
+         end handle exn => raise (NetworkException ("connect", exn))
 
       fun connectNB (addr, port) =
          let
@@ -46,11 +49,10 @@ structure Network :> NETWORK =
          in
             Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             (s, Socket.connectNB (s, saddr))
-         end
+         end handle exn => raise (NetworkException ("connectNB", exn))
 
-      val close = Socket.close
-      
-      fun tryClose sock = (close sock handle OS.SysErr _ => ())
+      fun close sock = Socket.close sock handle OS.SysErr _ => ()
+
 
       fun sendVec (sock, v) =
          let
