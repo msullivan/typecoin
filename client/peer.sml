@@ -2,33 +2,6 @@
 structure Peer :> PEER =
    struct
 
-      (* Constants *)
-      val minPeers = 40
-      val maxPeers = 1000
-      val tableSize = 2003  (* roughly twice maxPeers *)
-
-      (* Execute maintenance this often. *)
-      val maintenanceInterval = Time.fromSeconds (10 * 60)  (* 10 minutes *)
-
-      (* Throw out anything this old. *)
-      val tooOld = Time.fromSeconds (14 * 24 * 60 * 60)     (* 14 days *)
-
-      (* Don't relay anything this old. *)
-      val tooOldToRelay = Time.fromSeconds (3 * 60 * 60)    (* 3 hours *)
-
-      (* Dock the timestamp of incoming relayed peers this much. *)
-      val relayedPenalty = Time.fromSeconds (2 * 60 * 60)   (* 2 hours *)
-
-      (* Give dns-acquired peers a timestamp this long before now.
-         This must be greater than tooOldToRelay (so dns-acquired peers are
-         not relayed), but less than tooOld (so we can still use them).
-      *)
-      val dnsPenalty = Time.fromSeconds (4 * 60 * 60)       (* 4 hours *)
-
-      (* After this many connection failures, pull a peer from the verified queue. *)
-      val verifiedQueueThreshold = 4
-
-
       structure H = HashTable (structure Key = Address.Hashable)
       structure DT = SplayRDict (structure Key = TimeOrdered)
       structure DA = ListPreDict (structure Key = Address.Ordered)
@@ -47,7 +20,7 @@ structure Peer :> PEER =
       fun time ({timer, ...}:peer) = !timer
 
 
-      val theTable : peer H.table = H.table tableSize
+      val theTable : peer H.table = H.table (2*Constants.maxPeers+1)
       val theQueue : peer Q.ideque = Q.ideque ()
       val theVerifiedQueue : peer Q.ideque = Q.ideque ()  (* requeued peers, more likely to be active *)
       val queuedPeers = ref 0
@@ -74,7 +47,7 @@ structure Peer :> PEER =
 
 
       fun new addr newtime =
-         if !queuedPeers >= maxPeers then
+         if !queuedPeers >= Constants.maxPeers then
             ()
          else
             let
@@ -97,7 +70,7 @@ structure Peer :> PEER =
       fun next failures =
          let
             val peer as {timer, noder, ...}:peer =
-               if failures >= verifiedQueueThreshold then
+               if failures >= Constants.verifiedQueueThreshold then
                   Q.removeFront theVerifiedQueue
                   handle Q.Empty => Q.removeFront theQueue
                else
@@ -106,7 +79,7 @@ structure Peer :> PEER =
          in
             queuedPeers := !queuedPeers - 1;
 
-            if Time.<= (!timer, Time.- (Time.now (), tooOld)) then
+            if Time.<= (!timer, Time.- (Time.now (), Constants.tooOld)) then
                (
                delete peer;
                next failures
@@ -125,7 +98,7 @@ structure Peer :> PEER =
 
 
       fun wantPeers () =
-         maxPeers - !queuedPeers 
+         Constants.maxPeers - !queuedPeers 
 
 
       fun relayable () = !relayablePeers
@@ -152,8 +125,8 @@ structure Peer :> PEER =
             val () = Log.long (fn () => "Peer maintenance");
 
             val now = Time.now ()
-            val purgeCutoff = Time.- (now, tooOld)
-            val relayCutoff = Time.- (now, tooOldToRelay)
+            val purgeCutoff = Time.- (now, Constants.tooOld)
+            val relayCutoff = Time.- (now, Constants.tooOldToRelay)
 
             val (relayable, todelete) =
                H.fold
@@ -170,10 +143,10 @@ structure Peer :> PEER =
             app delete todelete;
 
             (* If we need peers, try dns. *)
-            if !queuedPeers < minPeers then
+            if !queuedPeers < Constants.minPeers then
                (
                Log.long (fn () => "DNS seeding");
-               reseed (Time.- (Time.now (), dnsPenalty)) (map Network.dns Chain.seeds) []
+               reseed (Time.- (Time.now (), Constants.dnsPenalty)) (map Network.dns Chain.seeds) []
                )
             else
                ();
@@ -203,7 +176,7 @@ structure Peer :> PEER =
          relayablePeers := [];
 
          maintenance ();
-         Scheduler.repeating maintenanceInterval maintenance;
+         Scheduler.repeating Constants.maintenanceInterval maintenance;
          ()
          )
 

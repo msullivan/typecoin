@@ -44,7 +44,6 @@ structure Main =
       fun main () =
          (
          Log.initialize ();
-         Log.long (fn () => Date.toString (Date.fromTimeLocal (Time.now ())));
          Blockchain.initialize ();
 
          (* start the scheduler and immediately call main' *)

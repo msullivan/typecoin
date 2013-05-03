@@ -2,11 +2,6 @@
 structure Blockchain :> BLOCKCHAIN =
    struct
 
-      (* Constants *)
-      val tableSize = 0x100000
-      val primaryForkSize = 0x080000
-
-      val orphanTableSize = 7
 
 
       structure A = Array
@@ -22,27 +17,13 @@ structure Blockchain :> BLOCKCHAIN =
 
       (* I/O *)
 
-      type pos = RAIO.pos
+      type pos = Position.int
 
       exception BlockchainIO
 
-      (* create dummy streams so we don't need to use options *)
-      val dummyOutstream = BinIO.mkOutstream (BinIO.StreamIO.mkOutstream (RAIO.toWriter RAIO.dummyOut, IO.NO_BUF))
-
-      val theOutstream = ref dummyOutstream
+      val theOutstream = ref IOUtil.dummyOut
       val theOutPos : Position.int ref = ref 0
-      val theRainstream = ref RAIO.dummyIn
-
-      fun rainput pos n =
-         let
-            val () = RAIO.seekIn (!theRainstream, pos)
-            val str = RAIO.inputN (!theRainstream, n)
-         in
-            if B.size str <> n then
-               raise BlockchainIO
-            else
-               str
-         end
+      val theInstream = ref IOUtil.dummyIn
 
       fun outputBlock hash blstr =
          let
@@ -60,19 +41,19 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun inputHash pos =
          let
-            val rainstream = !theRainstream
+            val ins = !theInstream
          in
-            RAIO.seekIn (rainstream, pos);
-            RAIO.inputN (rainstream, 32)
+            IOUtil.seekIn (ins, pos);
+            BinIO.inputN (ins, 32)
          end
 
       fun inputData pos =
          let
-            val rainstream = !theRainstream
-            val () = RAIO.seekIn (rainstream, pos+32)
-            val sz = Word32.toInt (ConvertWord.bytesToWord32L (RAIO.inputN (rainstream, 4)))
+            val ins = !theInstream
+            val () = IOUtil.seekIn (ins, pos+32)
+            val sz = Word32.toInt (ConvertWord.bytesToWord32L (BinIO.inputN (ins, 4)))
          in
-            RAIO.inputN (rainstream, sz)
+            BinIO.inputN (ins, sz)
          end
 
       fun fileExists filename =
@@ -135,8 +116,8 @@ structure Blockchain :> BLOCKCHAIN =
 
       val lastblock = ref 0
       val lasthash = ref Chain.genesisHash
-      val theTable : lineage T.table = T.table tableSize
-      val thePrimaryFork : pos A.array = A.array (primaryForkSize, 0)
+      val theTable : lineage T.table = T.table Constants.blockTableSize
+      val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
 
 
 
@@ -285,28 +266,39 @@ structure Blockchain :> BLOCKCHAIN =
             val hash = BinIO.inputN (instream, 32)
          in
             if B.size hash = 0 then
-               (
-               BinIO.closeIn instream;
-               theOutPos := pos
-               )
+               pos
             else if B.size hash <> 32 then
-               raise BlockchainIO
+               let in
+                  Log.long (fn () => "File ends with incomplete record");
+                  pos
+               end
             else
                let
                   val szstr = BinIO.inputN (instream, 4)
-                  val sz =
-                     Word32.toInt (ConvertWord.bytesToWord32L szstr)
-                     handle ConvertWord => raise BlockchainIO
-
-                  val blstr = BinIO.inputN (instream, sz)
                in
-                  if B.size blstr = sz then
-                     (
-                     loadBlock hash blstr pos;
-                     loadFile (pos + 36 + Position.fromInt sz) instream
-                     )
+                  if B.size szstr <> 4 then
+                     let in
+                        Log.long (fn () => "File ends with incomplete record");
+                        pos
+                     end
                   else
-                     raise BlockchainIO
+                     let
+                        val sz =
+                           Word32.toInt (ConvertWord.bytesToWord32L szstr)
+      
+                        val blstr = BinIO.inputN (instream, sz)
+                     in
+                        if B.size blstr <> sz then
+                           let in
+                              Log.long (fn () => "File ends with incomplete record");
+                              pos
+                           end
+                        else
+                           let in
+                              loadBlock hash blstr pos;
+                              loadFile (pos + 36 + Position.fromInt sz) instream
+                           end
+                     end
                end
          end
 
@@ -315,51 +307,67 @@ structure Blockchain :> BLOCKCHAIN =
          lastblock := 0;
          lasthash := Chain.genesisHash;
          T.reset theTable;
+         T.insert theTable Chain.genesisHash (Nil 0);
+         A.update (thePrimaryFork, 0, 0);
 
          if fileExists Chain.blockchainFile then
+            (* Load the blockchain record:
+               We need two instreams: one for the load (instream), the other for random access
+               (!theInstream) to look up information about old blocks.  We could make do with
+               just one and seek it back and forth, but that would be expensive and a pain.
+               Usually there will be very little random access; nearly all reading during the
+               load will be sequential.
+            *)
             let
                val instream = BinIO.openIn Chain.blockchainFile
-               val gensz = B.size Chain.genesisBlock
             in
-               theOutstream := BinIO.openAppend Chain.blockchainFile;
-               theRainstream := RAIO.fromInstream (BinIO.openIn Chain.blockchainFile);
-
                (* Verify that the first record looks right. *)
                if B.eq (BinIO.inputN (instream, B.size genesisRecord), genesisRecord) then
                   ()
                else
-                  raise BlockchainIO;
+                  (
+                  BinIO.closeIn instream;
+                  raise BlockchainIO
+                  );
 
-               T.insert theTable Chain.genesisHash (Nil 0);
-               A.update (thePrimaryFork, 0, 0);
+               theInstream := BinIO.openIn Chain.blockchainFile;
 
                Log.long (fn () => "Loading blockchain file");
-               loadFile (Position.fromInt (B.size genesisRecord)) instream;
-               Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
+               let
+                  val pos = loadFile (Position.fromInt (B.size genesisRecord)) instream
+               in
+                  theOutPos := pos;
+                  BinIO.closeIn instream;
+
+                  (* Open the outstream and seek it to pos.  Usually pos will be the end,
+                     where it opens anyway, but it might be different if there the file has
+                     an incomplete record at the end.
+                  *)
+                  theOutstream := BinIO.openAppend Chain.blockchainFile;
+                  IOUtil.seekOut (!theOutstream, pos);
+
+                  Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
+               end
             end
          else
-            (* start a new blockchain record *)
+            (* Start a new blockchain record. *)
             let
                val outstream = BinIO.openOut Chain.blockchainFile
             in
                theOutstream := outstream;
-               theRainstream := RAIO.fromInstream (BinIO.openIn Chain.blockchainFile);
+               theInstream := BinIO.openIn Chain.blockchainFile;
    
                BinIO.output (outstream, genesisRecord);
                BinIO.flushOut outstream;
                theOutPos := Position.fromInt (B.size genesisRecord);
-               Log.long (fn () => "Created new blockchain file");
-               T.insert theTable Chain.genesisHash (Nil 0);
-               A.update (thePrimaryFork, 0, 0)
+               Log.long (fn () => "Created new blockchain file")
             end
          )
 
       fun close () =
          (
          BinIO.closeOut (!theOutstream);
-         theOutstream := dummyOutstream;
-         RAIO.closeIn (!theRainstream);
-         theRainstream := RAIO.dummyIn
+         BinIO.closeIn (!theInstream)
          )
 
 
@@ -400,7 +408,7 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       fun newOrphanage () =
-         (T.table orphanTableSize, T.table orphanTableSize)
+         (T.table Constants.orphanTableSize, T.table Constants.orphanTableSize)
 
       fun orphanageMember (orphanTable, _) hash = T.member orphanTable hash
 

@@ -3,10 +3,11 @@
 
         platform.sig
         platform-mlton.sml
-        log.sig
-        log.sml
         chain.sig
         chain.sml
+        constants.sml
+        log.sig
+        log.sml
         base58.sig
         base58.sml
         reader.sig

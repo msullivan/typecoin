@@ -2,8 +2,6 @@
 signature PEER =
    sig
 
-      val relayedPenalty : Time.time
-
       type peer
 
       val address : peer -> Address.addr

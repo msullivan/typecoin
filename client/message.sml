@@ -19,13 +19,11 @@ structure Message :> MESSAGE =
 
 
       (* constants *)
-      val theVersion = 70001
-      val okVersion = 31402             (* v.31402 changed the format of addr *)
-      val theServices : word64 = 0w1
-(*
-      val theAgent = "/Satoshi:0.8.1/"
-*)
-      val theAgent = "/MLBTC:a0/"
+      val serviceNetwork : Word64.word = 0w1
+
+      val theServices : word64 = serviceNetwork
+      val okVersion = 31402  (* v.31402 changed the format of addr *)
+
 
       (* precomputed values *)
       val magic = ConvertWord.word32ToBytesL Chain.magic
@@ -142,18 +140,16 @@ structure Message :> MESSAGE =
 
       fun mkVersion { self, remote, nonce, lastBlock } =
          {
-         version = theVersion,
+         version = Constants.protocolVersion,
          services = theServices,
          timestamp = Time.toSeconds (Time.now ()),
          self = self,
          remote = remote,
          nonce = nonce,
-         agent = theAgent,
+         agent = Constants.agentName,
          lastBlock = lastBlock,
          relay = true
          }
-
-      val serviceNetwork : Word64.word = 0w1
 
       fun writeVersion ({version, services, timestamp, self, remote, nonce, agent, lastBlock, relay}:version) =
          W.word32L (Word32.fromInt version)            (* version *)
@@ -216,7 +212,7 @@ structure Message :> MESSAGE =
 
 
       fun mkGetblocks { hashes, lastDesired } =
-         { version=theVersion, hashes=hashes, lastDesired=lastDesired }
+         { version=Constants.protocolVersion, hashes=hashes, lastDesired=lastDesired }
 
       fun writeGetblocks { version, hashes, lastDesired } =
          W.word32L (Word32.fromInt version)        (* version *)

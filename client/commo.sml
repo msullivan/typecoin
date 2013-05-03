@@ -9,29 +9,9 @@ structure Commo :> COMMO =
 
       (* constants *)
 
-      (* Update a peer's timestamp at most this often. *)
-      val peerUpdateThreshold = Time.fromSeconds (5 * 60)  (* 5 minutes *)
-
-      (* When this long for a connection to go through. *)
-      val connectTimeout = Time.fromSeconds 30             (* 30 seconds *)
-
-      (* Connections become reapable when idle this long. *)
-      val idleTimeout = Time.fromSeconds (10 * 60)         (* 10 minutes *)
-
-      (* Reap reapable connections this often. *)
-      val reapInterval = Time.fromSeconds (5 * 60)         (* 5 minutes *)
-
       (* Reject any message with a payload larger than this. *)
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
 
-      (* Keep contact peers until you have this many connections. *)
-      val desiredConnections = 24
-
-      (* Contact a new peer this often. *)
-      val pollInterval = Time.fromSeconds 30               (* 30 seconds *)
-
-      (* Ping all connections this often. *)
-      val keepAliveInterval = Time.fromSeconds 30          (* 30 seconds *)
 
 
 
@@ -128,7 +108,7 @@ structure Commo :> COMMO =
             else
                let
                   val tid =
-                     Scheduler.once connectTimeout
+                     Scheduler.once Constants.connectTimeout
                      (fn () =>
                          (
                          Log.long (fn () => "Timeout connecting to " ^ Address.toString addr);
@@ -190,7 +170,7 @@ structure Commo :> COMMO =
       fun reapIdleConnections () =
          let
             val () = Log.long (fn () => "Reaping")
-            val cutoff = Time.- (Time.now (), idleTimeout)
+            val cutoff = Time.- (Time.now (), Constants.idleTimeout)
 
             val (n, l) =
                foldl (fn (conn as {sock, peer, lastHeard, opn, ...}:conn, (n, l)) =>
@@ -215,7 +195,7 @@ structure Commo :> COMMO =
             lastHeard := time;
 
             (* If we haven't updated the peer since the threshold time, do so. *)
-            if Time.>= (time, Time.+ (Peer.time peer, peerUpdateThreshold)) then
+            if Time.>= (time, Time.+ (Peer.time peer, Constants.peerUpdateThreshold)) then
                Peer.update peer time
             else
                ();
@@ -257,8 +237,8 @@ structure Commo :> COMMO =
 
 
       fun pollPeers () =
-         if !numConnections >= desiredConnections then
-            pollingTid := Scheduler.once pollInterval pollPeers
+         if !numConnections >= Constants.desiredConnections then
+            pollingTid := Scheduler.once Constants.pollInterval pollPeers
          else
             pollLoop 0
             
@@ -267,7 +247,7 @@ structure Commo :> COMMO =
              NONE =>
                 (
                 Log.long (fn () => "No more known peers to contact");
-                pollingTid := Scheduler.once pollInterval pollPeers
+                pollingTid := Scheduler.once Constants.pollInterval pollPeers
                 )
            | SOME peer =>
                 (
@@ -275,13 +255,13 @@ structure Commo :> COMMO =
                 openConn peer
                    (fn () =>
                        (* We might have gotten another connection while we waited for this one. *)
-                       if !numConnections >= desiredConnections then
-                          pollingTid := Scheduler.once pollInterval pollPeers
+                       if !numConnections >= Constants.desiredConnections then
+                          pollingTid := Scheduler.once Constants.pollInterval pollPeers
                        else
                           pollLoop (failures+1))
                    (fn conn =>
                        (
-                       pollingTid := Scheduler.once pollInterval pollPeers;
+                       pollingTid := Scheduler.once Constants.pollInterval pollPeers;
                        !theConnCallback conn
                        ))
                 ))
@@ -334,9 +314,9 @@ structure Commo :> COMMO =
          theMsgCallback := msgCallback;
          allConnections := [];
          numConnections := 0;
-         Scheduler.repeating reapInterval reapIdleConnections;
+         Scheduler.repeating Constants.reapInterval reapIdleConnections;
          pollingTid := Scheduler.once Time.zeroTime pollPeers;
-         Scheduler.repeating keepAliveInterval broadcastPing;
+         Scheduler.repeating Constants.keepAliveInterval broadcastPing;
          ()
          )
 

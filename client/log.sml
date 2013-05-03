@@ -48,7 +48,9 @@ structure Log :> LOG =
                   TextIO.openOut "log"
                
          in
-            theOutstream := outs
+            theOutstream := outs;
+            long (fn () => Chain.name ^ " client");
+            long (fn () => Date.toString (Date.fromTimeLocal (Time.now ())))
          end
 
       fun cleanup () =

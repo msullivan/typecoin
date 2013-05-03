@@ -70,7 +70,9 @@ structure Network :> NETWORK =
          let
             val v = Socket.recvVec (s, bufsize)
          in
+(*
             Log.short ".";
+*)
             v
          end handle OS.SysErr (err, _) =>
             (
