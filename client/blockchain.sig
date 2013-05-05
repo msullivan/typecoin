@@ -14,7 +14,7 @@ signature BLOCKCHAIN =
 
       exception Absent
       val member : hash -> bool
-      val blockPosition : hash -> Position.int     (* position in the record *)
+      val blockPosition : hash -> Int64.int        (* position in the record *)
       val blockNumber : hash -> int                (* block number in the chain *)
       val blockData : hash -> Bytestring.string    (* the block itself *)
 

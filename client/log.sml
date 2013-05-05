@@ -38,15 +38,17 @@ structure Log :> LOG =
 
       fun initialize () =
          let
+            val path = OS.Path.concat (Constants.dataDirectory, "log")
+
             val outs =
                (* This test shouldn't be necessary, but not every platform implements
                   openAppend according to spec.
                *)
-               if fileExists "log" then
-                  TextIO.openAppend "log"
+               if fileExists path then
+                  TextIO.openAppend path
                else
-                  TextIO.openOut "log"
-               
+                  TextIO.openOut path
+
          in
             theOutstream := outs;
             long (fn () => Chain.name ^ " client");

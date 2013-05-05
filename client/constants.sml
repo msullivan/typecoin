@@ -96,4 +96,9 @@ structure Constants =
       val primaryForkSize = 512 * 1024                      (* 512 k *)
 
 
+
+      (* File constants *)
+
+      val dataDirectory = "data"
+
    end

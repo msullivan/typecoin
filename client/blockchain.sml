@@ -8,6 +8,16 @@ structure Blockchain :> BLOCKCHAIN =
       structure B = Bytestring
       structure BS = Bytesubstring
 
+      structure Pos = Int64
+      structure MIO = 
+         MultiFileIOFun
+         (structure ImpIO = BinIO
+          structure String = Bytestring
+          structure SeekIO = BinSeekIO
+          val pieceSize = 0x20000000
+          val fileSize = OS.FileSys.fileSize
+          structure Integer = Pos)
+
 
       (* Precomputed data *)
       val genesisRecord =
@@ -17,48 +27,49 @@ structure Blockchain :> BLOCKCHAIN =
 
       (* I/O *)
 
-      type pos = Position.int
+      type pos = Pos.int
 
       exception BlockchainIO
 
-      val theOutstream = ref IOUtil.dummyOut
-      val theOutPos : Position.int ref = ref 0
-      val theInstream = ref IOUtil.dummyIn
+      val theOutstream : MIO.outstream option ref = ref NONE
+      val theOutPos : Pos.int ref = ref 0
+      val theInstream : MIO.instream option ref = ref NONE
 
       fun outputBlock hash blstr =
          let
             val pos = !theOutPos
-            val outs = !theOutstream
+            val outs = valOf (!theOutstream)
             val sz = B.size blstr
          in
-            BinIO.output (outs, hash);
-            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt sz));
-            BinIO.output (outs, blstr);
-            BinIO.flushOut outs;
-            theOutPos := pos + 36 + Position.fromInt sz;
+            MIO.output (outs, hash);
+            MIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt sz));
+            MIO.output (outs, blstr);
+            MIO.flushOut outs;
+            theOutPos := pos + 36 + Pos.fromInt sz;
             pos
          end
 
       fun inputHash pos =
          let
-            val ins = !theInstream
+            val ins = valOf (!theInstream)
          in
-            IOUtil.seekIn (ins, pos);
-            BinIO.inputN (ins, 32)
+            MIO.SeekIO.seekIn (ins, pos);
+            MIO.inputN (ins, 32)
          end
 
       fun inputData pos =
          let
-            val ins = !theInstream
-            val () = IOUtil.seekIn (ins, pos+32)
-            val sz = Word32.toInt (ConvertWord.bytesToWord32L (BinIO.inputN (ins, 4)))
+            val ins = valOf (!theInstream)
+            val () = MIO.SeekIO.seekIn (ins, pos+32)
+            val sz = Word32.toInt (ConvertWord.bytesToWord32L (MIO.inputN (ins, 4)))
          in
-            BinIO.inputN (ins, sz)
+            MIO.inputN (ins, sz)
          end
 
       fun fileExists filename =
          (OS.FileSys.fileSize filename; true)
          handle OS.SysErr _ => false
+              | Overflow => true
 
 
 
@@ -263,7 +274,7 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun loadFile pos instream =
          let
-            val hash = BinIO.inputN (instream, 32)
+            val hash = MIO.inputN (instream, 32)
          in
             if B.size hash = 0 then
                pos
@@ -274,7 +285,7 @@ structure Blockchain :> BLOCKCHAIN =
                end
             else
                let
-                  val szstr = BinIO.inputN (instream, 4)
+                  val szstr = MIO.inputN (instream, 4)
                in
                   if B.size szstr <> 4 then
                      let in
@@ -286,7 +297,7 @@ structure Blockchain :> BLOCKCHAIN =
                         val sz =
                            Word32.toInt (ConvertWord.bytesToWord32L szstr)
       
-                        val blstr = BinIO.inputN (instream, sz)
+                        val blstr = MIO.inputN (instream, sz)
                      in
                         if B.size blstr <> sz then
                            let in
@@ -296,78 +307,80 @@ structure Blockchain :> BLOCKCHAIN =
                         else
                            let in
                               loadBlock hash blstr pos;
-                              loadFile (pos + 36 + Position.fromInt sz) instream
+                              loadFile (pos + 36 + Pos.fromInt sz) instream
                            end
                      end
                end
          end
 
       fun initialize () =
-         (
-         lastblock := 0;
-         lasthash := Chain.genesisHash;
-         T.reset theTable;
-         T.insert theTable Chain.genesisHash (Nil 0);
-         A.update (thePrimaryFork, 0, 0);
-
-         if fileExists Chain.blockchainFile then
-            (* Load the blockchain record:
-               We need two instreams: one for the load (instream), the other for random access
-               (!theInstream) to look up information about old blocks.  We could make do with
-               just one and seek it back and forth, but that would be expensive and a pain.
-               Usually there will be very little random access; nearly all reading during the
-               load will be sequential.
-            *)
-            let
-               val instream = BinIO.openIn Chain.blockchainFile
-            in
-               (* Verify that the first record looks right. *)
-               if B.eq (BinIO.inputN (instream, B.size genesisRecord), genesisRecord) then
-                  ()
-               else
-                  (
-                  BinIO.closeIn instream;
-                  raise BlockchainIO
-                  );
-
-               theInstream := BinIO.openIn Chain.blockchainFile;
-
-               Log.long (fn () => "Loading blockchain file");
-               let
-                  val pos = loadFile (Position.fromInt (B.size genesisRecord)) instream
-               in
-                  theOutPos := pos;
-                  BinIO.closeIn instream;
-
-                  (* Open the outstream and seek it to pos.  Usually pos will be the end,
-                     where it opens anyway, but it might be different if there the file has
-                     an incomplete record at the end.
-                  *)
-                  theOutstream := BinIO.openAppend Chain.blockchainFile;
-                  IOUtil.seekOut (!theOutstream, pos);
-
-                  Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
-               end
-            end
-         else
-            (* Start a new blockchain record. *)
-            let
-               val outstream = BinIO.openOut Chain.blockchainFile
-            in
-               theOutstream := outstream;
-               theInstream := BinIO.openIn Chain.blockchainFile;
+         let
+            val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
+         in
+            lastblock := 0;
+            lasthash := Chain.genesisHash;
+            T.reset theTable;
+            T.insert theTable Chain.genesisHash (Nil 0);
+            A.update (thePrimaryFork, 0, 0);
    
-               BinIO.output (outstream, genesisRecord);
-               BinIO.flushOut outstream;
-               theOutPos := Position.fromInt (B.size genesisRecord);
-               Log.long (fn () => "Created new blockchain file")
-            end
-         )
+            if MIO.exists path then
+               (* Load the blockchain record:
+                  We need two instreams: one for the load (instream), the other for random access
+                  (!theInstream) to look up information about old blocks.  We could make do with
+                  just one and seek it back and forth, but that would be expensive and a pain.
+                  Usually there will be very little random access; nearly all reading during the
+                  load will be sequential.
+               *)
+               let
+                  val instream = MIO.openIn path
+               in
+                  (* Verify that the first record looks right. *)
+                  if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
+                     ()
+                  else
+                     (
+                     MIO.closeIn instream;
+                     raise BlockchainIO
+                     );
+   
+                  theInstream := SOME (MIO.openIn path);
+   
+                  Log.long (fn () => "Loading blockchain file");
+                  let
+                     val pos = loadFile (Pos.fromInt (B.size genesisRecord)) instream
+                  in
+                     theOutPos := pos;
+                     MIO.closeIn instream;
+   
+                     (* Open the outstream and seek it to pos.  Usually pos will be the end,
+                        where it opens anyway, but it might be different if there the file has
+                        an incomplete record at the end.
+                     *)
+                     theOutstream := SOME (MIO.openAppend path);
+                     MIO.SeekIO.seekOut (valOf (!theOutstream), pos);
+   
+                     Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
+                  end
+               end
+            else
+               (* Start a new blockchain record. *)
+               let
+                  val outstream = MIO.openAppend path
+               in
+                  theOutstream := SOME outstream;
+                  theInstream := SOME (MIO.openIn path);
+      
+                  MIO.output (outstream, genesisRecord);
+                  MIO.flushOut outstream;
+                  theOutPos := Pos.fromInt (B.size genesisRecord);
+                  Log.long (fn () => "Created new blockchain file")
+               end
+         end
 
       fun close () =
          (
-         BinIO.closeOut (!theOutstream);
-         BinIO.closeIn (!theInstream)
+         MIO.closeOut (valOf (!theOutstream));
+         MIO.closeIn (valOf (!theInstream))
          )
 
 
