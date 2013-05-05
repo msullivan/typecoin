@@ -2,8 +2,6 @@
 structure Blockchain :> BLOCKCHAIN =
    struct
 
-
-
       structure A = Array
       structure B = Bytestring
       structure BS = Bytesubstring
@@ -126,7 +124,6 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       val lastblock = ref 0
-      val lasthash = ref Chain.genesisHash
       val theTable : lineage T.table = T.table Constants.blockTableSize
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
 
@@ -211,7 +208,6 @@ structure Blockchain :> BLOCKCHAIN =
                             Array.update (thePrimaryFork, num, pos);
                             T.insert theTable hash (Nil num);
                             lastblock := num;
-                            lasthash := hash;
                             EXTEND
                             )
                          else
@@ -318,8 +314,7 @@ structure Blockchain :> BLOCKCHAIN =
             val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
          in
             lastblock := 0;
-            lasthash := Chain.genesisHash;
-            T.reset theTable;
+            T.reset theTable Constants.blockTableSize;
             T.insert theTable Chain.genesisHash (Nil 0);
             A.update (thePrimaryFork, 0, 0);
    
@@ -349,6 +344,7 @@ structure Blockchain :> BLOCKCHAIN =
                   let
                      val pos = loadFile (Pos.fromInt (B.size genesisRecord)) instream
                   in
+                     Log.long (fn () => "Loaded");
                      theOutPos := pos;
                      MIO.closeIn instream;
    
@@ -403,8 +399,6 @@ structure Blockchain :> BLOCKCHAIN =
       fun blockData hash = inputData (blockPosition hash)
 
       fun lastBlock () = !lastblock
-
-      fun lastHash () = !lasthash
 
       fun hashByNumber num =
          if num > !lastblock then

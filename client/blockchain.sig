@@ -19,7 +19,6 @@ signature BLOCKCHAIN =
       val blockData : hash -> Bytestring.string    (* the block itself *)
 
       val lastBlock : unit -> int
-      val lastHash : unit -> hash
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
 

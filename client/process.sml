@@ -84,7 +84,7 @@ structure Process :> PROCESS =
       fun monitorSync conn remoteblocks =
          if Blockchain.lastBlock () >= remoteblocks then
             (* Done *)
-            (* We never got a chance to ask for peers, to ask now. *)
+            (* We never got a chance to ask for peers, so ask now. *)
             if Peer.wantPeers () > 0 then
                Commo.sendMessage conn M.Getaddr
             else
