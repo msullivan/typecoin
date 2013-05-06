@@ -55,7 +55,7 @@ structure Process :> PROCESS =
             in that orphan and terminate the sync process.
       *)
 
-      fun sendGetBlocks conn goal =
+      fun getblocks goal =
          let
             fun loopGeom acc inc num =
                if num < 0 then
@@ -73,10 +73,7 @@ structure Process :> PROCESS =
 
             val hashes = loop [] 10 (Blockchain.lastBlock ())
          in
-            Commo.sendMessage conn
-            (M.Getblocks
-                (M.mkGetblocks
-                    { hashes = hashes, lastDesired = goal }))
+            M.Getblocks (M.mkGetblocks { hashes = hashes, lastDesired = goal })
          end
 
 
@@ -109,11 +106,12 @@ structure Process :> PROCESS =
       fun processConn conn =
          let
             val remoteblocks = Commo.lastBlock conn
+            val lastblock = Blockchain.lastBlock ()
          in
-            if not (isSome (!syncing)) andalso remoteblocks > Blockchain.lastBlock () then
+            if not (isSome (!syncing)) andalso remoteblocks > lastblock then
                (
-               Log.long (fn () => "Syncing");
-               sendGetBlocks conn NONE;
+               Log.long (fn () => "Block " ^ Int.toString remoteblocks ^ " available; syncing");
+               Commo.sendMessage conn (getblocks NONE);
                Scheduler.once Constants.throughputInterval (fn () => monitorSync conn remoteblocks);
                Commo.suspendPolling ();
                syncing := SOME conn;
@@ -162,34 +160,32 @@ structure Process :> PROCESS =
                 )
 
 
-           | M.Inv [inv as (M.BLOCK, hash)] =>
-                (* In the weirdo blockchain download protocol, a single block inventory message can have the
-                   special purpose of indicating the final block.  If we've already identified it as such,
-                   request another sheaf of ancestors without bothering to download the final block again.
-                *)
-                (
-                Log.short "i";
-                
-                if Blockchain.orphanageMember (Commo.orphanage conn) hash then
-                   sendGetBlocks conn (SOME hash)
-                else if Blockchain.member hash then
-                   ()
-                else
-                   Commo.sendMessage conn (M.Getdata [inv])
-                )
-                
-
            | M.Inv invs =>
                 let
                    val () = Log.short "i"
 
-                   val invs' =
-                      List.filter
-                         (fn (M.BLOCK, hash) => not (Blockchain.member hash)
-                           | _ => false)
-                         invs
+                   val orphanage = Commo.orphanage conn
+
+                   val (invs', msgs) =
+                      foldr
+                      (fn (inv as (objtp, hash), (invs', msgs)) =>
+                          (case objtp of
+                              M.BLOCK =>
+                                 if Blockchain.member hash then
+                                    (invs', msgs)
+                                 else if Blockchain.orphanageMember orphanage hash then
+                                    (* We've already identified this block as an orphan, so go directly
+                                       to downloading its ancestors without requesting the block again.
+                                    *)
+                                    (invs', getblocks (SOME hash) :: msgs)
+                                 else
+                                    (inv :: invs', msgs)
+                            | _ =>
+                                 (invs', msgs)))
+                       ([], [])
+                       invs
                 in
-                   Commo.sendMessage conn (M.Getdata invs')
+                   app (Commo.sendMessage conn) (M.Getdata invs' :: msgs)
                 end
 
 
@@ -215,9 +211,16 @@ structure Process :> PROCESS =
                        Blockchain.ORPHAN =>
                           if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
                              (* request the ancestors of the orphan *)
-                             sendGetBlocks conn (SOME hash)
+                             Commo.sendMessage conn (getblocks (SOME hash))
                           else
-                             (* too many orphans from this connection, drop it *)
+                             (* Too many orphans from this connection, drop it.
+
+                                This can result in an unnecessary disconnection if more than maxOrphans
+                                blocks are mined during a sync, which can happen during the initial
+                                sync.  This isn't terrible, since there are more peers to be contacted
+                                (indeed, maybe we should spread the load).  But we could fix this by
+                                tracking orphan chains, rather than individual orphans.
+                             *)
                              Commo.closeConn conn false
                      | Blockchain.NOEXTEND => ()
                      | Blockchain.EXTEND =>
