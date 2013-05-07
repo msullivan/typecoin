@@ -34,6 +34,8 @@
         peer.sml
         blockchain.sig
         blockchain.sml
+        verify.sig
+        verify.sml
         commo.sig
         commo.sml
         process.sig

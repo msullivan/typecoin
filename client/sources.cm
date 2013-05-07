@@ -38,6 +38,8 @@ is
         sink.sml
         transaction.sig
         transaction.sml
+        verify.sig
+        verify.sml
         writer.sig
         writer.sml
 

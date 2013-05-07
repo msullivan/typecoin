@@ -77,7 +77,42 @@ structure Block :> BLOCK =
                     difficulty=difficulty, nonce=nonce, count=count, transactions=transactions }
          ))))))))
 
-      fun hashBlockString str =
+      fun hashBlockHeader str =
          SHA256.hashBytes (SHA256.hash (Stream.fromTable Bytesubstring.sub (BS.substring (str, 0, 80)) 0))
+
+
+
+      val dhash = SHA256.hashBytes o SHA256.hashBytes
+      fun dhash2 str1 str2 = SHA256.hashBytes (SHA256.hashBytes (B.^ (str1, str2)))
+
+      fun merkleRoot n l =
+         let
+            fun double f l =
+               let
+                  val (h1, l') = f l
+               in
+                  (case l' of
+                      nil =>
+                         (* out of elements, duplicate h1 *)
+                         (dhash2 h1 h1, nil)
+                    | _ :: _ =>
+                         let
+                            val (h2, l'') = f l'
+                         in
+                            (dhash2 h1 h2, l'')
+                         end)
+               end
+      
+            fun loop n i f =
+               if i >= n then
+                  f
+               else
+                  loop n (i*2) (double f)
+         in
+            #1 (loop n 1 
+                (fn [] => raise (Fail "no elements")
+                  | h :: t => (dhash (Writer.write (Transaction.writeTx h)), t))
+                l)
+         end
 
    end

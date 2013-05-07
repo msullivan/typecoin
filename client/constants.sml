@@ -97,6 +97,13 @@ structure Constants =
 
 
 
+      (*** Confirmation constants ***)
+
+      (* Verify this many blocks at the end of blockchain. *)
+      val trustChainBefore = 10
+
+
+
       (* File constants *)
 
       val dataDirectory = "data"

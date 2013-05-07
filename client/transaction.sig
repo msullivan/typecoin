@@ -19,12 +19,16 @@ signature TRANSACTION =
 
       type tx =
          {
+         version : Word32.word,
          inputs : txin list,
          outputs : txout list,
          lockTime : Word32.word
          }
 
       exception InvalidTransaction
+
+      val mkTx :
+         { inputs : txin list, outputs : txout list, lockTime : Word32.word } -> tx
 
       val writeTx : tx -> Writer.writer
       val readTx : tx Reader.reader

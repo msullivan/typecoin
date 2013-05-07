@@ -50,6 +50,7 @@ structure Transaction :> TRANSACTION =
 
       type tx =
          {
+         version : Word32.word,
          inputs : txin list,
          outputs : txout list,
          lockTime : Word32.word
@@ -58,6 +59,11 @@ structure Transaction :> TRANSACTION =
 
 
       exception InvalidTransaction
+
+
+      fun mkTx { inputs, outputs, lockTime } =
+         { version=theVersion, inputs=inputs, outputs=outputs, lockTime=lockTime }
+
 
       fun writeTxin {from=(txid, n), script, sequence} =
          if B.size txid <> 32 then
@@ -101,8 +107,8 @@ structure Transaction :> TRANSACTION =
          ))
          
 
-      fun writeTx ({inputs, outputs, lockTime}:tx) =
-         W.word32L theVersion
+      fun writeTx ({version, inputs, outputs, lockTime}:tx) =
+         W.word32L version
          >>>
          W.varlist writeTxin inputs
          >>>
@@ -113,18 +119,14 @@ structure Transaction :> TRANSACTION =
       val readTx =
          R.word32L
          >>= (fn version =>
-         if version <> theVersion then
-            (* a different format, punt *)
-            raise Reader.SyntaxError
-         else
-            R.varlist readTxin
-            >>= (fn inputs =>
-            R.varlist readTxout
-            >>= (fn outputs =>
-            R.word32L
-            >>= (fn lockTime =>
-            R.return { inputs=inputs, outputs=outputs, lockTime=lockTime }
-            ))))
+         R.varlist readTxin
+         >>= (fn inputs =>
+         R.varlist readTxout
+         >>= (fn outputs =>
+         R.word32L
+         >>= (fn lockTime =>
+         R.return { version=version, inputs=inputs, outputs=outputs, lockTime=lockTime }
+         ))))
 
 
 
@@ -151,7 +153,7 @@ structure Transaction :> TRANSACTION =
                loop 0 inputs
          end
 
-      fun modifyForSig { inputs, outputs, lockTime } i prevScript =
-         { inputs=modifyInputsForSig inputs i prevScript, outputs=outputs, lockTime=lockTime }
+      fun modifyForSig { version, inputs, outputs, lockTime } i prevScript =
+         { version=version, inputs=modifyInputsForSig inputs i prevScript, outputs=outputs, lockTime=lockTime }
 
    end

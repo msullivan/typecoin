@@ -81,11 +81,7 @@ structure Process :> PROCESS =
       fun monitorSync conn remoteblocks =
          if Blockchain.lastBlock () >= remoteblocks then
             (* Done *)
-            (* We never got a chance to ask for peers, so ask now. *)
-            if Peer.wantPeers () > 0 then
-               Commo.sendMessage conn M.Getaddr
-            else
-               ()
+            ()
          else if !syncData >= Constants.syncThroughput then
             (* Acceptable progress *)
             (
@@ -101,6 +97,34 @@ structure Process :> PROCESS =
             syncing := NONE;
             Commo.resumePolling ()
             )
+
+
+      fun doneSync () =
+         let
+            val lastblock = Blockchain.lastBlock ()
+
+            fun verifylast i =
+               if i > lastblock then
+                  ()
+               else
+                  let in
+                     Verify.verifyBlock (Blockchain.dataByNumber i);
+                     verifylast (i+1)
+                  end
+         in
+            Log.long (fn () => "Sync complete at block " ^ Int.toString lastblock);
+            Commo.resumePolling ();
+   
+            verifylast (Int.max (lastblock - Constants.trustChainBefore + 1, 0));
+   
+            (* We never got a chance to ask for peers, so ask now. *)
+            if Peer.wantPeers () > 0 then
+               Commo.sendMessage (valOf (!syncing)) M.Getaddr
+            else
+               ();
+   
+            syncing := NONE
+         end
 
 
       fun processConn conn =
@@ -192,9 +216,16 @@ structure Process :> PROCESS =
            | M.Block blstr =>
                 let
                    val () = Log.short "b"
-
                    val blstr' = BS.string blstr
-                   val hash = Block.hashBlockString blstr'
+
+                   val () =
+                      (case !syncing of
+                          SOME _ =>
+                             Verify.verifyBlockFast blstr'
+                        | NONE =>
+                             Verify.verifyBlock blstr')
+
+                   val hash = Block.hashBlockHeader blstr'
                    val orphanage = Commo.orphanage conn
 
                    val result = Blockchain.insertBlock orphanage hash blstr'
@@ -219,7 +250,7 @@ structure Process :> PROCESS =
                                 blocks are mined during a sync, which can happen during the initial
                                 sync.  This isn't terrible, since there are more peers to be contacted
                                 (indeed, maybe we should spread the load).  But we could fix this by
-                                tracking orphan chains, rather than individual orphans.
+                                counting orphan chains, rather than individual orphans.
                              *)
                              Commo.closeConn conn false
                      | Blockchain.NOEXTEND => ()
@@ -231,16 +262,12 @@ structure Process :> PROCESS =
                                     val blocks = Blockchain.lastBlock ()
                                  in
                                     if blocks mod 100 = 0 then
-                                       Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))
+                                       Log.long (fn () => "Block " ^ Int.toString blocks)
                                     else
                                        ();
     
                                     if blocks >= Commo.lastBlock conn then
-                                       (
-                                       Log.long (fn () => "Sync complete at block " ^ Int.toString blocks);
-                                       Commo.resumePolling ();
-                                       syncing := NONE
-                                       )
+                                       doneSync ()
                                     else
                                        ()
                                  end
