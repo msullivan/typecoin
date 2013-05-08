@@ -150,16 +150,16 @@ structure Blockchain :> BLOCKCHAIN =
          linked data structures.
 
          A *lineage* gives the position of a block in the blockchain.  For a block on the primary
-         fork, the lineage is "Nil num", where num is the block's index in the chain.  Whatever
-         else we might wish to know can be recovered from the index.  For a block on a secondary
-         chain, the lineage is "Cons (pos, num, cumdiff, predlin)", where:
+         fork, the lineage is "Nil num", where num is the block's index in the chain.  (Whatever
+         else we might wish to know can be recovered from the index.)  For a block on a secondary
+         fork, the lineage is "Cons (pos, num, cumdiff, predlin)", where:
 
          - pos is the block's position in the record
          - num is the block's number
          - cumdiff is the cumulative difficulty of the branch ending in that block
          - predlin is a reference to the block's predecessor's lineage
 
-         In most cases we don't work with lineages, but references to lineages, because a sometimes
+         In most cases we don't work with lineages, but references to lineages, because sometimes
          a block will be moved to or from the primary fork without any action to the block's
          successors.  For example, 101a-102a-103a might be moved onto the primary fork while 102b
          stays on a secondary fork.  Conversely, 102 might be moved off the primary fork while 103c
@@ -176,6 +176,10 @@ structure Blockchain :> BLOCKCHAIN =
          4. theTable        is a hash table mapping block hashes to their lineage reference
          5. thePrimaryFork  is an array mapping primary-fork block numbers to each block's position
                             in the record
+
+         (I'm a bit concerned about the scalability of totaldiff.  If the Bitcoin difficulty grows
+         exponentially (which Moore's law suggests is likely), totaldiff will grow exponentially, so
+         the representation of totaldiff will grow linearly.)
 
          Orphans
          -------
@@ -203,11 +207,6 @@ structure Blockchain :> BLOCKCHAIN =
       val totaldiff : IntInf.int ref = ref 0
       val theTable : lineage ref T.table = T.table Constants.blockTableSize
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
-
-      (* I'm concerned about the scalability of totaldiff.  If the Bitcoin difficulty grows exponentially
-         (which Moore's law suggests is likely), totaldiff will grow exponentially, so the representation
-         of totaldiff will grow linearly.
-      *)
 
       type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
 
@@ -297,9 +296,7 @@ structure Blockchain :> BLOCKCHAIN =
 
       datatype result = ORPHAN | NOEXTEND | EXTEND
 
-      datatype mode =
-         RECEIVE
-       | LOAD of pos
+      datatype mode = RECEIVE | LOAD of pos
 
       fun insertBlockMain (orphanTable, orphanPredTable) hash blstr mode verifyit =
          if T.member theTable hash then
