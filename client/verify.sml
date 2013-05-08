@@ -7,7 +7,7 @@ structure Verify (* :> VERIFY *) =
 
 
       (* Constants *)
-      val minimumBits : Word32.word = 0wx1d00ffff
+      val maximumBits : Word32.word = 0wx1d00ffff
 
       (* Precomputed data *)
       val zeros = valOf (B.fromStringHex "0000000000000000000000000000000000000000000000000000000000000000")
@@ -16,14 +16,14 @@ structure Verify (* :> VERIFY *) =
       exception VerifyFailed
 
 
-      fun decodeDifficulty' bits =
+      fun decodeTarget' bits =
          let
             (* We can check this against the minimum difficulty using a simple test on the difficulty
                field, because 0xffff * 256 ^ 0x1d cannot be equalled with a smaller exponent.  Reducing
                the exponent would require 0xffff00 * 256 ^ 0x1c, but we only get 23 bits of mantissa.
             *)
             val () =
-               if Word32.> (bits, minimumBits) then
+               if Word32.> (bits, maximumBits) then
                   raise VerifyFailed
                else
                   ()
@@ -51,22 +51,42 @@ structure Verify (* :> VERIFY *) =
             BS.concat [left, middle, right]
          end
 
-      val cachedBits = ref minimumBits
-      val cachedMaxhash = ref (decodeDifficulty' minimumBits)
+      fun targetToDifficulty target =
+         IntInf.<< (1, 0w224) div (ConvertIntInf.fromBytesB target + 1)
+
+      val cachedBits = ref maximumBits
+      val cachedTarget = ref (decodeTarget' maximumBits)
+      val cachedDifficulty = ref (targetToDifficulty (decodeTarget' maximumBits))
+
+      fun decodeTarget bits =
+         (* The difficulty doesn't change often, so cache it. *)
+         if bits = !cachedBits then
+            !cachedTarget
+         else
+            let
+               val target = decodeTarget' bits
+               val diff = targetToDifficulty target
+            in
+               cachedBits := bits;
+               cachedTarget := target;
+               cachedDifficulty := diff;
+               target
+            end
 
       fun decodeDifficulty bits =
          (* The difficulty doesn't change often, so cache it. *)
          if bits = !cachedBits then
-            !cachedMaxhash
+            !cachedDifficulty
          else
             let
-               val maxhash = decodeDifficulty' bits
+               val target = decodeTarget' bits
+               val diff = targetToDifficulty target;
             in
                cachedBits := bits;
-               cachedMaxhash := maxhash;
-               maxhash
+               cachedTarget := target;
+               cachedDifficulty := diff;
+               diff
             end
-
 
       fun verifyBlockFast blstr =
          let
@@ -75,7 +95,7 @@ structure Verify (* :> VERIFY *) =
                handle Reader.SyntaxError => raise VerifyFailed
 
             val () =
-               (case Bytestring.compare (B.rev (Block.hashBlockHeader blstr), decodeDifficulty bits) of
+               (case Bytestring.compare (B.rev (Block.hashBlockHeader blstr), decodeTarget bits) of
                    GREATER =>
                       raise VerifyFailed
                  | _ => ())

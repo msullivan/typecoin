@@ -125,6 +125,7 @@ structure Process :> PROCESS =
                                   "Sync complete at block " ^ Int.toString lastblock
                                else
                                   "Sync aborted at block " ^ Int.toString lastblock);
+            Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()));
             (* The synced blocks have only been fast-verified, so fully verify
                the last chainTrustConfirmations blocks.
             *)
@@ -273,12 +274,20 @@ structure Process :> PROCESS =
                                              ();
           
                                           if blocks >= Commo.lastBlock conn then
+                                             (* We probably have all the blocks from conn at this point.  It's posssible
+                                                we don't (if there's currently a fork), but even if so, it's no big deal
+                                                to shut down sync early.  The last few blocks will still arrive, they
+                                                just won't arrive in sync mode.
+                                             *)
                                              doneSync true
                                           else
                                              ()
                                        end
                                   | NONE =>
-                                       Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))))
+                                       let in
+                                          Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()));
+                                          Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()))
+                                       end))
                       end
                    else
                       (* This block is bogus.  Don't talk to this peer any more. *)

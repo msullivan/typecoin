@@ -2,6 +2,8 @@
 signature VERIFY =
    sig
 
+      val decodeDifficulty : Word32.word -> IntInf.int
+
       (* We trust that the longest block chain contains only correct blocks.  This does
          the small set of checks necessary to ensure that this block (a) doesn't fool us
          into thinking it's on a longer chain than it really is, and (b) hasn't been

@@ -79,6 +79,14 @@ structure Blockchain :> BLOCKCHAIN =
             MIO.inputN (ins, sz)
          end
 
+      fun inputDiffBits pos =
+         let
+            val ins = valOf (!theInstream)
+         in
+            MIO.SeekIO.seekIn (ins, pos+112);
+            ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
+         end
+
       fun outputDeprecate pos =
          let
             val code = inputCode pos
@@ -115,32 +123,70 @@ structure Blockchain :> BLOCKCHAIN =
       structure T = HashTable (structure Key = HashHashable)
 
 
-      type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
+      (* The blockchain is a tree that looks like this:
 
+         ... === 100 === 101 === 102 === 103 === 104 === 105 === ...
+                   \               \
+                    \               \--- 103c -- 104c
+                     \
+                      \- 101a -- 102a -- 103a
+                           \
+                            \--- 102b
 
-      (* Since the blockchain is really a tree with very few limbs off the main trunk, the most
-         natural way to represented it is as a tree with each node pointing to its predecessor.
-         That is, as a bunch of lists (where the tree's branching arises by multiple list nodes
-         sharing the same tail).  However, this won't do, for two related reasons: (1) It's
-         wasteful, since almost all the nodes lie on the (current) primary fork, and (2) it
-         doesn't give us a good way of determining whether a node is on the primary fork or a
-         secondary one.
+         (Nearly always the tree will be much less bushy than this.  Only very rarely will a fork
+         have even two blocks.)  We call the top branch (..., 100, 101, ..., 105, ...) the primary
+         fork.  Every other block in the picture is on a secondary fork.
 
-         Instead, we represent the blockchain using an array containing what is currently believed
-         to be the primary fork.  Element i of the array gives the position (in the record) of the
-         ith block.  When we look up a hash in the table, we are given a lineage.  A lineage is
-         either (Nil num) -- indicating that the block is #num on the main fork -- or it is
-         (Cons (pos, num, predlin)) -- indicating that the block is on a secondary fork.  In
-         the latter case, pos is the position (in the record) of the block, num is the number the
-         block would be if it were on the main form, and predlin is the predecessor's lineage.
-         Predlin is a reference, because the predecessor might be moved onto or off the primary
-         fork.
+         Conceptually this is a tree, but we don't want to represent it that way; nearly every
+         block will be on the main primary fork, so it's wasteful to used a linked data structure.
+         Also, a linked data structure won't give us a good way to determine whether a block is on
+         the primary fork.  Instead, we put the primary fork into an array, and used linked data
+         structures only for the secondary forks, which will be very sparse.
 
-         Thus, if a block has lineage (Cons (_, _, ref (Nil _))) it is the first block on a fork.
-         Only very rarely will a fork contain even two blocks.
+         On occasion, a secondary fork will grow so that its cumulative difficulty is greater than
+         that of the primary fork.  When that happens, the secondary fork becomes the new primary
+         fork and the old primary fork becomes a secondary fork.  Then we must reorganize the data
+         structure to move the new primary fork into the array, and move the old primary fork into
+         linked data structures.
 
-         Note that a secondary fork can become the primary fork it it becomes longer.  Then the
-         array and lineages must be adjusted accordingly.
+         A *lineage* gives the position of a block in the blockchain.  For a block on the primary
+         fork, the lineage is "Nil num", where num is the block's index in the chain.  Whatever
+         else we might wish to know can be recovered from the index.  For a block on a secondary
+         chain, the lineage is "Cons (pos, num, cumdiff, predlin)", where:
+
+         - pos is the block's position in the record
+         - num is the block's number
+         - cumdiff is the cumulative difficulty of the branch ending in that block
+         - predlin is a reference to the block's predecessor's lineage
+
+         In most cases we don't work with lineages, but references to lineages, because a sometimes
+         a block will be moved to or from the primary fork without any action to the block's
+         successors.  For example, 101a-102a-103a might be moved onto the primary fork while 102b
+         stays on a secondary fork.  Conversely, 102 might be moved off the primary fork while 103c
+         stays off.
+
+         Our data structure has five pieces:
+
+         1. The record is a file containing all the blocks on any fork.  It is accessed through
+            theInstream and theOutstream.  The current position of theOutstream in the file is
+            maintained in theOutPos.
+
+         2. lastblock       holds the block number of the primary fork's head
+         3. totaldiff       holds the cumulative difficulty to the primary fork's head
+         4. theTable        is a hash table mapping block hashes to their lineage reference
+         5. thePrimaryFork  is an array mapping primary-fork block numbers to each block's position
+                            in the record
+
+         Orphans
+         -------
+         We don't store orphans in the main data structure at all, and they don't appear in the
+         picture.  Instead, each connection has an orphanage containing orphans received from that
+         connection.  If we eventually receive an orphan's predecessor from that connection, the
+         orphan will automatically be linked into the tree.  If not, the orphanage will be gc'ed
+         away when the connection closes.
+
+         We probably wouldn't bother to do this, except that the blockchain download protocol
+         depends on it.
       *)
 
       datatype lineage =
@@ -148,65 +194,101 @@ structure Blockchain :> BLOCKCHAIN =
          Nil of int
 
          (* block is on a secondary fork:
-            position, block number, predecessor's lineage
+            position, block number, cumulative difficulty, predecessor's lineage
          *)
-       | Cons of pos * int * lineage ref
+       | Cons of pos * int * IntInf.int * lineage ref
 
 
       val lastblock = ref 0
+      val totaldiff : IntInf.int ref = ref 0
       val theTable : lineage ref T.table = T.table Constants.blockTableSize
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
 
+      (* I'm concerned about the scalability of totaldiff.  If the Bitcoin difficulty grows exponentially
+         (which Moore's law suggests is likely), totaldiff will grow exponentially, so the representation
+         of totaldiff will grow linearly.
+      *)
+
+      type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
 
 
-      (* Rewinds the primary fork to backto, moving the current contents to a secondary fork. *)
+
+      (* The operation "rewind num" shunts every block on the primary fork back to (but not including)
+         num onto a secondary fork.
+      *)
       fun rewind backto =
          let
-            fun loop num =
-               if num = backto then
+            fun loop () =
+               if !lastblock = backto then
                   let
-                     val pos = A.sub (thePrimaryFork, num)
+                     val pos = A.sub (thePrimaryFork, !lastblock)
                      val hash = inputHash pos
                   in
                      T.lookup theTable hash
                   end
                else
                   let
-                     val predlinr = loop (num-1)
+                     val num = !lastblock
                      val pos = A.sub (thePrimaryFork, num)
+                     val cumdiff = !totaldiff
+                     val diff = Verify.decodeDifficulty (inputDiffBits pos)
+
+                     val () = lastblock := num - 1
+                     val () = totaldiff := cumdiff - diff
+
+                     val predlinr = loop ()
+
                      val hash = inputHash pos
                      val lineager = T.lookup theTable hash
                   in
-                     lineager := Cons (pos, num, predlinr);
+                     lineager := Cons (pos, num, cumdiff, predlinr);
                      lineager
                   end
          in
-            loop (!lastblock);
-            lastblock := backto
+            loop ()
          end
 
 
-      (* Puts lineage on the primary fork, displacing what is currently there. *)
+      (* Puts lineage on the primary fork, rewinding what is currently there to make room for it. *)
       fun setPrimary lineage =
          let
             fun loop lineage =
                (case lineage of
                    Nil num =>
-                      rewind num
-                 | Cons (pos, num, predlin) =>
+                      let in
+                         rewind num;
+                         ()
+                      end
+                 | Cons (pos, num, cumdiff, predlin) =>
                       let 
                          val () = loop (!predlin)
+
                          val hash = inputHash pos
                          val lineager = T.lookup theTable hash
                       in
                          lineager := Nil num;
-                         Array.update (thePrimaryFork, num, pos)
+                         Array.update (thePrimaryFork, num, pos);
+                         lastblock := num;
+                         totaldiff := cumdiff
                       end)
          in
-            loop lineage;
-            lastblock := (case lineage of
-                             Nil num => num
-                           | Cons (_, num, _) => num)
+            loop lineage
+         end
+
+
+      (* "cumulativeDifficulty num" computes the cumulative difficulty of the primary fork up to the
+         block numbered num.
+      *)
+      fun cumulativeDifficulty upto =
+         let
+            (* cumulative difficulty up to num is diff *)
+            fun loop num diff =
+               if num = upto then
+                  diff
+               else
+                  loop (num-1) (diff - Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, num))))
+         in
+            loop (!lastblock) (!totaldiff)
          end
 
 
@@ -230,17 +312,7 @@ structure Blockchain :> BLOCKCHAIN =
             in
                (case T.find theTable prev of
                    NONE =>
-                      (* Previous block is not in the table.  This is an orphan block.
-
-                         We don't store orphans in the main data structure at all.  Instead, each
-                         connection has an orphanage containing orphans received from that connection.
-                         If we eventually receive an orphan's predecessor from that connection,
-                         the orphan will automatically be linked in.  Otherwise, the orphanage will
-                         be gc'ed away when the connection closes.
-
-                         We probably wouldn't bother to do this, except that the blockchain download
-                         protocol depends on it.
-                      *)
+                      (* Previous block is not in the table.  This is an orphan block. *)
                       (case mode of
                           LOAD _ =>
                              ORPHAN
@@ -267,40 +339,53 @@ structure Blockchain :> BLOCKCHAIN =
                          val num =
                             1 + (case predlin of
                                     Nil n => n
-                                  | Cons (_, n, _) => n)
+                                  | Cons (_, n, _, _) => n)
+    
+                         val diff =
+                            Verify.decodeDifficulty (ConvertWord.bytesToWord32L (B.substring (blstr, 72, 4)))
+                            +
+                            (case predlin of
+                                Nil n =>
+                                   cumulativeDifficulty n
+                              | Cons (_, _, preddiff, _) =>
+                                   preddiff)
                       in
-                         if num > !lastblock then
+                         if diff > !totaldiff then
                             (* Extending the longest chain. *)
-                            (
-                            setPrimary predlin;
-                            Array.update (thePrimaryFork, num, pos);
-                            T.insert theTable hash (ref (Nil num));
-                            lastblock := num;
+                            let in
+                               if num > !lastblock then
+                                  ()
+                               else
+                                  (* We are extending the longest chain difficulty-wise, but not height-wise. *)
+                                  Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash));
 
-                            if verifyit andalso not (Verify.verifyBlock blstr) then
-                               let in
-                                  Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash));
-                                  deprecateByNumber num
-                               end
-                            else
-                               ();
-
-                            EXTEND
-                            )
+                               setPrimary predlin;
+                               Array.update (thePrimaryFork, num, pos);
+                               T.insert theTable hash (ref (Nil num));
+                               lastblock := num;
+                               totaldiff := diff;
+   
+                               if verifyit andalso not (Verify.verifyBlock blstr) then
+                                  let in
+                                     Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash));
+                                     deprecateByNumber num
+                                  end
+                               else
+                                  ();
+   
+                               EXTEND
+                            end
                          else
                             (* On a secondary fork. *)
                             let 
                                val deprecated = verifyit andalso not (Verify.verifyBlock blstr)
                                (* XX use deprecated *)
 
-                               val lineage = Cons (pos, num, predlinr)
+                               val lineage = Cons (pos, num, diff, predlinr)
                             in
                                T.insert theTable hash (ref lineage);
                                
-                               (case predlin of
-                                   Nil _ =>
-                                      Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
-                                 | _ => ());
+                               Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash));
 
                                if deprecated then
                                   Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash))
@@ -332,8 +417,10 @@ structure Blockchain :> BLOCKCHAIN =
                              T.remove orphanTable hash';
        
                              insertBlockMain orphanage hash' blstr' RECEIVE verifyit
-                             (* Our result is the result for hash'.  It can't be ORPHAN, since we just
-                                inserted its predecesor (ie, hash), and if it's EXTENDS we want it.
+                             (* Our result is just the result for hash', because we are extending
+                                the longest fork iff hash' extends the longest fork.
+                                (The result for hash' can't be ORPHAN, since we just inserted its
+                                predecesor (ie, hash).)
                              *)
                           end
                      | NONE =>
@@ -444,7 +531,6 @@ structure Blockchain :> BLOCKCHAIN =
                   let
                      val pos = loadFile (Pos.fromInt (B.size genesisRecord)) instream
                   in
-                     Log.long (fn () => "Loaded");
                      theOutPos := pos;
                      MIO.closeIn instream;
    
@@ -455,7 +541,8 @@ structure Blockchain :> BLOCKCHAIN =
                      theOutstream := SOME (MIO.openAppend path);
                      MIO.SeekIO.seekOut (valOf (!theOutstream), pos);
    
-                     Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock))
+                     Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock));
+                     Log.long (fn () => "Total difficulty " ^ IntInf.toString (!totaldiff))
                   end
                end
             else
@@ -489,16 +576,18 @@ structure Blockchain :> BLOCKCHAIN =
          (case !(T.lookup theTable hash) of
              Nil num =>
                 A.sub (thePrimaryFork, num)
-           | Cons (pos, _, _) => pos)
+           | Cons (pos, _, _, _) => pos)
 
       fun blockNumber hash =
          (case !(T.lookup theTable hash) of
              Nil num => num
-           | Cons (_, num, _) => num)
+           | Cons (_, num, _, _) => num)
 
       fun blockData hash = inputData (blockPosition hash)
 
       fun lastBlock () = !lastblock
+
+      fun totalDifficulty () = !totaldiff
 
       fun hashByNumber num =
          if num > !lastblock then
