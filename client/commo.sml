@@ -167,6 +167,9 @@ structure Commo :> COMMO =
             ()
 
 
+      fun closed ({opn, ...}:conn) = not (!opn)
+
+
       fun reapIdleConnections () =
          let
             val () = Log.long (fn () => "Reaping")

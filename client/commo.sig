@@ -6,7 +6,9 @@ signature COMMO =
 
       val sendMessage : conn -> Message.message -> unit
       val broadcastMessage : Message.message -> unit
+
       val closeConn : conn -> bool -> unit                (* bool=true if closed "with prejudice" *)
+      val closed : conn -> bool
 
       val suspendPolling : unit -> unit
       val resumePolling : unit -> unit

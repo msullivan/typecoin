@@ -77,7 +77,7 @@ structure Constants =
       val throughputInterval = Time.fromSeconds 30          (* 30 seconds *)    
 
       (* Want to receive at least this many bytes per throughputInterval. *)
-      val syncThroughput = 5 * 1024 * 1024                  (* 5 MB *)                   
+      val syncThroughput = 3 * 1024 * 1024                  (* 3 MB *)
 
       (* Accept at most this many orphans from any one connection. *)
       val maxOrphans = 50
@@ -99,8 +99,11 @@ structure Constants =
 
       (*** Confirmation constants ***)
 
-      (* Verify this many blocks at the end of blockchain. *)
-      val trustChainBefore = 10
+      (* Accept an invalid block with this many confirmations.
+         (Also, consequently, only verify this many blocks at
+         the end of the blockchain.)
+      *)
+      val chainTrustConfirmations = 10
 
 
 

@@ -22,7 +22,7 @@ structure Block :> BLOCK =
          previous : Bytestring.string,
          root : Bytestring.string,
          timestamp : word32,
-         difficulty : word32,
+         bits : word32,
          nonce : word32,
          count : int,
          transactions : Transaction.tx list
@@ -30,7 +30,7 @@ structure Block :> BLOCK =
 
       exception InvalidBlock
 
-      fun writeBlockHeader ({version, previous, root, timestamp, difficulty, nonce, ...}:block) =
+      fun writeBlockHeader ({version, previous, root, timestamp, bits, nonce, ...}:block) =
          if B.size previous <> 32 orelse B.size root <> 32 then
             raise InvalidBlock
          else
@@ -42,11 +42,11 @@ structure Block :> BLOCK =
             >>>
             W.word32L timestamp
             >>>
-            W.word32L difficulty
+            W.word32L bits
             >>>
             W.word32L nonce
 
-      fun writeBlock (block as {version, previous, root, timestamp, difficulty, nonce, count, transactions}:block) =
+      fun writeBlock (block as {count, transactions, ...}:block) =
          if length transactions <> count then
             raise InvalidBlock
          else
@@ -66,7 +66,7 @@ structure Block :> BLOCK =
          R.word32L
          >>= (fn timestamp =>
          R.word32L
-         >>= (fn difficulty =>
+         >>= (fn bits =>
          R.word32L
          >>= (fn nonce =>
          R.varint
@@ -74,7 +74,7 @@ structure Block :> BLOCK =
          R.count count Transaction.readTx
          >>= (fn transactions =>
          R.return { version=version, previous=previous, root=root, timestamp=timestamp,
-                    difficulty=difficulty, nonce=nonce, count=count, transactions=transactions }
+                    bits=bits, nonce=nonce, count=count, transactions=transactions }
          ))))))))
 
       fun hashBlockHeader str =

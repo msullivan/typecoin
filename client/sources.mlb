@@ -32,10 +32,10 @@
         message.sml
         peer.sig
         peer.sml
-        blockchain.sig
-        blockchain.sml
         verify.sig
         verify.sml
+        blockchain.sig
+        blockchain.sml
         commo.sig
         commo.sml
         process.sig

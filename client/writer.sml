@@ -91,7 +91,7 @@ structure Writer :> WRITER =
          seq (varint (length l)) (list f l)
 
 
-      fun write f =
-         B.concat (rev (f []))
-      
+      fun write wr =
+         B.concat (rev (wr []))
+
    end

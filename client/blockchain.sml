@@ -19,7 +19,13 @@ structure Blockchain :> BLOCKCHAIN =
 
       (* Precomputed data *)
       val genesisRecord =
-         B.concat [Chain.genesisHash, ConvertWord.word32ToBytesL (Word32.fromInt (B.size Chain.genesisBlock)), Chain.genesisBlock]
+         B.concat [ConvertWord.word32ToBytesL 0w0,
+                   Chain.genesisHash,
+                   ConvertWord.word32ToBytesL (Word32.fromInt (B.size Chain.genesisBlock)),
+                   Chain.genesisBlock]
+
+      (* Codes *)
+      val codeDeprecated : Word32.word = 0w1
 
 
 
@@ -39,30 +45,53 @@ structure Blockchain :> BLOCKCHAIN =
             val outs = valOf (!theOutstream)
             val sz = B.size blstr
          in
+            MIO.output (outs, ConvertWord.word32ToBytesL 0w0);
             MIO.output (outs, hash);
             MIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt sz));
             MIO.output (outs, blstr);
             MIO.flushOut outs;
-            theOutPos := pos + 36 + Pos.fromInt sz;
+            theOutPos := pos + 40 + Pos.fromInt sz;
             pos
+         end
+
+      fun inputCode pos =
+         let
+            val ins = valOf (!theInstream)
+         in
+            MIO.SeekIO.seekIn (ins, pos);
+            ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
          end
 
       fun inputHash pos =
          let
             val ins = valOf (!theInstream)
          in
-            MIO.SeekIO.seekIn (ins, pos);
+            MIO.SeekIO.seekIn (ins, pos+4);
             MIO.inputN (ins, 32)
          end
 
       fun inputData pos =
          let
             val ins = valOf (!theInstream)
-            val () = MIO.SeekIO.seekIn (ins, pos+32)
+            val () = MIO.SeekIO.seekIn (ins, pos+36)
             val sz = Word32.toInt (ConvertWord.bytesToWord32L (MIO.inputN (ins, 4)))
          in
             MIO.inputN (ins, sz)
          end
+
+      fun outputDeprecate pos =
+         let
+            val code = inputCode pos
+            val code' = Word32.orb (code, codeDeprecated)
+
+            val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
+            val outs = MIO.openAppend path
+         in
+            MIO.SeekIO.seekOut (outs, pos);
+            MIO.output (outs, ConvertWord.word32ToBytesL code');
+            MIO.closeOut outs
+         end
+
 
       fun fileExists filename =
          (OS.FileSys.fileSize filename; true)
@@ -101,13 +130,14 @@ structure Blockchain :> BLOCKCHAIN =
          to be the primary fork.  Element i of the array gives the position (in the record) of the
          ith block.  When we look up a hash in the table, we are given a lineage.  A lineage is
          either (Nil num) -- indicating that the block is #num on the main fork -- or it is
-         (Cons (pos, num, pred, predlin)) -- indicating that the block is on a secondary fork.  In
+         (Cons (pos, num, predlin)) -- indicating that the block is on a secondary fork.  In
          the latter case, pos is the position (in the record) of the block, num is the number the
-         block would be if it were on the main form, pred is the predecessor block's hash, and
-         predlin is the predecessor's lineage.
+         block would be if it were on the main form, and predlin is the predecessor's lineage.
+         Predlin is a reference, because the predecessor might be moved onto or off the primary
+         fork.
 
-         Thus, if a block has lineage (Cons (_, _, _, Nil _)) it is the first block on a fork.  Only
-         very rarely will a fork contain even two blocks.
+         Thus, if a block has lineage (Cons (_, _, ref (Nil _))) it is the first block on a fork.
+         Only very rarely will a fork contain even two blocks.
 
          Note that a secondary fork can become the primary fork it it becomes longer.  Then the
          array and lineages must be adjusted accordingly.
@@ -118,43 +148,78 @@ structure Blockchain :> BLOCKCHAIN =
          Nil of int
 
          (* block is on a secondary fork:
-            position, block number, predecessor, predecessor's lineage
+            position, block number, predecessor's lineage
          *)
-       | Cons of pos * int * hash * lineage
+       | Cons of pos * int * lineage ref
 
 
       val lastblock = ref 0
-      val theTable : lineage T.table = T.table Constants.blockTableSize
+      val theTable : lineage ref T.table = T.table Constants.blockTableSize
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
 
 
 
-      (* Takes a hash and lineage of a block to put on the primary fork, displacing
-         the fork that is currently there.
-         Returns the hash and lineage of the block (of the same number) that used to
-         be on the primary fork.
-      *)
-      fun makePrimary hash lineage =
-         (case lineage of
-             Nil _ =>
-                (hash, lineage)
-           | Cons (pos, num, pred, predlin) =>
-                let
-                   val oldpos = A.sub (thePrimaryFork, num)
-                   val oldhash = inputHash oldpos
-                   val (oldpred, oldpredlin) = makePrimary pred predlin
-                   val oldlin = Cons (oldpos, num, oldpred, oldpredlin)
-                in
-                   Array.update (thePrimaryFork, num, pos);
-                   T.insert theTable hash (Nil num);
-                   T.insert theTable oldhash oldlin;
-                   (oldhash, oldlin)
-                end)
+      (* Rewinds the primary fork to backto, moving the current contents to a secondary fork. *)
+      fun rewind backto =
+         let
+            fun loop num =
+               if num = backto then
+                  let
+                     val pos = A.sub (thePrimaryFork, num)
+                     val hash = inputHash pos
+                  in
+                     T.lookup theTable hash
+                  end
+               else
+                  let
+                     val predlinr = loop (num-1)
+                     val pos = A.sub (thePrimaryFork, num)
+                     val hash = inputHash pos
+                     val lineager = T.lookup theTable hash
+                  in
+                     lineager := Cons (pos, num, predlinr);
+                     lineager
+                  end
+         in
+            loop (!lastblock);
+            lastblock := backto
+         end
+
+
+      (* Puts lineage on the primary fork, displacing what is currently there. *)
+      fun setPrimary lineage =
+         let
+            fun loop lineage =
+               (case lineage of
+                   Nil num =>
+                      rewind num
+                 | Cons (pos, num, predlin) =>
+                      let 
+                         val () = loop (!predlin)
+                         val hash = inputHash pos
+                         val lineager = T.lookup theTable hash
+                      in
+                         lineager := Nil num;
+                         Array.update (thePrimaryFork, num, pos)
+                      end)
+         in
+            loop lineage;
+            lastblock := (case lineage of
+                             Nil num => num
+                           | Cons (_, num, _) => num)
+         end
+
+
+      fun deprecateByNumber _ = ()
 
 
       datatype result = ORPHAN | NOEXTEND | EXTEND
 
-      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr poso =
+      datatype mode =
+         RECEIVE
+       | LOAD of pos
+
+      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr mode verifyit =
          if T.member theTable hash then
             NOEXTEND
          else if T.member orphanTable hash then
@@ -173,65 +238,84 @@ structure Blockchain :> BLOCKCHAIN =
                          the orphan will automatically be linked in.  Otherwise, the orphanage will
                          be gc'ed away when the connection closes.
 
-                         We wouldn't bother to do this, except that the blockchain download protocol
-                         depends on it.
+                         We probably wouldn't bother to do this, except that the blockchain download
+                         protocol depends on it.
                       *)
-                      (case poso of
-                          SOME _ =>
-                             (* Shouldn't see orphans when loading, but if we do, ignore them. *)
+                      (case mode of
+                          LOAD _ =>
                              ORPHAN
-                        | NONE =>
+                        | _ =>
+                             (* Store received orphans. *)
                              (
                              T.insert orphanTable hash blstr;
                              T.insert orphanPredTable prev hash;
                              ORPHAN
                              ))
-                 | SOME lineage =>
+
+                 | SOME predlinr =>
                       let
+                         val predlin = !predlinr
+
                          val pos =
-                            (* If we're given a position, use it.  Otherwise write to file. *)
-                            (case poso of
-                                NONE =>
-                                   outputBlock hash blstr
-                              | SOME pos =>
-                                   pos)
+                            (* If we're loading, use the given position.  Otherwise write to file. *)
+                            (case mode of
+                                LOAD pos =>
+                                   pos
+                              | _ =>
+                                   outputBlock hash blstr)
 
                          val num =
-                            (case lineage of
-                                Nil n => n
-                              | Cons (_, n, _, _) => n) + 1
+                            1 + (case predlin of
+                                    Nil n => n
+                                  | Cons (_, n, _) => n)
                       in
                          if num > !lastblock then
                             (* Extending the longest chain. *)
                             (
-                            makePrimary prev lineage;
+                            setPrimary predlin;
                             Array.update (thePrimaryFork, num, pos);
-                            T.insert theTable hash (Nil num);
+                            T.insert theTable hash (ref (Nil num));
                             lastblock := num;
+
+                            if verifyit andalso not (Verify.verifyBlock blstr) then
+                               let in
+                                  Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash));
+                                  deprecateByNumber num
+                               end
+                            else
+                               ();
+
                             EXTEND
                             )
                          else
                             (* On a secondary fork. *)
-                            (
-                            T.insert theTable hash (Cons (pos, num, prev, lineage));
-                            
-                            (case lineage of
-                                Nil _ =>
-                                   (case poso of
-                                       NONE =>
-                                          Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
-                                     | SOME _ => ())
-                              | _ => ());
+                            let 
+                               val deprecated = verifyit andalso not (Verify.verifyBlock blstr)
+                               (* XX use deprecated *)
 
-                            NOEXTEND
-                            )
+                               val lineage = Cons (pos, num, predlinr)
+                            in
+                               T.insert theTable hash (ref lineage);
+                               
+                               (case predlin of
+                                   Nil _ =>
+                                      Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash))
+                                 | _ => ());
+
+                               if deprecated then
+                                  Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash))
+                               else
+                                  ();
+   
+                               NOEXTEND
+                            end
                       end)
             end
 
 
-      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr =
+      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr verifyit =
          let
-            val result = insertBlockMain orphanage hash blstr NONE
+            val result = insertBlockMain orphanage hash blstr RECEIVE verifyit
          in
             (case result of
                 ORPHAN => ORPHAN
@@ -247,7 +331,7 @@ structure Blockchain :> BLOCKCHAIN =
                              T.remove orphanPredTable hash;
                              T.remove orphanTable hash';
        
-                             insertBlockMain orphanage hash' blstr' NONE
+                             insertBlockMain orphanage hash' blstr' RECEIVE verifyit
                              (* Our result is the result for hash'.  It can't be ORPHAN, since we just
                                 inserted its predecesor (ie, hash), and if it's EXTENDS we want it.
                              *)
@@ -260,7 +344,7 @@ structure Blockchain :> BLOCKCHAIN =
       val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
       fun loadBlock hash blstr pos =
-         (case insertBlockMain dummyOrphanage hash blstr (SOME pos) of
+         (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) false of
              EXTEND =>
                 if !lastblock mod 1000 = 0 then
                    Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
@@ -270,52 +354,68 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun loadFile pos instream =
          let
-            val hash = MIO.inputN (instream, 32)
+            val code = MIO.inputN (instream, 4)
          in
-            if B.size hash = 0 then
+            if B.size code = 0 then
                pos
-            else if B.size hash <> 32 then
+            else if B.size code <> 4 then
                let in
                   Log.long (fn () => "File ends with incomplete record");
                   pos
                end
             else
                let
-                  val szstr = MIO.inputN (instream, 4)
+                  val hash = MIO.inputN (instream, 32)
                in
-                  if B.size szstr <> 4 then
+                  if B.size hash <> 32 then
                      let in
                         Log.long (fn () => "File ends with incomplete record");
                         pos
                      end
                   else
                      let
-                        val sz =
-                           Word32.toInt (ConvertWord.bytesToWord32L szstr)
-      
-                        val blstr = MIO.inputN (instream, sz)
+                        val szstr = MIO.inputN (instream, 4)
                      in
-                        if B.size blstr <> sz then
+                        if B.size szstr <> 4 then
                            let in
                               Log.long (fn () => "File ends with incomplete record");
                               pos
                            end
                         else
-                           let in
-                              loadBlock hash blstr pos;
-                              loadFile (pos + 36 + Pos.fromInt sz) instream
+                           let
+                              val sz =
+                                 Word32.toInt (ConvertWord.bytesToWord32L szstr)
+            
+                              val blstr = MIO.inputN (instream, sz)
+                           in
+                              if B.size blstr <> sz then
+                                 let in
+                                    Log.long (fn () => "File ends with incomplete record");
+                                    pos
+                                 end
+                              else 
+                                 let in
+                                    if Word32.andb (ConvertWord.bytesToWord32L code, codeDeprecated) = 0w0 then
+                                       loadBlock hash blstr pos
+                                    else
+                                       ();
+
+                                    loadFile (pos + 40 + Pos.fromInt sz) instream
+                                 end
                            end
                      end
                end
          end
 
+
+      
       fun initialize () =
          let
             val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
          in
             lastblock := 0;
             T.reset theTable Constants.blockTableSize;
-            T.insert theTable Chain.genesisHash (Nil 0);
+            T.insert theTable Chain.genesisHash (ref (Nil 0));
             A.update (thePrimaryFork, 0, 0);
    
             if MIO.exists path then
@@ -375,8 +475,8 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun close () =
          (
-         MIO.closeOut (valOf (!theOutstream));
-         MIO.closeIn (valOf (!theInstream))
+         Option.app MIO.closeOut (!theOutstream);
+         Option.app MIO.closeIn (!theInstream)
          )
 
 
@@ -386,15 +486,15 @@ structure Blockchain :> BLOCKCHAIN =
       fun member hash = T.member theTable hash
 
       fun blockPosition hash =
-         (case T.lookup theTable hash of
+         (case !(T.lookup theTable hash) of
              Nil num =>
                 A.sub (thePrimaryFork, num)
-           | Cons (pos, _, _, _) => pos)
+           | Cons (pos, _, _) => pos)
 
       fun blockNumber hash =
-         (case T.lookup theTable hash of
+         (case !(T.lookup theTable hash) of
              Nil num => num
-           | Cons (_, num, _, _) => num)
+           | Cons (_, num, _) => num)
 
       fun blockData hash = inputData (blockPosition hash)
 

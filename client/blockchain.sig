@@ -10,7 +10,10 @@ signature BLOCKCHAIN =
       val orphanageSize : orphanage -> int
 
       datatype result = ORPHAN | NOEXTEND | EXTEND
-      val insertBlock : orphanage -> hash -> Bytestring.string -> result
+      (* The block must be fast-verified already.  Will fully verify it if the bool argument is true. *)
+      val insertBlock : orphanage -> hash -> Bytestring.string -> bool -> result
+
+      val deprecateByNumber : int -> unit
 
       exception Absent
       val member : hash -> bool

@@ -14,6 +14,11 @@ structure Process :> PROCESS =
       val syncing : Commo.conn option ref = ref NONE
       val syncData = ref 0  (* amount of sync data received during this syncTimeout period *)
 
+      fun syncingWith conn =
+         (case !syncing of
+             NONE => false
+           | SOME conn' => Commo.eq (conn, conn'))
+
 
 
       (* The Bitcoin block download protocol is a bit strange.  (The Bitcoinj client calls it
@@ -79,8 +84,8 @@ structure Process :> PROCESS =
 
 
       fun monitorSync conn remoteblocks =
-         if Blockchain.lastBlock () >= remoteblocks then
-            (* Done *)
+         if Blockchain.lastBlock () >= remoteblocks orelse not (isSome (!syncing)) then
+            (* Done or aborted. *)
             ()
          else if !syncData >= Constants.syncThroughput then
             (* Acceptable progress *)
@@ -99,30 +104,40 @@ structure Process :> PROCESS =
             )
 
 
-      fun doneSync () =
+      (* complete=true if sync complete, complete=false if sync aborted. *)
+      fun doneSync complete =
          let
             val lastblock = Blockchain.lastBlock ()
 
             fun verifylast i =
                if i > lastblock then
                   ()
+               else if Verify.verifyBlock (Blockchain.dataByNumber i) then
+                  verifylast (i+1)
                else
                   let in
-                     Verify.verifyBlock (Blockchain.dataByNumber i);
+                     Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev (Blockchain.hashByNumber i)));
+                     Blockchain.deprecateByNumber i;
                      verifylast (i+1)
                   end
          in
-            Log.long (fn () => "Sync complete at block " ^ Int.toString lastblock);
+            Log.long (fn () => if complete then
+                                  "Sync complete at block " ^ Int.toString lastblock
+                               else
+                                  "Sync aborted at block " ^ Int.toString lastblock);
+            (* The synced blocks have only been fast-verified, so fully verify
+               the last chainTrustConfirmations blocks.
+            *)
+            verifylast (Int.max (lastblock - Constants.chainTrustConfirmations + 1, 1));
+               
             Commo.resumePolling ();
-   
-            verifylast (Int.max (lastblock - Constants.trustChainBefore + 1, 0));
    
             (* We never got a chance to ask for peers, so ask now. *)
             if Peer.wantPeers () > 0 then
                Commo.sendMessage (valOf (!syncing)) M.Getaddr
             else
                ();
-   
+
             syncing := NONE
          end
 
@@ -217,62 +232,66 @@ structure Process :> PROCESS =
                 let
                    val () = Log.short "b"
                    val blstr' = BS.string blstr
-
-                   val () =
-                      (case !syncing of
-                          SOME _ =>
-                             Verify.verifyBlockFast blstr'
-                        | NONE =>
-                             Verify.verifyBlock blstr')
-
-                   val hash = Block.hashBlockHeader blstr'
-                   val orphanage = Commo.orphanage conn
-
-                   val result = Blockchain.insertBlock orphanage hash blstr'
                 in
-                   (case !syncing of
-                       SOME conn' =>
-                          if Commo.eq (conn, conn') then
-                             syncData := !syncData + B.size blstr'
-                          else ()
-                     | NONE =>
-                          ());
+                   if Verify.verifyBlockFast blstr' then
+                      let
+                         val hash = Block.hashBlockHeader blstr'
+                         val orphanage = Commo.orphanage conn
 
-                   (case result of
-                       Blockchain.ORPHAN =>
-                          if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
-                             (* request the ancestors of the orphan *)
-                             Commo.sendMessage conn (getblocks (SOME hash))
-                          else
-                             (* Too many orphans from this connection, drop it.
+                         val result = Blockchain.insertBlock orphanage hash blstr' (not (isSome (!syncing)))
+                      in
+                         if syncingWith conn then
+                            syncData := !syncData + B.size blstr'
+                         else
+                            ();
 
-                                This can result in an unnecessary disconnection if more than maxOrphans
-                                blocks are mined during a sync, which can happen during the initial
-                                sync.  This isn't terrible, since there are more peers to be contacted
-                                (indeed, maybe we should spread the load).  But we could fix this by
-                                counting orphan chains, rather than individual orphans.
-                             *)
-                             Commo.closeConn conn false
-                     | Blockchain.NOEXTEND => ()
-                     | Blockchain.EXTEND =>
-                          (* Log the block, perhaps unless syncing. *)
-                          (case !syncing of
-                              SOME _ =>
-                                 let
-                                    val blocks = Blockchain.lastBlock ()
-                                 in
-                                    if blocks mod 100 = 0 then
-                                       Log.long (fn () => "Block " ^ Int.toString blocks)
-                                    else
-                                       ();
-    
-                                    if blocks >= Commo.lastBlock conn then
-                                       doneSync ()
-                                    else
-                                       ()
-                                 end
-                            | NONE =>
-                                 Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))))
+                         (case result of
+                             Blockchain.ORPHAN =>
+                                if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
+                                   (* request the ancestors of the orphan *)
+                                   Commo.sendMessage conn (getblocks (SOME hash))
+                                else
+                                   (* Too many orphans from this connection, drop it.
+      
+                                      This can result in an unnecessary disconnection if more than maxOrphans
+                                      blocks are mined during a sync, which can happen during the initial
+                                      sync.  This isn't terrible, since there are more peers to be contacted
+                                      (indeed, maybe it's best to spread the load anyawy).  But we could fix
+                                      this by limiting orphan chains, rather than individual orphans.
+                                   *)
+                                   Commo.closeConn conn false
+                           | Blockchain.NOEXTEND => ()
+                           | Blockchain.EXTEND =>
+                                (case !syncing of
+                                    SOME _ =>
+                                       let
+                                          val blocks = Blockchain.lastBlock ()
+                                       in
+                                          if blocks mod 100 = 0 then
+                                             Log.long (fn () => "Block " ^ Int.toString blocks)
+                                          else
+                                             ();
+          
+                                          if blocks >= Commo.lastBlock conn then
+                                             doneSync true
+                                          else
+                                             ()
+                                       end
+                                  | NONE =>
+                                       Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))))
+                      end
+                   else
+                      (* This block is bogus.  Don't talk to this peer any more. *)
+                      let in
+                         Log.long (fn () => "Invalid block detected at " ^ B.toStringHex (B.rev (Block.hashBlockHeader blstr')));
+
+                         if syncingWith conn then
+                            doneSync false
+                         else
+                            ();
+
+                         Commo.closeConn conn true
+                      end
                 end
 
 
