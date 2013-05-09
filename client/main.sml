@@ -50,6 +50,22 @@ structure Main =
 
       fun main () =
          (
+         (* Create data directory, if it doesn't exist. *)
+         ((if OS.FileSys.isDir Constants.dataDirectory then
+              ()
+           else
+              (
+              Log.long (fn () => "Fatal error: cannot create data directory");
+              raise (Fail "fatal error")
+              ))
+          handle OS.SysErr _ =>
+             (OS.FileSys.mkDir Constants.dataDirectory
+              handle OS.SysErr _ =>
+                 (
+                 Log.long (fn () => "Fatal error: cannot create data directory");
+                 raise (Fail "fatal error")
+                 )));
+
          Log.initialize ();
          Blockchain.initialize ();
 
