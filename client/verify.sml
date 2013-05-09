@@ -88,6 +88,8 @@ structure Verify (* :> VERIFY *) =
                diff
             end
 
+
+
       fun verifyBlockFast blstr =
          let
             val {bits, root, count, transactions, ...} =
@@ -110,11 +112,21 @@ structure Verify (* :> VERIFY *) =
          end handle VerifyFailed => false
 
 
+
       (* XXX *)
       fun verifyTx txstr = true
 
+
       (* XXX *)
-      fun verifyBlock blstr = true
+      fun verifyBlock blstr =
+         let
+            val {count, ...} =
+               Reader.readfull Block.readBlock (BS.full blstr)
+               handle Reader.SyntaxError => raise VerifyFailed
+         in
+            (* XXX make it fail a lot, for testing *)
+            count mod 3 <> 2
+         end
 
    end
 

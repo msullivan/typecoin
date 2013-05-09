@@ -1,10 +1,11 @@
 
-structure Blockchain :> BLOCKCHAIN =
+structure Blockchain (* :> BLOCKCHAIN *) =
    struct
 
       structure A = Array
       structure B = Bytestring
       structure BS = Bytesubstring
+      structure Q = IDeque
 
       structure Pos = Int64
       structure MIO = 
@@ -25,7 +26,7 @@ structure Blockchain :> BLOCKCHAIN =
                    Chain.genesisBlock]
 
       (* Codes *)
-      val codeDeprecated : Word32.word = 0w1
+      val codeDubious : Word32.word = 0w1
 
 
 
@@ -87,10 +88,10 @@ structure Blockchain :> BLOCKCHAIN =
             ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
          end
 
-      fun outputDeprecate pos =
+      fun outputSetDubious pos =
          let
             val code = inputCode pos
-            val code' = Word32.orb (code, codeDeprecated)
+            val code' = Word32.orb (code, codeDubious)
 
             val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
             val outs = MIO.openAppend path
@@ -165,21 +166,78 @@ structure Blockchain :> BLOCKCHAIN =
          stays on a secondary fork.  Conversely, 102 might be moved off the primary fork while 103c
          stays off.
 
-         Our data structure has five pieces:
+         Our data structure has six pieces:
 
          1. The record is a file containing all the blocks on any fork.  It is accessed through
             theInstream and theOutstream.  The current position of theOutstream in the file is
             maintained in theOutPos.
 
-         2. lastblock       holds the block number of the primary fork's head
-         3. totaldiff       holds the cumulative difficulty to the primary fork's head
-         4. theTable        is a hash table mapping block hashes to their lineage reference
-         5. thePrimaryFork  is an array mapping primary-fork block numbers to each block's position
-                            in the record
+         2. lastblock        holds the block number of the primary fork's head
+         3. totaldiff        holds the cumulative difficulty to the primary fork's head
+         4. theTable         is a hash table mapping block hashes to their lineage reference
+         5. thePrimaryFork   is an array mapping primary-fork block numbers to each block's position
+                             in the record
+         6. theDubiousQueue  see below
+         7. verification     records whether verification is on (see below)
 
          (I'm a bit concerned about the scalability of totaldiff.  If the Bitcoin difficulty grows
          exponentially (which Moore's law suggests is likely), totaldiff will grow exponentially, so
          the representation of totaldiff will grow linearly.)
+
+
+         Dubious blocks
+         --------------
+         If we disagree with a majority of the mining power about the rules, we could find ourselves
+         stranded on a fork while the miners move ahead.  (eg, March 11-12, 2013.)  To avoid this,
+         we accept the will of the majority of mining power once it gets enough confirmations, even
+         if it disagrees with the way we do verification.  Thus, we verify blocks, but if they fail
+         verification, we retain them, marked as "dubious".
+
+         A dubious block becomes "accepted" once it gets enough confirmations.  (Specifically, we
+         require chainTrustConfirmations subsequent blocks, and chainTrustConfirmations*diff
+         subsequent difficulty, where diff is the difficulty of the block preceding the dubious
+         one.)  Any suffix of the primary fork starting at a dubious but non-accepted block is a
+         dubious chain.
+
+         One should not rely on any information in a dubious chain.  This is signalled to the user.
+         When and if the block that  begins it is accepted, the chain is considered reliable again.
+         Otherwise, another fork will become the primary fork and the dubious chain will then be
+         irrelevant.
+
+         (As noted, we require a minimum number of confirmations and a minimum amount of difficulty
+         to accept a dubious block.  We require difficulty so that an attacker cannot cause a bad
+         block to become accepted by quickly churning out a bunch of low-difficulty blocks.  We
+         require confirmations so that a sudden rise in difficulty cannot cause a bad block to be
+         accepted with very few confirmations.)
+
+         We store the dubiousness information in two ways, depending on whether a blog is on the
+         primary fork.  On a secondary fork, a block's lineage records it's verification status,
+         which is OK (if it passed verification, or it is dubious but accepted), DUBIOUS, or
+         UNKNOWN (if it was never verified).
+
+         On the primary fork we do not distinguish between OK and UNKNOWN.  However, we ensure that
+         any verified blocks are far enough back in the chain that they would be accepted if they
+         happened to be dubious.  We ensure this by calling verifying the last several block at the
+         end of any period during which verification is turned off (ie, sync and load).  Thus, if
+         verification is on, all blocks on the primary fork are either OK or DUBIOUS.  When we move
+         a block from the primary fork while verifcation is off, we must put down its status as
+         UNKNOWN or DUBIOUS, since we have no good way to know if it is OK.  (Thus, if the block that
+         is verified is moved off the primary fork while verification is off, and then moved back
+         onto the primary fork, it will be re-verified.  This wasteful, but it will happen very
+         rarely.)
+
+         We maintain a deque of all dubious and unaccepted blocks on the primary fork in
+         theDubiousQueue.  Each entry gives the block's number and the total difficulty necessary
+         for it to become accepted.
+
+         When we detect a new dubious block on the primary fork, we add it to the end of the deque.
+         We may also insert or remove blocks at the end of a deque when the tree is reorganized.
+         When we extend the primary fork, we check the front of the deque to see if any dubious
+         blocks can now be accepted.
+
+         The usual state of affairs is for theDubiousQueue to be empty.  Whenever there are dubious
+         blocks, there is something wrong in the network, and it should be signalled to the user.
+
 
          Orphans
          -------
@@ -193,20 +251,24 @@ structure Blockchain :> BLOCKCHAIN =
          depends on it.
       *)
 
+      datatype verification = OK | DUBIOUS | UNKNOWN
+
       datatype lineage =
          (* block is on the primary fork: block number *)
          Nil of int
 
          (* block is on a secondary fork:
-            position, block number, cumulative difficulty, predecessor's lineage
+            position, block number, cumulative difficulty, predecessor's lineage, verification status
          *)
-       | Cons of pos * int * IntInf.int * lineage ref
+       | Cons of pos * int * IntInf.int * lineage ref * verification
 
 
       val lastblock = ref 0
       val totaldiff : IntInf.int ref = ref 0
       val theTable : lineage ref T.table = T.table Constants.blockTableSize
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
+      val theDubiousQueue : (int * IntInf.int) Q.ideque = Q.ideque ()
+      val verification = ref false
 
       type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
 
@@ -232,46 +294,37 @@ structure Blockchain :> BLOCKCHAIN =
                      val cumdiff = !totaldiff
                      val diff = Verify.decodeDifficulty (inputDiffBits pos)
 
+                     (* Undo everything but the table entry, which we can't do until the recursion returns. *)
                      val () = lastblock := num - 1
                      val () = totaldiff := cumdiff - diff
+                     (* Reducing the total difficulty could mean that things that we've removed from
+                        the dubious queue ought to be in there again.  We needn't worry about this,
+                        because we never rewind except to make room for an even longer fork.
+                     *)
+
+                     val verstat =
+                        (let
+                            val (dubnum, _) = Q.back theDubiousQueue
+                         in
+                            if num = dubnum then
+                               (Q.removeBack theDubiousQueue; DUBIOUS)
+                            else if !verification then
+                               OK
+                            else
+                               UNKNOWN
+                         end
+                         handle Q.Empty => if !verification then OK else UNKNOWN)
 
                      val predlinr = loop ()
 
                      val hash = inputHash pos
                      val lineager = T.lookup theTable hash
                   in
-                     lineager := Cons (pos, num, cumdiff, predlinr);
+                     lineager := Cons (pos, num, cumdiff, predlinr, verstat);
                      lineager
                   end
          in
             loop ()
-         end
-
-
-      (* Puts lineage on the primary fork, rewinding what is currently there to make room for it. *)
-      fun setPrimary lineage =
-         let
-            fun loop lineage =
-               (case lineage of
-                   Nil num =>
-                      let in
-                         rewind num;
-                         ()
-                      end
-                 | Cons (pos, num, cumdiff, predlin) =>
-                      let 
-                         val () = loop (!predlin)
-
-                         val hash = inputHash pos
-                         val lineager = T.lookup theTable hash
-                      in
-                         lineager := Nil num;
-                         Array.update (thePrimaryFork, num, pos);
-                         lastblock := num;
-                         totaldiff := cumdiff
-                      end)
-         in
-            loop lineage
          end
 
 
@@ -291,14 +344,161 @@ structure Blockchain :> BLOCKCHAIN =
          end
 
 
-      fun deprecateByNumber _ = ()
+      (* "setDubious" records that block number num (on the primary fork) is dubious *)
+      fun setDubious num =
+         let
+            val cumdiff = cumulativeDifficulty num
+            val prevdiff = Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, num-1)))
+
+            (* Trust this block only after chainTrustConfirmations confirmations at block
+               num-1's level of difficulty.
+            *)
+            val confirmDiff = cumdiff + (IntInf.fromInt Constants.chainTrustConfirmations) * prevdiff
+
+            fun loop acc =
+               if Q.isEmpty theDubiousQueue then
+                  acc
+               else
+                  let
+                     val (dubnum, _) = Q.back theDubiousQueue
+                  in
+                     (case Int.compare (num, dubnum) of
+                         EQUAL =>
+                            (* Already in there; it easiest to delete it and put it in again. *)
+                            let in
+                               Q.removeBack theDubiousQueue;
+                               acc
+                            end
+                       | GREATER =>
+                            acc
+                       | LESS =>
+                            loop (Q.removeBack theDubiousQueue :: acc))
+                  end
+
+            val dubafter = loop []
+         in
+            outputSetDubious (A.sub (thePrimaryFork, num));
+            Q.insertBack theDubiousQueue (num, confirmDiff);
+            app (Q.insertBack theDubiousQueue) dubafter
+         end
+
+
+      fun checkDubiousFront () =
+         if Q.isEmpty theDubiousQueue then
+            ()
+         else
+            let
+               val (num, diff) = Q.front theDubiousQueue
+            in
+               if !lastblock >= num + Constants.chainTrustConfirmations andalso !totaldiff >= diff then
+                  let in
+                     Q.removeFront theDubiousQueue;
+                     Log.long (fn () => "Dubious block "^ Int.toString num ^ " now accepted");
+                     checkDubiousFront ()
+                  end
+               else
+                  ()
+            end
+
+
+      (* Puts lineage on the primary fork, rewinding what is currently there to make room for it. *)
+      fun setPrimary lineage =
+         let
+            fun loop lineage =
+               (case lineage of
+                   Nil num =>
+                      let in
+                         rewind num;
+                         ()
+                      end
+                 | Cons (pos, num, cumdiff, predlin, verstat) =>
+                      let 
+                         val () = loop (!predlin)
+
+                         val hash = inputHash pos
+                         val lineager = T.lookup theTable hash
+                      in
+                         lineager := Nil num;
+                         Array.update (thePrimaryFork, num, pos);
+                         lastblock := num;
+                         totaldiff := cumdiff;
+                         checkDubiousFront ();
+                         
+                         (case verstat of
+                             OK => ()
+                           | DUBIOUS =>
+                                setDubious num
+                           | UNKNOWN =>
+                                if !verification andalso not (Verify.verifyBlock (inputData pos)) then
+                                   setDubious num
+                                else
+                                   ())
+                      end)
+         in
+            loop lineage
+         end
+
+
+      fun resumeVerification () =
+         let
+            val blocks = !lastblock
+            val alldiff = !totaldiff
+
+            (* Work backward to find a block we don't need to check.  That is, a block num that has
+               chainTrustConfirmations confirmations and (chainTrustConfirmations * diff') subsequent
+               difficulty, where diff' is the difficulty of block num-1.
+
+               invariants:
+               - cumdiff = cumulative difficulty to num
+               - diff is the difficulty of block num
+            *)
+            fun loop num cumdiff diff =
+               if num <= 0 then
+                  0
+               else
+                  let
+                     val diff' = Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, num-1)))
+                  in
+                     if
+                        blocks >= num + Constants.chainTrustConfirmations
+                        andalso
+                        alldiff >= cumdiff + (IntInf.fromInt Constants.chainTrustConfirmations) * diff'
+                     then
+                        num
+                     else
+                        loop (num-1) (cumdiff-diff) diff'
+                  end
+
+            fun loopVerify i =
+               if i > blocks then
+                  ()
+               else if Verify.verifyBlock (inputData (A.sub (thePrimaryFork, i))) then
+                  loopVerify (i+1)
+               else
+                  let in
+                     Log.long (fn () => "Dubious block detected at " ^ Int.toString i);
+                     setDubious i;
+                     loopVerify (i+1)
+                  end
+
+            val start =
+               loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks))))
+         in
+            loopVerify start;
+            verification := true
+         end
+
+      fun suspendVerification () = verification := false
+                   
 
 
       datatype result = ORPHAN | NOEXTEND | EXTEND
 
-      datatype mode = RECEIVE | LOAD of pos
+      datatype mode =
+         RECEIVE
+       | LOAD of pos  (* pos=position in record *)
 
-      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr mode verifyit =
+      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr mode =
          if T.member theTable hash then
             NOEXTEND
          else if T.member orphanTable hash then
@@ -328,15 +528,14 @@ structure Blockchain :> BLOCKCHAIN =
                          val pos =
                             (* If we're loading, use the given position.  Otherwise write to file. *)
                             (case mode of
-                                LOAD pos =>
-                                   pos
+                                LOAD pos => pos
                               | _ =>
                                    outputBlock hash blstr)
 
                          val num =
                             1 + (case predlin of
                                     Nil n => n
-                                  | Cons (_, n, _, _) => n)
+                                  | Cons (_, n, _, _, _) => n)
     
                          val diff =
                             Verify.decodeDifficulty (ConvertWord.bytesToWord32L (B.substring (blstr, 72, 4)))
@@ -344,28 +543,44 @@ structure Blockchain :> BLOCKCHAIN =
                             (case predlin of
                                 Nil n =>
                                    cumulativeDifficulty n
-                              | Cons (_, _, preddiff, _) =>
+                              | Cons (_, _, preddiff, _, _) =>
                                    preddiff)
+
+                         val (dubious, verstat) =
+                            if !verification then
+                               if Verify.verifyBlock blstr then
+                                  (false, OK)
+                               else
+                                  (true, DUBIOUS)
+                            else
+                               (false, UNKNOWN)
                       in
-                         if diff > !totaldiff then
-                            (* Extending the longest chain. *)
+                         if
+                            diff > !totaldiff
+                            orelse
+                            (diff = !totaldiff andalso not (Q.isEmpty theDubiousQueue))
+                         then
+                            (* Extending the longest chain.  Or, we don't like our chain and found another
+                               of equal length.
+                            *)
                             let in
                                if num > !lastblock then
                                   ()
                                else
-                                  (* We are extending the longest chain difficulty-wise, but not height-wise. *)
-                                  Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash));
+                                  (* XX only print this for fresh forks *)
+                                  Log.long (fn () => "Fork detected at "^ B.toStringHex (B.rev hash));
 
                                setPrimary predlin;
                                Array.update (thePrimaryFork, num, pos);
                                T.insert theTable hash (ref (Nil num));
                                lastblock := num;
                                totaldiff := diff;
+                               checkDubiousFront ();
    
-                               if verifyit andalso not (Verify.verifyBlock blstr) then
+                               if dubious then
                                   let in
-                                     Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash));
-                                     deprecateByNumber num
+                                     Log.long (fn () => "Dubious block detected at " ^ Int.toString num);
+                                     setDubious num
                                   end
                                else
                                   ();
@@ -375,17 +590,15 @@ structure Blockchain :> BLOCKCHAIN =
                          else
                             (* On a secondary fork. *)
                             let 
-                               val deprecated = verifyit andalso not (Verify.verifyBlock blstr)
-                               (* XX use deprecated *)
-
-                               val lineage = Cons (pos, num, diff, predlinr)
+                               val lineage = Cons (pos, num, diff, predlinr, verstat)
                             in
                                T.insert theTable hash (ref lineage);
                                
+                               (* XX only print this for fresh forks *)
                                Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash));
 
-                               if deprecated then
-                                  Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev hash))
+                               if dubious then
+                                  Log.long (fn () => "Dubious block detected on secondary fork at " ^ B.toStringHex (B.rev hash))
                                else
                                   ();
    
@@ -395,9 +608,9 @@ structure Blockchain :> BLOCKCHAIN =
             end
 
 
-      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr verifyit =
+      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr =
          let
-            val result = insertBlockMain orphanage hash blstr RECEIVE verifyit
+            val result = insertBlockMain orphanage hash blstr RECEIVE
          in
             (case result of
                 ORPHAN => ORPHAN
@@ -413,7 +626,7 @@ structure Blockchain :> BLOCKCHAIN =
                              T.remove orphanPredTable hash;
                              T.remove orphanTable hash';
        
-                             insertBlockMain orphanage hash' blstr' RECEIVE verifyit
+                             insertBlockMain orphanage hash' blstr' RECEIVE
                              (* Our result is just the result for hash', because we are extending
                                 the longest fork iff hash' extends the longest fork.
                                 (The result for hash' can't be ORPHAN, since we just inserted its
@@ -428,9 +641,9 @@ structure Blockchain :> BLOCKCHAIN =
       val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
       fun loadBlock hash blstr pos =
-         (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) false of
+         (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) of
              EXTEND =>
-                if !lastblock mod 1000 = 0 then
+                if !lastblock mod 1000 = 0 orelse !lastblock > 71730 then
                    Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
                 else
                    ()
@@ -479,11 +692,7 @@ structure Blockchain :> BLOCKCHAIN =
                                  end
                               else 
                                  let in
-                                    if Word32.andb (ConvertWord.bytesToWord32L code, codeDeprecated) = 0w0 then
-                                       loadBlock hash blstr pos
-                                    else
-                                       ();
-
+                                    loadBlock hash blstr pos;
                                     loadFile (pos + 40 + Pos.fromInt sz) instream
                                  end
                            end
@@ -498,9 +707,12 @@ structure Blockchain :> BLOCKCHAIN =
             val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
          in
             lastblock := 0;
+            totaldiff := 0;
             T.reset theTable Constants.blockTableSize;
             T.insert theTable Chain.genesisHash (ref (Nil 0));
             A.update (thePrimaryFork, 0, 0);
+            Q.reset theDubiousQueue;
+            verification := false;
    
             if MIO.exists path then
                (* Load the blockchain record:
@@ -538,6 +750,7 @@ structure Blockchain :> BLOCKCHAIN =
                      theOutstream := SOME (MIO.openAppend path);
                      MIO.SeekIO.seekOut (valOf (!theOutstream), pos);
    
+                     resumeVerification ();
                      Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock));
                      Log.long (fn () => "Total difficulty " ^ IntInf.toString (!totaldiff))
                   end
@@ -553,7 +766,8 @@ structure Blockchain :> BLOCKCHAIN =
                   MIO.output (outstream, genesisRecord);
                   MIO.flushOut outstream;
                   theOutPos := Pos.fromInt (B.size genesisRecord);
-                  Log.long (fn () => "Created new blockchain file")
+                  Log.long (fn () => "Created new blockchain file");
+                  verification := true  (* don't need to verify any blocks, it's empty *)
                end
          end
 
@@ -573,12 +787,12 @@ structure Blockchain :> BLOCKCHAIN =
          (case !(T.lookup theTable hash) of
              Nil num =>
                 A.sub (thePrimaryFork, num)
-           | Cons (pos, _, _, _) => pos)
+           | Cons (pos, _, _, _, _) => pos)
 
       fun blockNumber hash =
          (case !(T.lookup theTable hash) of
              Nil num => num
-           | Cons (_, num, _, _) => num)
+           | Cons (_, num, _, _, _) => num)
 
       fun blockData hash = inputData (blockPosition hash)
 

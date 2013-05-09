@@ -99,38 +99,22 @@ structure Process :> PROCESS =
             (
             Log.long (fn () => "Unsatisfactory sync throughput: " ^ Int.toString (!syncData div 1024));
             Commo.closeConn conn false;
-            syncing := NONE;
-            Commo.resumePolling ()
+            Commo.resumePolling ();
+            Blockchain.resumeVerification ();
+            syncing := NONE
             )
 
 
       (* complete=true if sync complete, complete=false if sync aborted. *)
       fun doneSync complete =
-         let
-            val lastblock = Blockchain.lastBlock ()
-
-            fun verifylast i =
-               if i > lastblock then
-                  ()
-               else if Verify.verifyBlock (Blockchain.dataByNumber i) then
-                  verifylast (i+1)
-               else
-                  let in
-                     Log.long (fn () => "Dubious block detected at " ^ B.toStringHex (B.rev (Blockchain.hashByNumber i)));
-                     Blockchain.deprecateByNumber i;
-                     verifylast (i+1)
-                  end
-         in
+         let in
             Log.long (fn () => if complete then
-                                  "Sync complete at block " ^ Int.toString lastblock
+                                  "Sync complete at block " ^ Int.toString (Blockchain.lastBlock ())
                                else
-                                  "Sync aborted at block " ^ Int.toString lastblock);
+                                  "Sync aborted at block " ^ Int.toString (Blockchain.lastBlock ()));
             Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()));
-            (* The synced blocks have only been fast-verified, so fully verify
-               the last chainTrustConfirmations blocks.
-            *)
-            verifylast (Int.max (lastblock - Constants.chainTrustConfirmations + 1, 1));
-               
+
+            Blockchain.resumeVerification ();
             Commo.resumePolling ();
    
             (* We never got a chance to ask for peers, so ask now. *)
@@ -154,6 +138,7 @@ structure Process :> PROCESS =
                Commo.sendMessage conn (getblocks NONE);
                Scheduler.once Constants.throughputInterval (fn () => monitorSync conn remoteblocks);
                Commo.suspendPolling ();
+               Blockchain.suspendVerification ();
                syncing := SOME conn;
                syncData := 0
                )
@@ -239,7 +224,7 @@ structure Process :> PROCESS =
                          val hash = Block.hashBlockHeader blstr'
                          val orphanage = Commo.orphanage conn
 
-                         val result = Blockchain.insertBlock orphanage hash blstr' (not (isSome (!syncing)))
+                         val result = Blockchain.insertBlock orphanage hash blstr'
                       in
                          if syncingWith conn then
                             syncData := !syncData + B.size blstr'
