@@ -9,5 +9,6 @@ signature CHAIN =
       val genesisBlock : Bytestring.string
       val seeds : string list
       val blockchainFile : string
+      val indexFile : string
 
    end

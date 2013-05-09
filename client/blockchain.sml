@@ -1,5 +1,5 @@
 
-structure Blockchain (* :> BLOCKCHAIN *) =
+structure Blockchain :> BLOCKCHAIN =
    struct
 
       structure A = Array
@@ -29,13 +29,42 @@ structure Blockchain (* :> BLOCKCHAIN *) =
 
       (* I/O *)
 
+      fun fileExists filename =
+         (OS.FileSys.fileSize filename; true)
+         handle OS.SysErr _ => false
+              | Overflow => true
+
+      fun must escape f (s, n) =
+         let
+            val str = f (s, n)
+         in
+            if B.size str = n then
+               str
+            else
+               escape ()
+         end
+
+
+
       type pos = Pos.int
 
       exception BlockchainIO
 
       val theOutstream : MIO.outstream option ref = ref NONE
       val theOutPos : Pos.int ref = ref 0
+      val lastIndexPos : Pos.int ref = ref 0
       val theInstream : MIO.instream option ref = ref NONE
+
+
+
+      (* The record file is a sequence of block records.
+
+         Block record format:
+         4  bytes: reserved for expansion
+         32 bytes: block hash
+         4  bytes: size of the block (n)
+         n  bytes: the block
+      *)
 
       fun outputBlock hash blstr =
          let
@@ -76,13 +105,6 @@ structure Blockchain (* :> BLOCKCHAIN *) =
             MIO.SeekIO.seekIn (ins, pos+112);
             ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
          end
-
-
-      fun fileExists filename =
-         (OS.FileSys.fileSize filename; true)
-         handle OS.SysErr _ => false
-              | Overflow => true
-
 
 
 
@@ -615,66 +637,162 @@ structure Blockchain (* :> BLOCKCHAIN *) =
 
       val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
-      fun loadBlock hash blstr pos =
-         (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) of
-             EXTEND =>
-                if !lastblock mod 1000 = 0 then
-                   Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
-                else
-                   ()
-           | _ => ())
-
+      exception LoadFile of pos
       fun loadFile pos instream =
-         let
-            val code = MIO.inputN (instream, 4)
-         in
-            if B.size code = 0 then
-               pos
-            else if B.size code <> 4 then
-               let in
-                  Log.long (fn () => "File ends with incomplete record");
-                  pos
-               end
-            else
-               let
-                  val hash = MIO.inputN (instream, 32)
-               in
-                  if B.size hash <> 32 then
-                     let in
-                        Log.long (fn () => "File ends with incomplete record");
-                        pos
-                     end
+         if MIO.endOfStream instream then
+            pos
+         else
+            let
+               fun esc () =
+                  let in
+                     Log.long (fn () => "File ends with incomplete record");
+                     raise (LoadFile pos)
+                  end
+
+               val code = must esc MIO.inputN (instream, 4)
+               val hash = must esc MIO.inputN (instream, 32)
+               val sz = Word32.toInt (ConvertWord.bytesToWord32L (must esc MIO.inputN (instream, 4)))
+               val blstr = must esc MIO.inputN (instream, sz)
+            in
+               (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) of
+                   EXTEND =>
+                      if !lastblock mod 1000 = 0 then
+                         Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
+                      else
+                         ()
+                 | _ =>
+                      ());
+               loadFile (pos + 40 + Pos.fromInt sz) instream
+            end
+
+
+
+      (* Index format:
+
+         8   bytes: final position
+         4   bytes: number of blocks (n)
+         8n  bytes: thePrimaryFork contents
+         36m bytes: theTable contents  (m=number of Nil entries in theTable)
+
+         Hash entry format:
+         32  bytes: block hash
+         4   bytes: block number
+      *)
+
+
+      (* Should find a way to do this better. *)
+      fun int64ToBytesL x = 
+         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
+
+      fun bytesToInt64L str =
+         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
+
+      fun writeIndex () =
+         if !theOutPos >= !lastIndexPos + Int64.fromInt Constants.indexThreshold then
+            let
+               val path = OS.Path.concat (Constants.dataDirectory, Chain.indexFile ^ ".new")
+               val path' = OS.Path.concat (Constants.dataDirectory, Chain.indexFile)
+               val outs = BinIO.openOut path
+   
+               val blocks = !lastblock
+   
+               fun writePrimaryFork num =
+                  if num > blocks then
+                     ()
                   else
-                     let
-                        val szstr = MIO.inputN (instream, 4)
-                     in
-                        if B.size szstr <> 4 then
+                     let in
+                        BinIO.output (outs, int64ToBytesL (A.sub (thePrimaryFork, num)));
+                        writePrimaryFork (num+1)
+                     end
+   
+               fun writeHashEntry (hash, lineager) =
+                  (case !lineager of
+                      Nil num =>
+                         let in
+                            BinIO.output (outs, hash);
+                            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt num))
+                         end
+                    | _ =>
+                         (* Leave these out of the index.  Most likely they're forgotten.  If we
+                            turn out to need them, we can get them again.
+                         *)
+                         ())
+                      
+            in
+               BinIO.output (outs, int64ToBytesL (!theOutPos));
+               BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt blocks));
+               writePrimaryFork 0;
+               T.app writeHashEntry theTable;
+               BinIO.closeOut outs;
+               OS.FileSys.rename {old=path, new=path'};
+               lastIndexPos := !theOutPos;
+               Log.long (fn () => "Index written")
+            end
+            handle OS.SysErr _ => ()
+         else
+            (* Don't write an index if there's nothing new to index. *)
+            ()
+
+
+      exception ReadIndex
+      fun readIndex () =
+         let
+            val path = OS.Path.concat (Constants.dataDirectory, Chain.indexFile)
+
+            fun esc () = raise ReadIndex
+         in
+            if fileExists path then
+               let
+                  val ins = BinIO.openIn path
+               in
+                  let
+                     val finalpos = bytesToInt64L (must esc BinIO.inputN (ins, 8))
+                     val blocks = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
+   
+                     fun readPrimaryFork num =
+                        if num > blocks then
+                           ()
+                        else
                            let in
-                              Log.long (fn () => "File ends with incomplete record");
-                              pos
+                              A.update (thePrimaryFork, num, bytesToInt64L (must esc BinIO.inputN (ins, 8)));
+                              readPrimaryFork (num+1)
                            end
+   
+                     fun readTable () =
+                        if BinIO.endOfStream ins then
+                           ()
                         else
                            let
-                              val sz =
-                                 Word32.toInt (ConvertWord.bytesToWord32L szstr)
-            
-                              val blstr = MIO.inputN (instream, sz)
+                              val hash = must esc BinIO.inputN (ins, 32)
+                              val num = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
                            in
-                              if B.size blstr <> sz then
-                                 let in
-                                    Log.long (fn () => "File ends with incomplete record");
-                                    pos
-                                 end
-                              else 
-                                 let in
-                                    loadBlock hash blstr pos;
-                                    loadFile (pos + 40 + Pos.fromInt sz) instream
-                                 end
+                              T.insert theTable hash (ref (Nil num));
+                              readTable ()
                            end
+                  in
+                     (* We don't bother setting totaldiff. It's only the relative amounts that ever matter,
+                        so we can just start it at zero.
+                     *)
+                     Log.long (fn () => "Loading index");
+                     lastblock := blocks;
+                     readPrimaryFork 0;
+                     readTable ();
+                     BinIO.closeIn ins;
+                     Log.long (fn () => "Index load complete at block "^ Int.toString blocks);
+                     SOME finalpos
+                  end
+                  handle ReadIndex =>
+                     let in
+                        BinIO.closeIn ins;
+                        Log.long (fn () => "Failed to load index");
+                        lastblock := 0;
+                        T.reset theTable Constants.blockTableSize;
+                        NONE
                      end
                end
+            else
+               NONE
          end
-
 
       
       fun initialize () =
@@ -699,36 +817,48 @@ structure Blockchain (* :> BLOCKCHAIN *) =
                *)
                let
                   val instream = MIO.openIn path
+                  val () = theInstream := SOME (MIO.openIn path);
+                  
+                  val (startpos, doWriteIndex) =
+                     (* Try loading an index. *)
+                     (case readIndex () of
+                         SOME pos =>
+                            let in
+                               MIO.SeekIO.seekIn (instream, pos);
+                               (pos, false)
+                            end
+                       | NONE =>
+                            (* Couldn't load an index, start from the beginning. *)
+                            (* Verify that the first record looks right. *)
+                            if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
+                               (Pos.fromInt (B.size genesisRecord), true)
+                            else
+                               let in
+                                  MIO.closeIn instream;
+                                  raise BlockchainIO
+                               end)
+
+                  val () = lastIndexPos := startpos
+
+                  val () = Log.long (fn () => "Loading blockchain file");
+                  val endpos =
+                     loadFile startpos instream
+                     handle LoadFile pos => pos
                in
-                  (* Verify that the first record looks right. *)
-                  if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
-                     ()
-                  else
-                     (
-                     MIO.closeIn instream;
-                     raise BlockchainIO
-                     );
-   
-                  theInstream := SOME (MIO.openIn path);
-   
-                  Log.long (fn () => "Loading blockchain file");
-                  let
-                     val pos = loadFile (Pos.fromInt (B.size genesisRecord)) instream
-                  in
-                     theOutPos := pos;
-                     MIO.closeIn instream;
-   
-                     (* Open the outstream and seek it to pos.  Usually pos will be the end,
-                        where it opens anyway, but it might be different if there the file has
-                        an incomplete record at the end.
-                     *)
-                     theOutstream := SOME (MIO.openAppend path);
-                     MIO.SeekIO.seekOut (valOf (!theOutstream), pos);
-   
-                     resumeVerification ();
-                     Log.long (fn () => "Load complete at block " ^ Int.toString (!lastblock));
-                     Log.long (fn () => "Total difficulty " ^ IntInf.toString (!totaldiff))
-                  end
+                  theOutPos := endpos;
+                  MIO.closeIn instream;
+
+                  (* Open the outstream and seek it to pos.  Usually endpos will be the end,
+                     where it opens anyway, but it might be different if there the file has
+                     an incomplete record at the end.
+                  *)
+                  theOutstream := SOME (MIO.openAppend path);
+                  MIO.SeekIO.seekOut (valOf (!theOutstream), endpos);
+
+                  resumeVerification ();
+                  Log.long (fn () => "Blockchain load complete at block " ^ Int.toString (!lastblock));
+
+                  writeIndex ()
                end
             else
                (* Start a new blockchain record. *)
@@ -741,6 +871,7 @@ structure Blockchain (* :> BLOCKCHAIN *) =
                   MIO.output (outstream, genesisRecord);
                   MIO.flushOut outstream;
                   theOutPos := Pos.fromInt (B.size genesisRecord);
+                  lastIndexPos := Pos.fromInt (B.size genesisRecord);
                   Log.long (fn () => "Created new blockchain file");
                   verification := true  (* don't need to verify any blocks, it's empty *)
                end

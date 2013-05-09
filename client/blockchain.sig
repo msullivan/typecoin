@@ -29,6 +29,7 @@ signature BLOCKCHAIN =
       val dataByNumber : int -> Bytestring.string
 
       val initialize : unit -> unit
+      val writeIndex : unit -> unit
       val close : unit -> unit
 
    end

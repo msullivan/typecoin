@@ -114,8 +114,8 @@ structure Process :> PROCESS =
                                   "Sync complete at block " ^ Int.toString (Blockchain.lastBlock ())
                                else
                                   "Sync aborted at block " ^ Int.toString (Blockchain.lastBlock ()));
-            Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()));
 
+            Blockchain.writeIndex ();
             Commo.resumePolling ();
 
             (* We never got a chance to ask for peers, so ask now. *)

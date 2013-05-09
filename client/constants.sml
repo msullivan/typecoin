@@ -95,6 +95,9 @@ structure Constants =
       (* Allocate a block index of this size. *)
       val primaryForkSize = 512 * 1024                      (* 512 k *)
 
+      (* Write a new index if processed this much additional data. *)
+      val indexThreshold = 1024 * 1024                      (* 1 meg *)
+
 
 
       (*** Confirmation constants ***)

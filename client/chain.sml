@@ -23,6 +23,7 @@ structure BitcoinChain :> CHAIN =
          ]
 
       val blockchainFile = "blockchain.dat"
+      val indexFile = "index.dat"
 
    end
 
@@ -49,6 +50,7 @@ structure TestnetChain :> CHAIN =
          ]
 
       val blockchainFile = "testblockchain.dat"
+      val indexFile = "testindex.dat"
 
    end
 
