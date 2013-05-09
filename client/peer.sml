@@ -120,7 +120,7 @@ structure Peer :> PEER =
                reseed time llrest (l :: llout)
                ))
 
-      fun maintenance () =
+      fun maintenance getAddresses =
          let
             val () = Log.long (fn () => "Peer maintenance");
 
@@ -155,19 +155,7 @@ structure Peer :> PEER =
          end
 
 
-(*
-      val seeds =
-         ["5.9.2.145","23.23.45.26","24.50.2.175","46.4.24.198","62.87.179.182",
-          "62.213.207.209","67.20.120.210","78.47.138.172","80.69.77.225",
-          "82.69.209.33","83.137.101.103","84.200.17.182","85.214.146.220",
-          "94.23.1.23","94.23.47.168","95.170.83.79","96.241.62.47","108.61.77.74",
-          "109.238.35.170","142.4.209.33","152.2.31.233","164.177.157.148",
-          "173.230.150.38","173.236.193.117","176.9.218.166","178.63.48.141",
-          "192.30.35.174","198.199.70.246","199.26.85.40","212.238.236.21",
-          "213.5.71.38"]
-*)
-
-      fun initialize () =
+      fun initialize getAddresses =
          (
          H.reset theTable;
          Q.reset theQueue;
@@ -175,8 +163,8 @@ structure Peer :> PEER =
          queuedPeers := 0;
          relayablePeers := [];
 
-         maintenance ();
-         Scheduler.repeating Constants.maintenanceInterval maintenance;
+         maintenance getAddresses;
+         Scheduler.repeating Constants.maintenanceInterval (fn () => maintenance getAddresses);
          ()
          )
 

@@ -35,8 +35,6 @@ structure Main =
 
          Scheduler.repeating (Time.fromSeconds (60 * 60)) Blockchain.writeIndex;
 
-         (* Initialize Peer before Process, so that there are peers in the queue for Process. *)
-         Peer.initialize ();
          Process.initialize ();
 
          ()

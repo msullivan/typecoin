@@ -306,6 +306,9 @@ structure Process :> PROCESS =
       fun initialize () =
          (
          syncing := NONE;
+
+         (* Initialize Peer before Commo, so that there are peers in the queue for Commo. *)
+         Peer.initialize ();
          Commo.initialize processConn processMessage
          )
 

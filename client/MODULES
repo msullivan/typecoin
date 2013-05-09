@@ -9,7 +9,7 @@ Buffers incoming transmissions and dispatches them to the appropriate
 handler.  Per-socket state.
 
 Peer (peer.sml)
-Peer manager: manages known peers.  Global state: initialized in Main.
+Peer manager: manages known peers.  Global state: initialized in Process.
 
 Commo (commo.sml)
 Communication manager: Maintains connections to active peers.  Global

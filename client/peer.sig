@@ -17,7 +17,6 @@ signature PEER =
       val wantPeers : unit -> int
       val relayable : unit -> Address.addr list
 
-      val initialize : unit -> unit
-      val maintenance : unit -> unit
+      val initialize : unit -> unit  
 
    end
