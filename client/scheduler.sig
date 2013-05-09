@@ -2,7 +2,7 @@
 signature SCHEDULER =
    sig
 
-      val yield : unit -> 'a
+      val exit : unit -> 'a
       val shutdown : unit -> 'a
 
       (* sockets *)
@@ -16,6 +16,7 @@ signature SCHEDULER =
       val onceAbs : Time.time -> (unit -> unit) -> tid
       val once : Time.time -> (unit -> unit) -> tid
       val repeating : Time.time -> (unit -> unit) -> tid
+      val yield : Time.time -> (unit -> unit) -> 'a
       val cancel : tid -> unit
 
       val numberOfTimeouts : unit -> int

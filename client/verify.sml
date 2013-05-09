@@ -1,5 +1,5 @@
 
-structure Verify (* :> VERIFY *) =
+structure Verify :> VERIFY =
    struct
 
       structure B = Bytestring
@@ -90,7 +90,7 @@ structure Verify (* :> VERIFY *) =
 
 
 
-      fun verifyBlockFast blstr =
+      fun verifyBlockGross blstr =
          let
             val {bits, root, count, transactions, ...} =
                Reader.readfull Block.readBlock (BS.full blstr)
@@ -124,8 +124,7 @@ structure Verify (* :> VERIFY *) =
                Reader.readfull Block.readBlock (BS.full blstr)
                handle Reader.SyntaxError => raise VerifyFailed
          in
-            (* XXX make it fail a lot, for testing *)
-            count mod 3 <> 2
+            true
          end
 
    end

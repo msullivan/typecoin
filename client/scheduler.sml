@@ -14,16 +14,16 @@ structure Scheduler :> SCHEDULER =
       type tid = (unit -> unit) ref
 
 
-      datatype directive = YIELD | SHUTDOWN
-      exception Yield
+      datatype directive = EXIT | SHUTDOWN
+      exception Exit
       exception Shutdown
-      fun yield () = raise Yield
+      fun exit () = raise Exit
       fun shutdown () = raise Shutdown
 
 
       fun dispatch f =
-         (f (); YIELD)
-         handle Yield => YIELD
+         (f (); EXIT)
+         handle Exit => EXIT
               | Shutdown => SHUTDOWN
          (* Should we catch exceptions here? *)
 
@@ -38,6 +38,8 @@ structure Scheduler :> SCHEDULER =
       val theQueue : tid Q.pq ref = ref (Q.empty ())
       val queueSize = ref 0
 
+      val currentPool = ref 0  (* <= AESFortuna.poolCount *)
+
 
       fun timeloop () =
          (case Q.findMin (!theQueue) of
@@ -50,7 +52,7 @@ structure Scheduler :> SCHEDULER =
                    queueSize := !queueSize - 1;
                    (case dispatch (!fr) of
                        SHUTDOWN => ()
-                     | YIELD => timeloop ())
+                     | EXIT => timeloop ())
                    )
                 else
                    wait ())
@@ -70,7 +72,11 @@ structure Scheduler :> SCHEDULER =
          *)
          (case ready of
              nil =>
-                timeloop ()
+                let in
+                   AESFortuna.addEntropy (!currentPool, ConvertIntInf.toBytesB (Time.toMilliseconds (Time.now ())));
+                   currentPool := (!currentPool + 1) mod AESFortuna.poolCount;
+                   timeloop ()
+                end
            | sd :: rest =>
                 (* I wish we didn't need a linear search, but equality is the only test we have. *)
                 (case List.find (fn (sd', _) => sameDesc (sd, sd')) (!callbacks) of
@@ -79,7 +85,7 @@ structure Scheduler :> SCHEDULER =
                   | SOME (_, f) =>
                        (case dispatch f of
                            SHUTDOWN => ()
-                         | YIELD => sockloop rest)))
+                         | EXIT => sockloop rest)))
 
 
       fun start f =
@@ -92,7 +98,7 @@ structure Scheduler :> SCHEDULER =
 
          (case dispatch f of
              SHUTDOWN => ()
-           | YIELD => timeloop ())
+           | EXIT => timeloop ())
          )
 
 
@@ -166,6 +172,12 @@ structure Scheduler :> SCHEDULER =
          end
 
       fun cancel fr = fr := skip
+
+      fun yield time f =
+         (
+         once time f;
+         raise Exit
+         )
 
       fun numberOfTimeouts () = !queueSize
 

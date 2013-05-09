@@ -15,7 +15,7 @@ signature VERIFY =
          #1 ensures that the block doesn't pretend to be harder than it is.  #2
          ensure that the block's contents comport with its header.
       *)
-      val verifyBlockFast : Bytestring.string -> bool
+      val verifyBlockGross : Bytestring.string -> bool
 
       (* Assumes that the block has already passed verifyBlockFast. *)
       val verifyBlock : Bytestring.string -> bool

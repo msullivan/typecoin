@@ -220,7 +220,7 @@ structure Process :> PROCESS =
                    val () = Log.short "b"
                    val blstr' = BS.string blstr
                 in
-                   if Verify.verifyBlockFast blstr' then
+                   if Verify.verifyBlockGross blstr' then
                       let
                          val hash = Block.hashBlockHeader blstr'
                          val orphanage = Commo.orphanage conn
@@ -270,10 +270,7 @@ structure Process :> PROCESS =
                                              ()
                                        end
                                   | NONE =>
-                                       let in
-                                          Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()));
-                                          Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()))
-                                       end))
+                                       Log.long (fn () => "Block " ^ Int.toString (Blockchain.lastBlock ()))))
                       end
                    else
                       (* This block is bogus.  Don't talk to this peer any more. *)

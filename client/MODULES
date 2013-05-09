@@ -15,6 +15,9 @@ Commo (commo.sml)
 Communication manager: Maintains connections to active peers.  Global
 state: initialized in Process.
 
+Verify (verify.sml)
+Verifies that blocks and transactions are valid.
+
 Blockchain (blockchain.sml)
 Records the blockchain, tracks which blocks are on the primary fork,
 and searches for hashes.  Global state: initialized in Main.

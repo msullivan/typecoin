@@ -690,6 +690,8 @@ structure Blockchain :> BLOCKCHAIN =
       fun writeIndex () =
          if !theOutPos >= !lastIndexPos + Int64.fromInt Constants.indexThreshold then
             let
+               val () = Log.long (fn () => "Writing index")
+
                val path = OS.Path.concat (Constants.dataDirectory, Chain.indexFile ^ ".new")
                val path' = OS.Path.concat (Constants.dataDirectory, Chain.indexFile)
                val outs = BinIO.openOut path
@@ -728,7 +730,7 @@ structure Blockchain :> BLOCKCHAIN =
                lastIndexPos := !theOutPos;
                Log.long (fn () => "Index written")
             end
-            handle OS.SysErr _ => ()
+            handle OS.SysErr _ => Log.long (fn () => "Error writing index")
          else
             (* Don't write an index if there's nothing new to index. *)
             ()
