@@ -25,9 +25,6 @@ structure Blockchain (* :> BLOCKCHAIN *) =
                    ConvertWord.word32ToBytesL (Word32.fromInt (B.size Chain.genesisBlock)),
                    Chain.genesisBlock]
 
-      (* Codes *)
-      val codeDubious : Word32.word = 0w1
-
 
 
       (* I/O *)
@@ -55,14 +52,6 @@ structure Blockchain (* :> BLOCKCHAIN *) =
             pos
          end
 
-      fun inputCode pos =
-         let
-            val ins = valOf (!theInstream)
-         in
-            MIO.SeekIO.seekIn (ins, pos);
-            ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
-         end
-
       fun inputHash pos =
          let
             val ins = valOf (!theInstream)
@@ -86,19 +75,6 @@ structure Blockchain (* :> BLOCKCHAIN *) =
          in
             MIO.SeekIO.seekIn (ins, pos+112);
             ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
-         end
-
-      fun outputSetDubious pos =
-         let
-            val code = inputCode pos
-            val code' = Word32.orb (code, codeDubious)
-
-            val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
-            val outs = MIO.openAppend path
-         in
-            MIO.SeekIO.seekOut (outs, pos);
-            MIO.output (outs, ConvertWord.word32ToBytesL code');
-            MIO.closeOut outs
          end
 
 
@@ -377,7 +353,6 @@ structure Blockchain (* :> BLOCKCHAIN *) =
 
             val dubafter = loop []
          in
-            outputSetDubious (A.sub (thePrimaryFork, num));
             Q.insertBack theDubiousQueue (num, confirmDiff);
             app (Q.insertBack theDubiousQueue) dubafter
          end
@@ -643,7 +618,7 @@ structure Blockchain (* :> BLOCKCHAIN *) =
       fun loadBlock hash blstr pos =
          (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) of
              EXTEND =>
-                if !lastblock mod 1000 = 0 orelse !lastblock > 71730 then
+                if !lastblock mod 1000 = 0 then
                    Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))
                 else
                    ()

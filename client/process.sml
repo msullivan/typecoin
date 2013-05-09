@@ -98,9 +98,9 @@ structure Process :> PROCESS =
             (* Unsatisfactory sync throughput.  Try other peers, starting one immediately. *)
             (
             Log.long (fn () => "Unsatisfactory sync throughput: " ^ Int.toString (!syncData div 1024));
+            Blockchain.resumeVerification ();
             Commo.closeConn conn false;
             Commo.resumePolling ();
-            Blockchain.resumeVerification ();
             syncing := NONE
             )
 
@@ -108,15 +108,16 @@ structure Process :> PROCESS =
       (* complete=true if sync complete, complete=false if sync aborted. *)
       fun doneSync complete =
          let in
+            Blockchain.resumeVerification ();
+   
             Log.long (fn () => if complete then
                                   "Sync complete at block " ^ Int.toString (Blockchain.lastBlock ())
                                else
                                   "Sync aborted at block " ^ Int.toString (Blockchain.lastBlock ()));
             Log.long (fn () => "Total difficulty " ^ IntInf.toString (Blockchain.totalDifficulty ()));
 
-            Blockchain.resumeVerification ();
             Commo.resumePolling ();
-   
+
             (* We never got a chance to ask for peers, so ask now. *)
             if Peer.wantPeers () > 0 then
                Commo.sendMessage (valOf (!syncing)) M.Getaddr
