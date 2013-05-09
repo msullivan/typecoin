@@ -34,6 +34,8 @@ is
         script.sml
         scheduler.sig
         scheduler.sml
+        seed.sig
+        seed.sml
         sink.sig
         sink.sml
         transaction.sig

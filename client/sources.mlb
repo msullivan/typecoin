@@ -16,6 +16,8 @@
         writer.sml
         network.sig
         network.sml
+        seed.sig
+        seed.sml
         scheduler.sig
         scheduler.sml
         sink.sig

@@ -113,5 +113,12 @@ structure Constants =
       (* File constants *)
 
       val dataDirectory = "data"
+      val seedFile = "seed.dat"
+
+
+
+      (* Randomization constants *)
+
+      val writeSeedInterval = Time.fromSeconds (15 * 60)    (* 15 minutes *)
 
    end

@@ -11,8 +11,13 @@ structure Main =
                          hour=0, minute=0, second=0, offset=NONE })
          end
 
+
       fun main' () =
          (
+         Seed.initialSeed ();
+         Seed.writeSeedFile ();
+         Scheduler.repeating Constants.writeSeedInterval Seed.writeSeedFile;
+
          Scheduler.onceAbs (Time.+ (midnight (), Time.fromSeconds (60 * 60 * 24)))
          (fn () => (
                    Log.long (fn () => Date.toString (Date.fromTimeLocal (Time.now ())));
@@ -37,11 +42,13 @@ structure Main =
          ()
          )
 
+
       fun cleanup () =
          (
          Blockchain.close ();
          Log.cleanup ()
          )
+
 
       fun main () =
          (

@@ -38,8 +38,6 @@ structure Scheduler :> SCHEDULER =
       val theQueue : tid Q.pq ref = ref (Q.empty ())
       val queueSize = ref 0
 
-      val currentPool = ref 0  (* <= AESFortuna.poolCount *)
-
 
       fun timeloop () =
          (case Q.findMin (!theQueue) of
@@ -73,8 +71,7 @@ structure Scheduler :> SCHEDULER =
          (case ready of
              nil =>
                 let in
-                   AESFortuna.addEntropy (!currentPool, ConvertIntInf.toBytesB (Time.toMilliseconds (Time.now ())));
-                   currentPool := (!currentPool + 1) mod AESFortuna.poolCount;
+                   Seed.addTimeEntropy ();
                    timeloop ()
                 end
            | sd :: rest =>

@@ -78,5 +78,8 @@ Platform-specific (SML/NJ vs. MLton) definitions.
 Reader (reader.sml)
 Deserialization combinators.
 
+Seed (seed.sml)
+Collects entropy and manages seed file for Fortuna.
+
 Writer (writer.sml)
 Serialization combinators.
