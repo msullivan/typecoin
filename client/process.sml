@@ -7,17 +7,18 @@ structure Process :> PROCESS =
       structure M = Message
 
 
+      structure HashHashable =
+         struct
+            type t = Bytestring.string
+            val eq = B.eq
 
-      (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
-         use one peer exclusively as long as we're happy with the progress we're making.
-      *)
-      val syncing : Commo.conn option ref = ref NONE
-      val syncData = ref 0  (* amount of sync data received during this syncTimeout period *)
+            fun hash str =
+               (* The front bytes are pretty much random, so just use those. *)
+               ConvertWord.wordLgToWord (PackWord32Big.subVec (str, 0))
+         end
+      structure T = HashTable (structure Key = HashHashable)
 
-      fun syncingWith conn =
-         (case !syncing of
-             NONE => false
-           | SOME conn' => Commo.eq (conn, conn'))
+      val dhash = SHA256.hashBytes o SHA256.hashBytes
 
 
 
@@ -81,6 +82,19 @@ structure Process :> PROCESS =
             M.Getblocks (M.mkGetblocks { hashes = hashes, lastDesired = goal })
          end
 
+
+      (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
+         use one peer exclusively as long as we're happy with the progress we're making.
+         Also, we suspect verification while syncing, since there's a good chance of getting
+         more than chainTrustConfirmations blocks.
+      *)
+      val syncing : Commo.conn option ref = ref NONE
+      val syncData = ref 0  (* amount of sync data received during this syncTimeout period *)
+
+      fun syncingWith conn =
+         (case !syncing of
+             NONE => false
+           | SOME conn' => Commo.eq (conn, conn'))
 
 
       fun monitorSync conn remoteblocks =
@@ -151,6 +165,11 @@ structure Process :> PROCESS =
 
 
 
+      val txpool : Bytestring.string T.table = T.table Constants.poolSize
+      val relayList : Message.inv list ref = ref []
+
+
+
       fun processMessage (conn, msg) =
          (case msg of
 
@@ -206,12 +225,84 @@ structure Process :> PROCESS =
                                     (invs', getblocks (SOME hash) :: msgs)
                                  else
                                     (inv :: invs', msgs)
+                            | M.TX =>
+                                 if T.member txpool hash then
+                                    (invs', msgs)
+                                 else
+                                    (inv :: invs', msgs)
                             | _ =>
                                  (invs', msgs)))
                        ([], [])
                        invs
                 in
                    app (Commo.sendMessage conn) (M.Getdata invs' :: msgs)
+                end
+
+
+           | M.Getdata invs =>
+                let
+                   val () = Log.short "G"
+
+                   val notfound =
+                      List.foldl
+                      (fn (inv as (objtp, hash), notfound) =>
+                          (case objtp of
+                              M.ERR => notfound
+                            | M.TX =>
+                                 (case T.find txpool hash of
+                                     NONE =>
+                                        inv :: notfound
+                                   | SOME txstr =>
+                                        let in
+                                           Commo.sendMessage conn (M.Tx txstr);
+                                           notfound
+                                        end)
+                            | M.BLOCK =>
+                                 (let in
+                                     Commo.sendMessage conn (M.Block (Blockchain.blockData hash));
+                                     notfound
+                                  end
+                                  handle Blockchain.Absent => (inv :: notfound))))
+                      []
+                      invs
+                in
+                   (case notfound of
+                       [] => ()
+                     | _ =>
+                          Commo.sendMessage conn (M.Notfound (rev notfound)))
+                end
+
+
+           | M.Notfound _ =>
+                Log.short "n"
+
+
+
+           | M.Getblocks _ =>
+                Log.short "B"
+
+
+           | M.Tx txstr =>
+                let
+                   val () = Log.short "t"
+
+                   val hash = dhash txstr
+                in
+                   (if T.member txpool hash then
+                       ()
+                    else 
+                       let
+                          val tx = Reader.readfull Transaction.reader (BS.full txstr)
+                       in
+                          if Verify.verifyTx tx then
+                             let in
+                                T.insert txpool hash txstr;
+                                relayList := (M.TX, hash) :: !relayList
+                             end
+                          else
+                             ()
+                       end)
+                   handle Reader.SyntaxError => ()
                 end
 
 
@@ -233,6 +324,20 @@ structure Process :> PROCESS =
                             ();
 
                          (case result of
+                             Blockchain.ORPHAN => ()
+                           | Blockchain.REPEAT => ()
+                           | _ =>
+                                (case !syncing of
+                                    SOME _ => ()
+                                  | NONE =>
+                                       (* Ideally, we would also relay any orphans that can now be connected.
+                                          But it would require some more plumbing to get access to those and
+                                          it doesn't seem worth the trouble.  Usually we'll only receive orphans
+                                          while syncing anyway.
+                                       *)
+                                       relayList := (M.BLOCK, EBlock.hash eblock) :: !relayList));
+
+                         (case result of
                              Blockchain.ORPHAN =>
                                 if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
                                    (* request the ancestors of the orphan *)
@@ -247,6 +352,7 @@ structure Process :> PROCESS =
                                       this by limiting orphan chains, rather than individual orphans.
                                    *)
                                    Commo.closeConn conn false
+                           | Blockchain.REPEAT => ()
                            | Blockchain.NOEXTEND => ()
                            | Blockchain.EXTEND =>
                                 (case !syncing of
@@ -287,6 +393,23 @@ structure Process :> PROCESS =
                 end
 
 
+           | M.Getaddr =>
+                let
+                   val () = Log.short "A"
+
+                   val l =
+                      map
+                      (fn (timestamp, addr) =>
+                          (Time.toSeconds timestamp,
+                           { services = Message.serviceNetwork,
+                             address = addr,
+                             port = Chain.port }))
+                      (Peer.relayable ())
+                in
+                   Commo.sendMessage conn (M.Addr l)
+                end
+
+
            | M.Ping nonce =>
                 (
                 Log.short "P";
@@ -298,18 +421,47 @@ structure Process :> PROCESS =
                 Log.short "p"
 
 
+           | M.Alert _ =>
+                Log.short "!"
+
+
            | _ =>
                 Log.short "?")
+
+
+
+      fun relay () =
+         (case !relayList of
+             [] => ()
+           | l as _ :: _ =>
+                let in
+                   Log.long (fn () => "Relaying "^ Int.toString (length l) ^" items");
+                   Commo.broadcastMessage (M.Inv (rev l));
+                   relayList := [];
+
+                   (* Wait a while and then remove these from the pool. *)
+                   Scheduler.yield Constants.poolRetentionTime
+                   (fn () =>
+                       List.app
+                       (fn (M.TX, hash) => T.remove txpool hash
+                         | _ => ())
+                       l)
+                end)
 
 
 
       fun initialize () =
          (
          syncing := NONE;
+         T.reset txpool Constants.poolSize;
+         relayList := [];
 
          (* Initialize Peer before Commo, so that there are peers in the queue for Commo. *)
          Peer.initialize ();
-         Commo.initialize processConn processMessage
+         Commo.initialize processConn processMessage;
+
+         Scheduler.repeating Constants.relayInterval relay;
+         ()
          )
 
    end

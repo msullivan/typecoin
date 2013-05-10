@@ -9,7 +9,7 @@ signature BLOCKCHAIN =
       val orphanageMember : orphanage -> hash -> bool
       val orphanageSize : orphanage -> int
 
-      datatype result = ORPHAN | NOEXTEND | EXTEND
+      datatype result = ORPHAN | REPEAT | NOEXTEND | EXTEND
       (* The block must be grossly-verified already. *)
       val insertBlock : orphanage -> EBlock.eblock -> result
       

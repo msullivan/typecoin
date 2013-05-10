@@ -24,7 +24,7 @@ structure Peer :> PEER =
       val theQueue : peer Q.ideque = Q.ideque ()
       val theVerifiedQueue : peer Q.ideque = Q.ideque ()  (* requeued peers, more likely to be active *)
       val queuedPeers = ref 0
-      val relayablePeers : Address.addr list ref = ref []
+      val relayablePeers : (Time.time * Address.addr) list ref = ref []
 
       fun delete (peer as {addr, timer, noder, valid, ...}:peer) =
          if H.member theTable addr then
@@ -136,7 +136,7 @@ structure Peer :> PEER =
                       else if Time.< (!timer, relayCutoff) then
                          (relayable, todelete)
                       else
-                         (addr :: relayable, todelete))
+                         ((!timer, addr) :: relayable, todelete))
                   ([], []) theTable
          in
             relayablePeers := relayable;

@@ -15,7 +15,7 @@ signature PEER =
       val enqueue : peer -> unit
 
       val wantPeers : unit -> int
-      val relayable : unit -> Address.addr list
+      val relayable : unit -> (Time.time * Address.addr) list
 
       val initialize : unit -> unit  
 

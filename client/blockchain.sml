@@ -494,7 +494,7 @@ structure Blockchain :> BLOCKCHAIN =
                    
 
 
-      datatype result = ORPHAN | NOEXTEND | EXTEND
+      datatype result = ORPHAN | REPEAT | NOEXTEND | EXTEND
 
       datatype mode =
          RECEIVE
@@ -503,7 +503,7 @@ structure Blockchain :> BLOCKCHAIN =
       (* hash = EBlock.hash eblock *)
       fun insertBlockMain (orphanTable, orphanPredTable) hash eblock mode =
          if T.member theTable hash then
-            NOEXTEND
+            REPEAT
          else if T.member orphanTable hash then
             ORPHAN
          else
@@ -618,6 +618,7 @@ structure Blockchain :> BLOCKCHAIN =
          in
             (case result of
                 ORPHAN => ORPHAN
+              | REPEAT => REPEAT
               | _ =>
                    (* hash is not an orphan; check whether hash is the predecessor to an orphan,
                       If so, insert the successor too.

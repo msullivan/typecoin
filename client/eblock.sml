@@ -31,7 +31,7 @@ structure EBlock :> EBLOCK =
                S.delay
                (fn () =>
                    map
-                   (fn tx => SHA256.hashBytes (SHA256.hashBytes (Writer.write (Transaction.writer tx))))
+                   (fn tx => dhash (Writer.write (Transaction.writer tx)))
                    (#transactions (S.force block)))
          in
             { bytes=bytes, block=block, hash=hash, txhashes=txhashes }

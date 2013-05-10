@@ -100,6 +100,19 @@ structure Constants =
 
 
 
+      (*** Pool and relay constants ***)
+
+      (* Allocate a pool of this size. *)
+      val poolSize = 4096
+
+      (* Relay inventory this often. *)
+      val relayInterval = Time.fromSeconds 20
+
+      (* Keep relayed transactions in the pool this long. *)
+      val poolRetentionTime = Time.fromSeconds (10 * 60)    (* 10 minutes *)
+
+
+
       (*** Confirmation constants ***)
 
       (* Accept an invalid block with this many confirmations.
