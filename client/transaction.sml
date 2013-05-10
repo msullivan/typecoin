@@ -65,7 +65,7 @@ structure Transaction :> TRANSACTION =
          { version=theVersion, inputs=inputs, outputs=outputs, lockTime=lockTime }
 
 
-      fun writeTxin {from=(txid, n), script, sequence} =
+      fun txinWriter {from=(txid, n), script, sequence} =
          if B.size txid <> 32 then
             raise InvalidTransaction
          else
@@ -77,7 +77,7 @@ structure Transaction :> TRANSACTION =
             >>>
             W.word32L sequence
 
-      val readTxin =
+      val txinReader =
          R.bytes 32
          >>= (fn txid =>
          R.word32L
@@ -90,7 +90,7 @@ structure Transaction :> TRANSACTION =
          ))))
 
 
-      fun writeTxout {amount, script} =
+      fun txoutWriter {amount, script} =
          if amount < 0 orelse amount > maxAmount then
             raise InvalidTransaction
          else
@@ -98,7 +98,7 @@ structure Transaction :> TRANSACTION =
             >>>
             W.bytesVar script
 
-      val readTxout =
+      val txoutReader =
          R.wrap Word64.toLargeInt R.word64L
          >>= (fn amount =>
          R.bytesVar
@@ -107,21 +107,21 @@ structure Transaction :> TRANSACTION =
          ))
          
 
-      fun writeTx ({version, inputs, outputs, lockTime}:tx) =
+      fun writer ({version, inputs, outputs, lockTime}:tx) =
          W.word32L version
          >>>
-         W.varlist writeTxin inputs
+         W.varlist txinWriter inputs
          >>>
-         W.varlist writeTxout outputs
+         W.varlist txoutWriter outputs
          >>>
          W.word32L lockTime
 
-      val readTx =
+      val reader =
          R.word32L
          >>= (fn version =>
-         R.varlist readTxin
+         R.varlist txinReader
          >>= (fn inputs =>
-         R.varlist readTxout
+         R.varlist txoutReader
          >>= (fn outputs =>
          R.word32L
          >>= (fn lockTime =>

@@ -243,10 +243,11 @@ structure Blockchain :> BLOCKCHAIN =
          picture.  Instead, each connection has an orphanage containing orphans received from that
          connection.  If we eventually receive an orphan's predecessor from that connection, the
          orphan will automatically be linked into the tree.  If not, the orphanage will be gc'ed
-         away when the connection closes.
+         away when the connection closes.  (We probably wouldn't bother to do this, except that the
+         blockchain download protocol depends on it.
 
-         We probably wouldn't bother to do this, except that the blockchain download protocol
-         depends on it.
+         The orphanage consists of two hash tables.  The first is indexed by the orphans, the second
+         by the orphans' predecessors.
       *)
 
       datatype verification = OK | DUBIOUS | UNKNOWN
@@ -268,7 +269,7 @@ structure Blockchain :> BLOCKCHAIN =
       val theDubiousQueue : (int * IntInf.int) Q.ideque = Q.ideque ()
       val verification = ref false
 
-      type orphanage = B.string T.table * hash T.table  (* orphans, orphans' predecessors *)
+      type orphanage = EBlock.eblock T.table * hash T.table  (* orphans, orphans' predecessors *)
 
 
 
@@ -426,7 +427,11 @@ structure Blockchain :> BLOCKCHAIN =
                            | DUBIOUS =>
                                 setDubious num
                            | UNKNOWN =>
-                                if !verification andalso not (Verify.verifyBlock (inputData pos)) then
+                                if
+                                   !verification
+                                   andalso
+                                   not (Verify.verifyBlock (EBlock.fromBytes (inputData pos)))
+                                then
                                    setDubious num
                                 else
                                    ())
@@ -469,7 +474,7 @@ structure Blockchain :> BLOCKCHAIN =
             fun loopVerify i =
                if i > blocks then
                   ()
-               else if Verify.verifyBlock (inputData (A.sub (thePrimaryFork, i))) then
+               else if Verify.verifyBlock (EBlock.fromBytes (inputData (A.sub (thePrimaryFork, i)))) then
                   loopVerify (i+1)
                else
                   let in
@@ -495,14 +500,15 @@ structure Blockchain :> BLOCKCHAIN =
          RECEIVE
        | LOAD of pos  (* pos=position in record *)
 
-      fun insertBlockMain (orphanTable, orphanPredTable) hash blstr mode =
+      (* hash = EBlock.hash eblock *)
+      fun insertBlockMain (orphanTable, orphanPredTable) hash eblock mode =
          if T.member theTable hash then
             NOEXTEND
          else if T.member orphanTable hash then
             ORPHAN
          else
             let
-               val prev = B.substring (blstr, 4, 32)
+               val prev = #previous (EBlock.toBlock eblock)
             in
                (case T.find theTable prev of
                    NONE =>
@@ -513,7 +519,7 @@ structure Blockchain :> BLOCKCHAIN =
                         | _ =>
                              (* Store received orphans. *)
                              (
-                             T.insert orphanTable hash blstr;
+                             T.insert orphanTable hash eblock;
                              T.insert orphanPredTable prev hash;
                              ORPHAN
                              ))
@@ -527,7 +533,7 @@ structure Blockchain :> BLOCKCHAIN =
                             (case mode of
                                 LOAD pos => pos
                               | _ =>
-                                   outputBlock hash blstr)
+                                   outputBlock hash (EBlock.toBytes eblock))
 
                          val num =
                             1 + (case predlin of
@@ -535,7 +541,7 @@ structure Blockchain :> BLOCKCHAIN =
                                   | Cons (_, n, _, _, _) => n)
     
                          val diff =
-                            Verify.decodeDifficulty (ConvertWord.bytesToWord32L (B.substring (blstr, 72, 4)))
+                            Verify.decodeDifficulty (#bits (EBlock.toBlock eblock))
                             +
                             (case predlin of
                                 Nil n =>
@@ -545,7 +551,7 @@ structure Blockchain :> BLOCKCHAIN =
 
                          val (dubious, verstat) =
                             if !verification then
-                               if Verify.verifyBlock blstr then
+                               if Verify.verifyBlock eblock then
                                   (false, OK)
                                else
                                   (true, DUBIOUS)
@@ -605,9 +611,10 @@ structure Blockchain :> BLOCKCHAIN =
             end
 
 
-      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) hash blstr =
+      fun insertBlock (orphanage as (orphanTable, orphanPredTable)) eblock =
          let
-            val result = insertBlockMain orphanage hash blstr RECEIVE
+            val hash = EBlock.hash eblock
+            val result = insertBlockMain orphanage hash eblock RECEIVE
          in
             (case result of
                 ORPHAN => ORPHAN
@@ -618,16 +625,16 @@ structure Blockchain :> BLOCKCHAIN =
                    (case T.find orphanPredTable hash of
                        SOME hash' =>
                           let
-                             val blstr' = T.lookup orphanTable hash'
+                             val eblock' = T.lookup orphanTable hash'
                           in
                              T.remove orphanPredTable hash;
                              T.remove orphanTable hash';
        
-                             insertBlockMain orphanage hash' blstr' RECEIVE
-                             (* Our result is just the result for hash', because we are extending
-                                the longest fork iff hash' extends the longest fork.
-                                (The result for hash' can't be ORPHAN, since we just inserted its
-                                predecesor (ie, hash).)
+                             insertBlockMain orphanage hash' eblock' RECEIVE
+                             (* Our result is just the result for eblock', because we are extending
+                                the longest fork iff eblock' extends the longest fork.
+                                (The result for eblock' can't be ORPHAN, since we just inserted its
+                                predecesor (ie, eblock).)
                              *)
                           end
                      | NONE =>
@@ -654,7 +661,7 @@ structure Blockchain :> BLOCKCHAIN =
                val sz = Word32.toInt (ConvertWord.bytesToWord32L (must esc MIO.inputN (instream, 4)))
                val blstr = must esc MIO.inputN (instream, sz)
             in
-               (case insertBlockMain dummyOrphanage hash blstr (LOAD pos) of
+               (case insertBlockMain dummyOrphanage hash (EBlock.fromBytes blstr) (LOAD pos) of
                    EXTEND =>
                       if !lastblock mod 1000 = 0 then
                          Log.long (fn () => "Loaded block " ^ Int.toString (!lastblock))

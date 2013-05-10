@@ -16,14 +16,8 @@ signature BLOCK =
 
       exception InvalidBlock
 
-      val writeBlock : block -> Writer.writer
-      val writeBlockHeader : block -> Writer.writer
-      val readBlock : block Reader.reader
-
-      (* hash the first 80 bytes of the string *)
-      val hashBlockHeader : Bytestring.string -> Bytestring.string
-
-      (* merkle n l: if  n = |l| and n > 0  then  return the merkle root of l *)
-      val merkleRoot : int -> Transaction.tx list -> Bytestring.string
+      val writer : block -> Writer.writer
+      val headerWriter : block -> Writer.writer
+      val reader : block Reader.reader
 
    end

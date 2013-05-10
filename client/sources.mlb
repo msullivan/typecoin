@@ -28,6 +28,8 @@
         transaction.sml
         block.sig
         block.sml
+        eblock.sig
+        eblock.sml
         address.sig
         address.sml
         message.sig

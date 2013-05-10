@@ -53,8 +53,8 @@ signature MESSAGE =
        | Getdata of inv list
        | Notfound of inv list
        | Getblocks of getblocks
-       | Tx of Bytesubstring.substring
-       | Block of Bytesubstring.substring
+       | Tx of Bytestring.string
+       | Block of Bytestring.string
        | Getaddr
        | Ping of Word64.word
        | Pong of Word64.word

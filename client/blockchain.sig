@@ -11,7 +11,7 @@ signature BLOCKCHAIN =
 
       datatype result = ORPHAN | NOEXTEND | EXTEND
       (* The block must be grossly-verified already. *)
-      val insertBlock : orphanage -> hash -> Bytestring.string -> result
+      val insertBlock : orphanage -> EBlock.eblock -> result
       
       val suspendVerification : unit -> unit
       val resumeVerification : unit -> unit

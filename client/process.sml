@@ -218,17 +218,17 @@ structure Process :> PROCESS =
            | M.Block blstr =>
                 let
                    val () = Log.short "b"
-                   val blstr' = BS.string blstr
+                   val eblock = EBlock.fromBytes blstr
                 in
-                   if Verify.verifyBlockGross blstr' then
+                   if Verify.verifyBlockGross eblock then
                       let
-                         val hash = Block.hashBlockHeader blstr'
+                         val hash = EBlock.hash eblock
                          val orphanage = Commo.orphanage conn
 
-                         val result = Blockchain.insertBlock orphanage hash blstr'
+                         val result = Blockchain.insertBlock orphanage eblock
                       in
                          if syncingWith conn then
-                            syncData := !syncData + B.size blstr'
+                            syncData := !syncData + B.size blstr
                          else
                             ();
 
@@ -275,7 +275,7 @@ structure Process :> PROCESS =
                    else
                       (* This block is bogus.  Don't talk to this peer any more. *)
                       let in
-                         Log.long (fn () => "Invalid block detected at " ^ B.toStringHex (B.rev (Block.hashBlockHeader blstr')));
+                         Log.long (fn () => "Invalid block detected at " ^ B.toStringHex (B.rev (EBlock.hash eblock)));
 
                          if syncingWith conn then
                             doneSync false

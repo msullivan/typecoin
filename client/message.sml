@@ -86,8 +86,8 @@ structure Message :> MESSAGE =
        | Getdata of inv list
        | Notfound of inv list
        | Getblocks of getblocks
-       | Tx of Bytesubstring.substring
-       | Block of Bytesubstring.substring
+       | Tx of Bytestring.string
+       | Block of Bytestring.string
        | Getaddr
        | Ping of Word64.word
        | Pong of Word64.word
@@ -313,8 +313,8 @@ structure Message :> MESSAGE =
 
 
 
-      fun writeAll str = W.bytesS str
-      fun readAll f = R.wrap f R.all
+      fun writeAll str = W.bytes str
+      fun readAll f = R.wrap (fn x => f (Bytesubstring.string x)) R.all
 
 
 

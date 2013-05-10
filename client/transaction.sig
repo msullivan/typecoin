@@ -30,8 +30,8 @@ signature TRANSACTION =
       val mkTx :
          { inputs : txin list, outputs : txout list, lockTime : Word32.word } -> tx
 
-      val writeTx : tx -> Writer.writer
-      val readTx : tx Reader.reader
+      val writer : tx -> Writer.writer
+      val reader : tx Reader.reader
 
       (* transaction, input # to replace the script of, replacement script *)
       val modifyForSig : tx -> int -> Bytestring.string -> tx

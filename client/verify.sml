@@ -90,20 +90,52 @@ structure Verify :> VERIFY =
 
 
 
-      fun verifyBlockGross blstr =
+      fun dhash2 str1 str2 = SHA256.hashBytes (SHA256.hashBytes (B.^ (str1, str2)))
+
+      (* merkle n l: if  n = |l| and n > 0  then  return the merkle root of l *)
+      fun merkleRoot n l =
+         let
+            fun double f l =
+               let
+                  val (h1, l') = f l
+               in
+                  (case l' of
+                      nil =>
+                         (* out of elements, duplicate h1 *)
+                         (dhash2 h1 h1, nil)
+                    | _ :: _ =>
+                         let
+                            val (h2, l'') = f l'
+                         in
+                            (dhash2 h1 h2, l'')
+                         end)
+               end
+      
+            fun loop n i f =
+               if i >= n then
+                  f
+               else
+                  loop n (i*2) (double f)
+         in
+            #1 (loop n 1 (fn [] => raise (Fail "no elements") | h :: t => (h, t)) l)
+         end
+
+
+
+      fun verifyBlockGross eblock =
          let
             val {bits, root, count, transactions, ...} =
-               Reader.readfull Block.readBlock (BS.full blstr)
+               EBlock.toBlock eblock
                handle Reader.SyntaxError => raise VerifyFailed
 
             val () =
-               (case Bytestring.compare (B.rev (Block.hashBlockHeader blstr), decodeTarget bits) of
+               (case Bytestring.compare (B.rev (EBlock.hash eblock), decodeTarget bits) of
                    GREATER =>
                       raise VerifyFailed
                  | _ => ())
 
             val () =
-               if B.eq (root, Block.merkleRoot count transactions) then
+               if B.eq (root, merkleRoot count (EBlock.txhashes eblock)) then
                   ()
                else
                   raise VerifyFailed
@@ -114,18 +146,11 @@ structure Verify :> VERIFY =
 
 
       (* XXX *)
-      fun verifyTx txstr = true
+      fun verifyTx tx = true
 
 
       (* XXX *)
-      fun verifyBlock blstr =
-         let
-            val {count, ...} =
-               Reader.readfull Block.readBlock (BS.full blstr)
-               handle Reader.SyntaxError => raise VerifyFailed
-         in
-            true
-         end
+      fun verifyBlock eblock = true
 
    end
 
