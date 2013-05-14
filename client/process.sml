@@ -170,6 +170,17 @@ structure Process :> PROCESS =
 
 
 
+      fun inject tx =
+         let
+            val txstr = Transaction.writeTx tx
+            val hash = dhash txstr
+         in
+            T.insert txpool hash txstr;
+            relayList := (M.TX, hash) :: !relayList
+         end
+
+
+
       fun processMessage (conn, msg) =
          (case msg of
 
@@ -421,33 +432,66 @@ structure Process :> PROCESS =
                 Log.short "p"
 
 
-           | M.Alert _ =>
-                Log.short "!"
+           | M.Alert (payload, sg) =>
+                let in
+                   Log.short "!";
 
+                   let
+                      val path = OS.Path.concat (Constants.dataDirectory, Constants.alertFile)
+                      val outs = Platform.BinIO_openAppend path
+                   in
+                      BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size payload)));
+                      BinIO.output (outs, payload);
+                      BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size sg)));
+                      BinIO.output (outs, sg);
+                      BinIO.closeOut outs
+                   end
+                   handle OS.SysErr _ => ();
+
+                   Log.long (fn () => "ALERT RECEIVED")
+                end
+                   
+
+           | M.Unsupported command =>
+                let in
+                   Log.short "?";
+                   Log.long (fn () => "Received unsupported message "^ B.toString command)
+                end
+
+           | M.Illformed _ =>
+                let in
+                   Log.short "@";
+                   Log.long (fn () => "Received illformed message")
+                end
 
            | _ =>
-                Log.short "?")
+                let in
+                   Log.short "@";
+                   Log.long (fn () => "Received unexpected message")
+                end)
 
 
 
       fun relay () =
-         (case !relayList of
-             [] => ()
-           | l as _ :: _ =>
-                let in
-                   Log.long (fn () => "Relaying "^ Int.toString (length l) ^" items");
-                   Commo.broadcastMessage (M.Inv (rev l));
-                   relayList := [];
-
-                   (* Wait a while and then remove these from the pool. *)
-                   Scheduler.yield Constants.poolRetentionTime
-                   (fn () =>
-                       List.app
-                       (fn (M.TX, hash) => T.remove txpool hash
-                         | _ => ())
-                       l)
-                end)
-
+         (case !syncing of
+             NONE =>
+                (case !relayList of
+                    [] => ()
+                  | l as _ :: _ =>
+                       let in
+                          Log.long (fn () => "Relaying "^ Int.toString (length l) ^" items");
+                          Commo.broadcastMessage (M.Inv (rev l));
+                          relayList := [];
+       
+                          (* Wait a while and then remove these from the pool. *)
+                          Scheduler.yield Constants.poolRetentionTime
+                          (fn () =>
+                              List.app
+                              (fn (M.TX, hash) => T.remove txpool hash
+                                | _ => ())
+                              l)
+                       end)
+           | SOME _ => ())
 
 
       fun initialize () =

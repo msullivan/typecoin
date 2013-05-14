@@ -77,4 +77,6 @@ structure Block :> BLOCK =
                     bits=bits, nonce=nonce, count=count, transactions=transactions }
          ))))))))
 
+      fun readBlock bytes = Reader.readfull reader bytes
+
    end

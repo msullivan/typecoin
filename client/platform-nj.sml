@@ -25,6 +25,17 @@ structure Platform :> PLATFORM =
            | _ =>
                 (fn t => t))
 
+      fun fileExists filename =
+         (OS.FileSys.fileSize filename; true)
+         handle OS.SysErr _ => false
+              | Overflow => true
+
+      fun BinIO_openAppend filename =
+         if fileExists filename then
+            BinIO.openAppend filename
+         else
+            BinIO.openOut filename
+         
       fun hashWord32 w =
          MJHash.hashInc (ConvertWord.word32ToWord w) (ConvertWord.word32ToWord (Word32.>> (w, 0w1)))
 

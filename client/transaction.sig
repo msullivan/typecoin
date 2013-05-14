@@ -2,7 +2,7 @@
 signature TRANSACTION =
    sig
 
-      type coord = Bytestring.string * Word32.word
+      type coord = Bytestring.string * int
 
       type txin =
          {
@@ -32,6 +32,9 @@ signature TRANSACTION =
 
       val writer : tx -> Writer.writer
       val reader : tx Reader.reader
+
+      val writeTx : tx -> Bytestring.string
+      val readTx : Bytesubstring.substring -> tx
 
       (* transaction, input # to replace the script of, replacement script *)
       val modifyForSig : tx -> int -> Bytestring.string -> tx

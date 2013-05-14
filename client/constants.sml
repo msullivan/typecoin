@@ -18,7 +18,7 @@ structure Constants =
       val desiredConnections = 8
 
       (* Contact a new peer this often. *)
-      val pollInterval = Time.fromSeconds 30               (* 30 seconds *)
+      val pollInterval = Time.fromSeconds 10               (* 10 seconds *)
 
       (* Ping all connections this often. *)
       val keepAliveInterval = Time.fromSeconds 45          (* 45 seconds *)
@@ -127,7 +127,7 @@ structure Constants =
 
       val dataDirectory = "data"
       val seedFile = "seed.dat"
-
+      val alertFile = "alert.dat"
 
 
       (* Randomization constants *)

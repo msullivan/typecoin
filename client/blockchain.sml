@@ -928,6 +928,13 @@ structure Blockchain :> BLOCKCHAIN =
          else
             inputData (A.sub (thePrimaryFork, num))
 
+      fun positionByNumber num =
+         if num > !lastblock then
+            raise Absent
+         else
+            A.sub (thePrimaryFork, num)
+         
+
 
 
       fun newOrphanage () =

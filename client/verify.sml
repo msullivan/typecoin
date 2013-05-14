@@ -153,6 +153,3 @@ structure Verify :> VERIFY =
       fun verifyBlock eblock = true
 
    end
-
-
-

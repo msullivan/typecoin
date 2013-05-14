@@ -32,8 +32,21 @@ structure Transaction :> TRANSACTION =
       val maxAmount = Word64.toLargeInt 0wxffffffffffffffff
 
 
+      fun sword32ToInt w =
+         if Word32.andb (w, 0wx80000000) = 0w0 then
+            Word32.toInt w
+         else
+            ~ (Word32.toInt (Word32.~ w))
 
-      type coord = Bytestring.string * Word32.word
+      fun intToSword32 i =
+         if i >= 0 then
+            Word32.fromInt i
+         else
+            Word32.~ (Word32.fromInt (~ i))
+
+
+
+      type coord = Bytestring.string * int
 
       type txin =
          {
@@ -71,7 +84,7 @@ structure Transaction :> TRANSACTION =
          else
             W.bytes txid
             >>>
-            W.word32L n
+            W.word32L (intToSword32 n)
             >>>
             W.bytesVar script
             >>>
@@ -80,7 +93,7 @@ structure Transaction :> TRANSACTION =
       val txinReader =
          R.bytes 32
          >>= (fn txid =>
-         R.word32L
+         R.wrap sword32ToInt R.word32L
          >>= (fn n =>
          R.bytesVar
          >>= (fn script =>
@@ -128,6 +141,10 @@ structure Transaction :> TRANSACTION =
          R.return { version=version, inputs=inputs, outputs=outputs, lockTime=lockTime }
          ))))
 
+
+      fun writeTx tx = Writer.write (writer tx)
+
+      fun readTx str = Reader.readfull reader str
 
 
       fun modifyInputsForSig inputs i prevScript =

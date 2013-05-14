@@ -12,6 +12,8 @@ is
         blockchain.sml
         chain.sig
         chain.sml
+        commerce.sig
+        commerce.sml
         commo.sig
         commo.sml
         constants.sml

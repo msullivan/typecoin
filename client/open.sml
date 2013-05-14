@@ -10,6 +10,8 @@ structure B = Bytestring
 structure BS = Bytesubstring
 structure BC = Blockchain
 
+open EllipticCurveParams
+
 
 (*
 val sha = SHA256.hashBytes
