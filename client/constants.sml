@@ -132,6 +132,7 @@ structure Constants =
 
       (* Randomization constants *)
 
+      (* Write a random seed file this often. *)
       val writeSeedInterval = Time.fromSeconds (15 * 60)    (* 15 minutes *)
 
    end

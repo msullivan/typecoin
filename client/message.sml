@@ -91,8 +91,8 @@ structure Message :> MESSAGE =
        | Getaddr
        | Ping of Word64.word
        | Pong of Word64.word
-
        | Alert of rawalert
+
        | OldVersion of int
        | Unsupported of Bytestring.string
        | Illformed of Bytestring.string
@@ -278,6 +278,11 @@ structure Message :> MESSAGE =
          R.return (Alert (payload, sg))
          ))
 
+      fun writeAlert (payload, sg) =
+         W.bytesVar payload
+         >>>
+         W.bytesVar sg
+
       val parseAlert =
          R.wrap Word32.toInt R.word32L
          >>= (fn version =>
@@ -382,9 +387,9 @@ structure Message :> MESSAGE =
                 writePayload (commandPing, writePing n)
            | Pong n =>
                 writePayload (commandPong, writePing n)
+           | Alert alert =>
+                writePayload (commandAlert, writeAlert alert)
 
-           | Alert _ =>
-                raise InvalidMessage
            | OldVersion _ =>
                 raise InvalidMessage
            | Unsupported _ =>
@@ -419,7 +424,7 @@ structure Message :> MESSAGE =
             if BS.eq (checksum' msg, BS.slice (s, 20, SOME 4)) then
                (case List.find (fn (c, _) => BS.eq (c, command)) commands of
                    SOME (_, r) =>
-                      (R.readfull r msg
+                      (R.readfullS r msg
                        handle
                        R.SyntaxError =>
                           Illformed (BS.string s))

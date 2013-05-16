@@ -25,13 +25,10 @@ structure Main =
                    ()
                    ));
 
-         Scheduler.repeating (Time.fromSeconds 30)
-         (fn () => Log.long (fn () => "Heartbeat "
-                                      ^ Int.toString (Scheduler.numberOfTimeouts ())
-                                      ^ " "
-                                      ^ Int.toString (Peer.wantPeers ())
-                                      ^ " "
-                                      ^ Int.toString (Commo.numberOfConnections ())));
+         Scheduler.repeating (Time.fromSeconds 60)
+         (fn () => Log.long (fn () => "Heartbeat: "
+                                      ^ Int.toString (Commo.numberOfConnections ())
+                                      ^ " connections"));
 
          Scheduler.repeating (Time.fromSeconds (60 * 60)) Blockchain.writeIndex;
 

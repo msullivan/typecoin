@@ -2,6 +2,7 @@
 structure Reader : READER =
    struct
 
+      structure B = Bytestring
       structure BS = Bytesubstring
 
       structure Parsing = ParsingFun (type token = Word8.word
@@ -100,16 +101,23 @@ structure Reader : READER =
 
 
 
-      fun read f str = f str
+      fun readS f str =
+         f str
+         (* Make sure we don't stop the program over an integer out of range. *)
+         handle Overflow => raise SyntaxError
 
-      fun readfull f str =
+      fun read f str = readS f (BS.full str)
+
+      fun readfullS f str =
          let
-            val (x, str') = f str
+            val (x, str') = readS f str
          in
             if BS.isEmpty str' then
                x
             else
                raise SyntaxError
          end
+
+      fun readfull f str = readfullS f (BS.full str)
 
    end

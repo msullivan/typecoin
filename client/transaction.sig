@@ -34,7 +34,7 @@ signature TRANSACTION =
       val reader : tx Reader.reader
 
       val writeTx : tx -> Bytestring.string
-      val readTx : Bytesubstring.substring -> tx
+      val readTx : Bytestring.string -> tx
 
       (* transaction, input # to replace the script of, replacement script *)
       val modifyForSig : tx -> int -> Bytestring.string -> tx

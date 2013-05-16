@@ -22,7 +22,7 @@ structure EBlock :> EBLOCK =
       fun fromBytes bytes =
          let
             val block = 
-               S.delay (fn () => Block.readBlock (BS.full bytes))
+               S.delay (fn () => Block.readBlock bytes)
 
             val hash =
                S.delay (fn () => hashBlockHeader bytes)

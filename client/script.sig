@@ -15,6 +15,6 @@ signature SCRIPT =
       val reader : inst list Reader.reader
 
       val writeScript : inst list -> Bytestring.string
-      val readScript : Bytesubstring.substring -> inst list
+      val readScript : Bytestring.string -> inst list
 
    end

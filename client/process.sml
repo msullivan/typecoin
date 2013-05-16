@@ -303,7 +303,7 @@ structure Process :> PROCESS =
                        ()
                     else 
                        let
-                          val tx = Reader.readfull Transaction.reader (BS.full txstr)
+                          val tx = Reader.readfull Transaction.reader txstr
                        in
                           if Verify.verifyTx tx then
                              let in
@@ -433,24 +433,40 @@ structure Process :> PROCESS =
 
 
            | M.Alert (payload, sg) =>
-                let in
-                   Log.short "!";
+                let
+                   val () = Log.short "!"
 
-                   let
-                      val path = OS.Path.concat (Constants.dataDirectory, Constants.alertFile)
-                      val outs = Platform.BinIO_openAppend path
-                   in
-                      BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size payload)));
-                      BinIO.output (outs, payload);
-                      BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size sg)));
-                      BinIO.output (outs, sg);
-                      BinIO.closeOut outs
-                   end
-                   handle OS.SysErr _ => ();
+                   val poso =
+                      let
+                         val path = OS.Path.concat (Constants.dataDirectory, Constants.alertFile)
+                         val pos = OS.FileSys.fileSize path
+                         val outs = Platform.BinIO_openAppend path
+                      in
+                         BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size payload)));
+                         BinIO.output (outs, payload);
+                         BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size sg)));
+                         BinIO.output (outs, sg);
+                         BinIO.closeOut outs;
+                         SOME pos
+                      end
+                      handle 
+                         OS.SysErr _ => NONE
+                       | Overflow => NONE
+                in
+                   if ECDSAp.verify (EllipticCurveParams.secp256k1, Chain.alertKey, dhash payload, ECDERp.decodeSg sg) then
+                      let
+                         val alert = Reader.readfull Message.parseAlert payload
+                      in
+                         Log.long (fn () => "ALERT RECEIVED: " ^ #statusBar alert)
+                      end
+                   else
+                      Log.long (fn () => "Invalid alert received");
 
-                   Log.long (fn () => "ALERT RECEIVED")
+                   (case poso of
+                       SOME pos => Log.long (fn () => "Alert recorded at "^ Position.toString pos)
+                     | NONE => Log.long (fn () => "Error recording alert"))
                 end
-                   
+
 
            | M.Unsupported command =>
                 let in
@@ -458,11 +474,13 @@ structure Process :> PROCESS =
                    Log.long (fn () => "Received unsupported message "^ B.toString command)
                 end
 
+
            | M.Illformed _ =>
                 let in
                    Log.short "@";
                    Log.long (fn () => "Received illformed message")
                 end
+
 
            | _ =>
                 let in
@@ -509,3 +527,5 @@ structure Process :> PROCESS =
          )
 
    end
+
+

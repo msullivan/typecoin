@@ -70,7 +70,7 @@ structure Commerce :> COMMERCE =
            | SOME (blocknum, i) =>
                 let
                    val blstr = Blockchain.dataByNumber blocknum
-                   val block = Block.readBlock (BS.full blstr)
+                   val block = Block.readBlock blstr
                    val tx = List.nth (#transactions block, i)
 
                    val () =
@@ -148,7 +148,7 @@ structure Commerce :> COMMERCE =
 
                          val script =
                             (* Figure out what ioscript is looking for. *)
-                            (case analyze (Script.readScript (BS.full ioscript)) of
+                            (case analyze (Script.readScript ioscript) of
                                 Standard addr =>
                                    (case findKey addr of
                                        NONE =>

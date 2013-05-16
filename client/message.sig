@@ -58,9 +58,9 @@ signature MESSAGE =
        | Getaddr
        | Ping of Word64.word
        | Pong of Word64.word
+       | Alert of rawalert
 
          (* incoming only *)
-       | Alert of rawalert
        | OldVersion of int
        | Unsupported of Bytestring.string
        | Illformed of Bytestring.string
