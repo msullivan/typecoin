@@ -15,10 +15,81 @@ structure Script :> SCRIPT =
 
       datatype inst =
          Const of Bytestring.string
+       | Constn of IntInf.int
+       | Nop
+       | If
+       | Notif
+       | Else
+       | Endif
+       | Verify
+       | Return
+       | Toaltstack
+       | Fromaltstack
+       | Ifdup
+       | Depth
+       | Drop
        | Dup
-       | Hash160
+       | Nip
+       | Over
+       | Pick
+       | Roll
+       | Rot
+       | Swap
+       | Tuck
+       | TwoDrop
+       | TwoDup
+       | ThreeDup
+       | TwoOver
+       | TwoRot
+       | TwoSwap
+       | Cat
+       | Substr
+       | Left
+       | Right
+       | Size
+       | Invert
+       | And
+       | Or
+       | Xor
+       | Equal
        | Equalverify
+       | OneAdd
+       | OneSub
+       | TwoMul
+       | TwoDiv
+       | Negate
+       | Abs
+       | Not
+       | ZeroNotequal
+       | Add
+       | Sub
+       | Mul
+       | Div
+       | Mod
+       | Lshift
+       | Rshift
+       | Booland
+       | Boolor
+       | Numequal
+       | Numequalverify
+       | Numnotequal
+       | Lt
+       | Gt
+       | Leq
+       | Geq
+       | Min
+       | Max
+       | Within
+       | Ripemd160
+       | Sha1
+       | Sha256
+       | Hash160
+       | Hash256
+       | Codeseparator
        | Checksig
+       | Checksigverify
+       | Checkmultisig
+       | Checkmultisigverify
 
        | Unsupported
 
@@ -63,10 +134,92 @@ structure Script :> SCRIPT =
                       raise Writer.InvalidData
                 end
 
+           | Constn i =>
+                if i < ~1 then
+                   raise Writer.InvalidData
+                else if i = ~1 then
+                   W.byte 0wx4f
+                else if i = 0 then
+                   W.byte 0wx00
+                else if i <= 0x60 then
+                   W.byte (0wx50 + ConvertWord.intInfToWord8 i)
+                else
+                   instWriter (Const (ConvertIntInf.toBytesL i))
+
+           | Nop => W.byte 0wx61
+           | If => W.byte 0wx63
+           | Notif => W.byte 0wx64
+           | Else => W.byte 0wx67
+           | Endif => W.byte 0wx68
+           | Verify => W.byte 0wx69
+           | Return => W.byte 0wx6a
+           | Toaltstack => W.byte 0wx6b
+           | Fromaltstack => W.byte 0wx6c
+           | Ifdup => W.byte 0wx73
+           | Depth => W.byte 0wx74
+           | Drop => W.byte 0wx75
            | Dup => W.byte 0wx76
+           | Nip => W.byte 0wx77
+           | Over => W.byte 0wx78
+           | Pick => W.byte 0wx79
+           | Roll => W.byte 0wx7a
+           | Rot => W.byte 0wx7b
+           | Swap => W.byte 0wx7c
+           | Tuck => W.byte 0wx7d
+           | TwoDrop => W.byte 0wx6d
+           | TwoDup => W.byte 0wx6e
+           | ThreeDup => W.byte 0wx6f
+           | TwoOver => W.byte 0wx70
+           | TwoRot => W.byte 0wx71
+           | TwoSwap => W.byte 0wx72
+           | Cat => W.byte 0wx7e
+           | Substr => W.byte 0wx7f
+           | Left => W.byte 0wx80
+           | Right => W.byte 0wx81
+           | Size => W.byte 0wx82
+           | Invert => W.byte 0wx83
+           | And => W.byte 0wx84
+           | Or => W.byte 0wx85
+           | Xor => W.byte 0wx86
+           | Equal => W.byte 0wx87
            | Equalverify => W.byte 0wx88
+           | OneAdd => W.byte 0wx8b
+           | OneSub => W.byte 0wx8c
+           | TwoMul => W.byte 0wx8d
+           | TwoDiv => W.byte 0wx8e
+           | Negate => W.byte 0wx8f
+           | Abs => W.byte 0wx90
+           | Not => W.byte 0wx91
+           | ZeroNotequal => W.byte 0wx92
+           | Add => W.byte 0wx93
+           | Sub => W.byte 0wx94
+           | Mul => W.byte 0wx95
+           | Div => W.byte 0wx96
+           | Mod => W.byte 0wx97
+           | Lshift => W.byte 0wx98
+           | Rshift => W.byte 0wx99
+           | Booland => W.byte 0wx9a
+           | Boolor => W.byte 0wx9b
+           | Numequal => W.byte 0wx9c
+           | Numequalverify => W.byte 0wx9d
+           | Numnotequal => W.byte 0wx9e
+           | Lt => W.byte 0wx9f
+           | Gt => W.byte 0wxa0
+           | Leq => W.byte 0wxa1
+           | Geq => W.byte 0wxa2
+           | Min => W.byte 0wxa3
+           | Max => W.byte 0wxa4
+           | Within => W.byte 0wxa5
+           | Ripemd160 => W.byte 0wxa6
+           | Sha1 => W.byte 0wxa7
+           | Sha256 => W.byte 0wxa8
            | Hash160 => W.byte 0wxa9
+           | Hash256 => W.byte 0wxaa
+           | Codeseparator => W.byte 0wxab
            | Checksig => W.byte 0wxac
+           | Checksigverify => W.byte 0wxad
+           | Checkmultisig => W.byte 0wxae
+           | Checkmultisigverify => W.byte 0wxaf
 
            | Unsupported =>
                 raise (Fail "unsupported opcode"))
@@ -100,10 +253,82 @@ structure Script :> SCRIPT =
                 R.return (Const str)
                 ))
 
+           | 0wx4f => R.return (Constn ~1)
+
+           | 0wx61 => R.return Nop
+           | 0wx63 => R.return If
+           | 0wx64 => R.return Notif
+           | 0wx67 => R.return Else
+           | 0wx68 => R.return Endif
+           | 0wx69 => R.return Verify
+           | 0wx6a => R.return Return
+           | 0wx6b => R.return Toaltstack
+           | 0wx6c => R.return Fromaltstack
+           | 0wx73 => R.return Ifdup
+           | 0wx74 => R.return Depth
+           | 0wx75 => R.return Drop
            | 0wx76 => R.return Dup
+           | 0wx77 => R.return Nip
+           | 0wx78 => R.return Over
+           | 0wx79 => R.return Pick
+           | 0wx7a => R.return Roll
+           | 0wx7b => R.return Rot
+           | 0wx7c => R.return Swap
+           | 0wx7d => R.return Tuck
+           | 0wx6d => R.return TwoDrop
+           | 0wx6e => R.return TwoDup
+           | 0wx6f => R.return ThreeDup
+           | 0wx70 => R.return TwoOver
+           | 0wx71 => R.return TwoRot
+           | 0wx72 => R.return TwoSwap
+           | 0wx7e => R.return Cat
+           | 0wx7f => R.return Substr
+           | 0wx80 => R.return Left
+           | 0wx81 => R.return Right
+           | 0wx82 => R.return Size
+           | 0wx83 => R.return Invert
+           | 0wx84 => R.return And
+           | 0wx85 => R.return Or
+           | 0wx86 => R.return Xor
+           | 0wx87 => R.return Equal
            | 0wx88 => R.return Equalverify
-           | 0wxa9 => R.return Hash160
-           | 0wxac => R.return Checksig
+           | 0wx8b => R.return OneAdd 
+           | 0wx8c => R.return OneSub 
+           | 0wx8d => R.return TwoMul 
+           | 0wx8e => R.return TwoDiv 
+           | 0wx8f => R.return Negate 
+           | 0wx90 => R.return Abs 
+           | 0wx91 => R.return Not 
+           | 0wx92 => R.return ZeroNotequal 
+           | 0wx93 => R.return Add 
+           | 0wx94 => R.return Sub 
+           | 0wx95 => R.return Mul 
+           | 0wx96 => R.return Div 
+           | 0wx97 => R.return Mod 
+           | 0wx98 => R.return Lshift 
+           | 0wx99 => R.return Rshift 
+           | 0wx9a => R.return Booland 
+           | 0wx9b => R.return Boolor 
+           | 0wx9c => R.return Numequal 
+           | 0wx9d => R.return Numequalverify 
+           | 0wx9e => R.return Numnotequal 
+           | 0wx9f => R.return Lt 
+           | 0wxa0 => R.return Gt 
+           | 0wxa1 => R.return Leq 
+           | 0wxa2 => R.return Geq 
+           | 0wxa3 => R.return Min 
+           | 0wxa4 => R.return Max 
+           | 0wxa5 => R.return Within 
+           | 0wxa6 => R.return Ripemd160 
+           | 0wxa7 => R.return Sha1 
+           | 0wxa8 => R.return Sha256 
+           | 0wxa9 => R.return Hash160 
+           | 0wxaa => R.return Hash256 
+           | 0wxab => R.return Codeseparator 
+           | 0wxac => R.return Checksig 
+           | 0wxad => R.return Checksigverify 
+           | 0wxae => R.return Checkmultisig 
+           | 0wxaf => R.return Checkmultisigverify 
 
            | _ =>
                 if opcode <= 0wx4b then
@@ -111,6 +336,8 @@ structure Script :> SCRIPT =
                    >>= (fn str =>
                    R.return (Const str)
                    )
+                else if opcode >= 0wx51 andalso opcode <= 0wx60 then
+                   R.return (Constn (ConvertWord.word8ToIntInf (opcode - 0wx50)))
                 else
                    R.return Unsupported)
          )
