@@ -348,8 +348,10 @@ structure Commo =
    (structure ConnState =
        struct
           type state =
-             { orphanage : Blockchain.orphanage }
+             { orphanage : Blockchain.orphanage,
+               trigger : Bytestring.string ref }
 
           fun new () =
-             { orphanage = Blockchain.newOrphanage () }
+             { orphanage = Blockchain.newOrphanage (),
+               trigger = ref Bytestring.null }
        end)

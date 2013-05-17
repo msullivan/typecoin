@@ -912,6 +912,14 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun blockData hash = inputData (blockPosition hash)
 
+      fun blockPrimary hash =
+         (case T.find theTable hash of
+             NONE => false
+           | SOME lineager =>
+                (case !lineager of
+                    Nil _ => true
+                  | Cons _ => false))
+
       fun lastBlock () = !lastblock
 
       fun totalDifficulty () = !totaldiff

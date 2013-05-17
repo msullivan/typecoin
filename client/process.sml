@@ -22,6 +22,7 @@ structure Process :> PROCESS =
 
 
       fun getOrphanage conn = #orphanage (Commo.state conn)
+      fun getTrigger conn = #trigger (Commo.state conn)
 
 
 
@@ -64,7 +65,7 @@ structure Process :> PROCESS =
             in that orphan and terminate the sync process.
       *)
 
-      fun getblocks goal =
+      fun makeGetblocks goal =
          let
             fun loopGeom acc inc num =
                if num < 0 then
@@ -84,6 +85,32 @@ structure Process :> PROCESS =
          in
             M.Getblocks (M.mkGetblocks { hashes = hashes, lastDesired = goal })
          end
+
+
+      fun makeBlockInv conn curr =
+         let
+            val last = Blockchain.lastBlock ()
+            val stop = Int.min (curr+500, last)
+
+            fun invloop acc num =
+               if num <= curr then
+                  acc
+               else
+                  invloop ((M.BLOCK, Blockchain.hashByNumber num) :: acc) (num-1)
+
+            val invs = invloop [] stop
+
+            val triggerr = getTrigger conn
+         in
+            if stop = last then
+               triggerr := B.null
+            else
+               triggerr := Blockchain.hashByNumber stop;
+
+            invs
+         end
+
+         
 
 
       (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
@@ -158,7 +185,7 @@ structure Process :> PROCESS =
             if not (isSome (!syncing)) andalso remoteblocks > lastblock then
                (
                Log.long (fn () => "Block " ^ Int.toString remoteblocks ^ " available; syncing");
-               Commo.sendMessage conn (getblocks NONE);
+               Commo.sendMessage conn (makeGetblocks NONE);
                Scheduler.once Constants.throughputInterval (fn () => monitorSync conn remoteblocks);
                Commo.suspendPolling ();
                Blockchain.suspendVerification ();
@@ -236,7 +263,7 @@ structure Process :> PROCESS =
                                     (* We've already identified this block as an orphan, so go directly
                                        to downloading its ancestors without requesting the block again.
                                     *)
-                                    (invs', getblocks (SOME hash) :: msgs)
+                                    (invs', makeGetblocks (SOME hash) :: msgs)
                                  else
                                     (inv :: invs', msgs)
                             | M.TX =>
@@ -257,28 +284,55 @@ structure Process :> PROCESS =
                 let
                    val () = Log.short "G"
 
-                   val notfound =
-                      List.foldl
-                      (fn (inv as (objtp, hash), notfound) =>
-                          (case objtp of
-                              M.ERR => notfound
-                            | M.TX =>
-                                 (case T.find txpool hash of
-                                     NONE =>
-                                        inv :: notfound
-                                   | SOME txstr =>
-                                        let in
-                                           Commo.sendMessage conn (M.Tx txstr);
-                                           notfound
-                                        end)
-                            | M.BLOCK =>
-                                 (let in
-                                     Commo.sendMessage conn (M.Block (Blockchain.blockData hash));
-                                     notfound
-                                  end
-                                  handle Blockchain.Absent => (inv :: notfound))))
-                      []
-                      invs
+                   val triggerr = getTrigger conn
+                   val trigger = !triggerr
+
+                   fun loop notfound invs =
+                      (case invs of
+                          [] =>
+                             notfound
+                        | (inv as (objtp, hash)) :: rest =>
+                             (case objtp of
+                                 M.ERR =>
+                                    loop notfound rest
+                               | M.TX =>
+                                    (case T.find txpool hash of
+                                        NONE =>
+                                           loop (inv :: notfound) rest
+                                      | SOME txstr =>
+                                           let in
+                                              Commo.sendMessage conn (M.Tx txstr);
+                                              loop notfound rest
+                                           end)
+                               | M.BLOCK =>
+                                    (let in
+                                        Commo.sendMessage conn (M.Block (Blockchain.blockData hash));
+
+                                        if B.eq (hash, trigger) then
+                                           (* They asked for the trigger block, so send another sheaf of block hashes. *)
+                                           let
+                                              val () = Log.long (fn () => "Trigger recognized")
+
+                                              val invs = makeBlockInv conn (Blockchain.blockNumber hash)
+                                           in
+                                              (case invs of
+                                                  [] => ()
+                                                | _ :: _ =>
+                                                     let in
+                                                        Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks in respononse to trigger");
+                                                        Commo.sendMessage conn (M.Inv invs)
+                                                     end)
+                                           end
+                                        else
+                                           ();
+
+                                        loop notfound rest
+                                     end
+                                     handle
+                                        Blockchain.Absent =>
+                                           loop (inv :: notfound) rest)))
+
+                   val notfound = loop [] invs
                 in
                    (case notfound of
                        [] => ()
@@ -291,9 +345,33 @@ structure Process :> PROCESS =
                 Log.short "n"
 
 
+           | M.Getblocks ({hashes, ...}:M.getblocks) =>
+                let
+                   val () = Log.short "B"
 
-           | M.Getblocks _ =>
-                Log.short "B"
+                   fun findPrimaryBlock l =
+                      (case l of
+                          nil =>
+                             0
+                        | hash :: rest =>
+                             if Blockchain.blockPrimary hash then
+                                Blockchain.blockNumber hash
+                             else
+                                findPrimaryBlock rest)
+                                
+                   (* First recognized block on their list, start with the next block in the chain. *)
+                   val first = findPrimaryBlock hashes
+
+                   val invs = makeBlockInv conn first
+                in
+                   (case invs of
+                       [] => ()
+                     | _ :: _ =>
+                          let in
+                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks");
+                             Commo.sendMessage conn (M.Inv invs)
+                          end)
+                end
 
 
            | M.Tx txstr =>
@@ -355,7 +433,7 @@ structure Process :> PROCESS =
                              Blockchain.ORPHAN =>
                                 if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
                                    (* request the ancestors of the orphan *)
-                                   Commo.sendMessage conn (getblocks (SOME hash))
+                                   Commo.sendMessage conn (makeGetblocks (SOME hash))
                                 else
                                    (* Too many orphans from this connection, drop it.
       

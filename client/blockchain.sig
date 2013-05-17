@@ -21,6 +21,7 @@ signature BLOCKCHAIN =
       val blockPosition : hash -> Int64.int        (* position in the record *)
       val blockNumber : hash -> int                (* block number in the chain *)
       val blockData : hash -> Bytestring.string    (* the block itself *)
+      val blockPrimary : hash -> bool              (* is the block on the primary chain *)
 
       val lastBlock : unit -> int
       val totalDifficulty : unit -> IntInf.int
