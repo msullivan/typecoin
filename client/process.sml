@@ -457,7 +457,7 @@ structure Process :> PROCESS =
                       let
                          val alert = Reader.readfull Message.parseAlert payload
                       in
-                         Log.long (fn () => "ALERT RECEIVED: " ^ #statusBar alert)
+                         Log.long (fn () => "Alert received: " ^ #statusBar alert)
                       end
                    else
                       Log.long (fn () => "Invalid alert received");

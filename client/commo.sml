@@ -66,7 +66,7 @@ structure Commo :> COMMO =
                                 self = netAddrNull,
                                 remote = M.mkNetaddr addr,
                                 nonce = nonce,
-                                lastBlock = 0
+                                lastBlock = Blockchain.lastBlock ()
                                 }))
       
                   fun k msg =
@@ -135,9 +135,9 @@ structure Commo :> COMMO =
          peer : Peer.peer,
          lastHeard : Time.time ref,  (* zero indicates forcibly closed *)
          opn : bool ref,             (* still open?  also used for quick equality test *)
+         lastBlock : int,
 
          (* Data held for other modules.  If there's too many of these, we should functorize over them. *)
-         lastBlock : int,
          orphanage : Blockchain.orphanage
          }
 
