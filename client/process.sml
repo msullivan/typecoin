@@ -21,6 +21,9 @@ structure Process :> PROCESS =
       val dhash = SHA256.hashBytes o SHA256.hashBytes
 
 
+      fun getOrphanage conn = #orphanage (Commo.state conn)
+
+
 
       (* The Bitcoin block download protocol is a bit strange.  (The Bitcoinj client calls it
          "very implicit and not well thought out".)
@@ -85,11 +88,16 @@ structure Process :> PROCESS =
 
       (* To avoid wasting bandwidth by downloading the blockchain from multiple peers at once,
          use one peer exclusively as long as we're happy with the progress we're making.
-         Also, we suspect verification while syncing, since there's a good chance of getting
+         Also, we suspend verification while syncing, since there's a good chance of getting
          more than chainTrustConfirmations blocks.
       *)
       val syncing : Commo.conn option ref = ref NONE
       val syncData = ref 0  (* amount of sync data received during this syncTimeout period *)
+
+      val txpool : Bytestring.string T.table = T.table Constants.poolSize
+      val relayList : Message.inv list ref = ref []
+
+
 
       fun syncingWith conn =
          (case !syncing of
@@ -165,11 +173,6 @@ structure Process :> PROCESS =
 
 
 
-      val txpool : Bytestring.string T.table = T.table Constants.poolSize
-      val relayList : Message.inv list ref = ref []
-
-
-
       fun inject tx =
          let
             val txstr = Transaction.writeTx tx
@@ -220,7 +223,7 @@ structure Process :> PROCESS =
                 let
                    val () = Log.short "i"
 
-                   val orphanage = Commo.orphanage conn
+                   val orphanage = getOrphanage conn
 
                    val (invs', msgs) =
                       foldr
@@ -325,7 +328,7 @@ structure Process :> PROCESS =
                    if Verify.verifyBlockGross eblock then
                       let
                          val hash = EBlock.hash eblock
-                         val orphanage = Commo.orphanage conn
+                         val orphanage = getOrphanage conn
 
                          val result = Blockchain.insertBlock orphanage eblock
                       in

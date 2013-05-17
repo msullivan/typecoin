@@ -3,6 +3,7 @@ signature COMMO =
    sig
 
       type conn
+      type state
 
       val sendMessage : conn -> Message.message -> unit
       val broadcastMessage : Message.message -> unit
@@ -15,7 +16,7 @@ signature COMMO =
 
       val eq : conn * conn -> bool
       val lastBlock : conn -> int
-      val orphanage : conn -> Blockchain.orphanage
+      val state : conn -> state
 
       val numberOfConnections : unit -> int
 

@@ -1,5 +1,16 @@
 
-structure Commo :> COMMO =
+signature CONN_STATE =
+   sig
+      type state
+      val new : unit -> state
+   end
+
+
+functor CommoFun (structure ConnState : CONN_STATE)
+   :>
+   COMMO 
+   where type state = ConnState.state
+   =
    struct
 
       structure B = Bytestring
@@ -11,7 +22,6 @@ structure Commo :> COMMO =
 
       (* Reject any message with a payload larger than this. *)
       val maximumPayload = 1800000                         (* 1.8 million bytes *)
-
 
 
 
@@ -129,6 +139,8 @@ structure Commo :> COMMO =
 
 
 
+      type state = ConnState.state
+
       type conn = 
          {
          sock : Network.asock,
@@ -136,9 +148,7 @@ structure Commo :> COMMO =
          lastHeard : Time.time ref,  (* zero indicates forcibly closed *)
          opn : bool ref,             (* still open?  also used for quick equality test *)
          lastBlock : int,
-
-         (* Data held for other modules.  If there's too many of these, we should functorize over them. *)
-         orphanage : Blockchain.orphanage
+         state : state
          }
 
 
@@ -219,7 +229,7 @@ structure Commo :> COMMO =
              let
                 val lastHeard = ref (Time.now ())
                 val conn = { sock=sock, peer=peer, lastHeard=lastHeard, opn=ref true,
-                             lastBlock=lastBlock, orphanage=Blockchain.newOrphanage () }
+                             lastBlock=lastBlock, state=ConnState.new () }
 
                 fun loop () =
                    recvMessage
@@ -328,6 +338,18 @@ structure Commo :> COMMO =
 
       fun lastBlock ({lastBlock, ...}:conn) = lastBlock
 
-      fun orphanage ({orphanage, ...}:conn) = orphanage
+      fun state ({state, ...}:conn) = state
 
    end
+
+
+structure Commo =
+   CommoFun
+   (structure ConnState =
+       struct
+          type state =
+             { orphanage : Blockchain.orphanage }
+
+          fun new () =
+             { orphanage = Blockchain.newOrphanage () }
+       end)
