@@ -15,6 +15,8 @@ structure Peer :> PEER =
          valid : bool ref
          }
 
+      fun degenerate addr = { addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref false }
+
       fun address ({addr, ...}:peer) = addr
 
       fun time ({timer, ...}:peer) = !timer
@@ -25,6 +27,7 @@ structure Peer :> PEER =
       val theVerifiedQueue : peer Q.ideque = Q.ideque ()  (* requeued peers, more likely to be active *)
       val queuedPeers = ref 0
       val relayablePeers : (Time.time * Address.addr) list ref = ref []
+
 
       fun delete (peer as {addr, timer, noder, valid, ...}:peer) =
          if H.member theTable addr then
@@ -46,30 +49,25 @@ structure Peer :> PEER =
             timer := newtime
 
 
-      fun new addr =
-         let
-            val peer as {noder, ...}:peer =
-               H.lookupOrInsert theTable addr
-               (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref true})
-         in
-            if Q.orphan (!noder) then
-               (
-               noder := Q.insertBackNode theQueue peer;
-               queuedPeers := !queuedPeers + 1
-               )
-            else
-               ();
-
-            peer
-         end
-
-
-      fun insertMaybe addr time =
+      fun new addr time =
          if !queuedPeers >= Constants.maxPeers then
-            ()
+            degenerate addr
          else
-            update (new addr) time
-            
+            let
+               val peer as {noder, ...}:peer =
+                  H.lookupOrInsert theTable addr
+                  (fn () => {addr=addr, timer=ref time, noder=ref Q.dummy, valid=ref true})
+            in
+               if Q.orphan (!noder) then
+                  (
+                  noder := Q.insertBackNode theQueue peer;
+                  queuedPeers := !queuedPeers + 1
+                  )
+               else
+                  ();
+   
+               peer
+            end
 
 
       fun next failures =
@@ -121,7 +119,7 @@ structure Peer :> PEER =
                reseed time llrest llout
           | (inaddr :: l) :: llrest =>
                (
-               insertMaybe (Address.fromInAddr inaddr) time;
+               new (Address.fromInAddr inaddr) time;
                reseed time llrest (l :: llout)
                ))
 

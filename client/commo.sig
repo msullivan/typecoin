@@ -20,6 +20,7 @@ signature COMMO =
       val peer : conn -> Peer.peer
 
       val numberOfConnections : unit -> int
+      val self : unit -> Message.netaddr option
 
       (* first callback is for new connections, second is for messages over existing ones *)
       val initialize : (conn -> unit) -> (conn * Message.message -> unit) -> unit

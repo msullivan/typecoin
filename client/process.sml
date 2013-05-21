@@ -183,6 +183,14 @@ structure Process :> PROCESS =
             val remoteblocks = Commo.lastBlock conn
             val lastblock = Blockchain.lastBlock ()
          in
+            (case Commo.self () of
+                NONE => ()
+              | SOME netaddr =>
+                   (
+                   Log.long (fn () => "Advertising");
+                   Commo.sendMessage conn (M.Addr [(Time.toSeconds (Time.now ()), netaddr)])
+                   ));
+
             if not (isSome (!syncing)) andalso remoteblocks > lastblock then
                (
                Log.long (fn () => "Block " ^ Int.toString remoteblocks ^ " available; syncing");
@@ -237,7 +245,7 @@ structure Process :> PROCESS =
                              [] => ()
                            | (timestamp, {address, ...}:M.netaddr) :: rest =>
                                 (
-                                Peer.insertMaybe address (Time.- (Time.fromSeconds timestamp, Constants.relayedPenalty));
+                                Peer.new address (Time.- (Time.fromSeconds timestamp, Constants.relayedPenalty));
                                 loop (n-1) rest
                                 ))
                    in

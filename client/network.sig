@@ -18,5 +18,6 @@ signature NETWORK =
       val recvVec : asock -> Bytestring.string
       
       val dns : string -> addr list
+      val self : unit -> addr list
 
    end

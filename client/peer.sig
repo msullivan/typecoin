@@ -7,11 +7,11 @@ signature PEER =
       val address : peer -> Address.addr
       val time : peer -> Time.time
 
-      val new : Address.addr -> peer
+      val new : Address.addr -> Time.time -> peer
       val update : peer -> Time.time -> unit
       val delete : peer -> unit
 
-      val insertMaybe : Address.addr -> Time.time -> unit  (* Create a new peer and update it, if peers are wanted. *)
+      val degenerate : Address.addr -> peer  (* Not maintained, just an address. *)
 
       val next : int -> peer option  (* int = number of consecutive failures *)
       val enqueue : peer -> unit

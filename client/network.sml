@@ -83,4 +83,6 @@ structure Network :> NETWORK =
       fun dns str =
          getOpt (Option.map NetHostDB.addrs (NetHostDB.getByName str), [])
 
+      fun self () = dns (NetHostDB.getHostName ())
+
    end

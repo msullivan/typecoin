@@ -24,6 +24,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
       val msgVerack = M.writeMessage M.Verack
 
 
+
       (* Attempts to receive a message.  If it succeeds, invokes sk with the message, which must return
          a new sink.  If the connection is interrupted before it can process a message, invokes fk.
       *)
@@ -45,6 +46,30 @@ functor CommoFun (structure ConnState : CONN_STATE)
          in
             Sink.MORE (24, fk, k)
          end
+
+
+      (* Cache this. *)
+      val myNetaddr = ref (M.mkNetaddr Address.null)
+      val myAddrIsPrivate = ref true
+
+      fun setOwnAddress () =
+         let
+            val addr =
+               (case Network.self () of
+                   [] => Address.null
+                 | iaddr :: _ => Address.fromInAddr iaddr)
+         in
+            myAddrIsPrivate :=
+               (case Address.toList addr of
+                   [0w0, 0w0, 0w0, 0w0] => true
+                 | [0w10, _, _, _] => true
+                 | [0w172, b, _, _] => 0w16 <= b andalso b < 0w32
+                 | [0w192, 0w168, _, _] => true
+                 | _ => false);
+
+            myNetaddr := M.mkNetaddr addr
+         end
+
 
 
       (* Handshake, then invoke sk (giving it the remote's version), which much provide a sink.
@@ -76,7 +101,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
                   (M.Version
                       (M.mkVersion
                           {
-                          self = netAddrNull,
+                          self = !myNetaddr,
                           remote = M.mkNetaddr addr,
                           nonce = nonce,
                           lastBlock = Blockchain.lastBlock ()
@@ -156,7 +181,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
                                   (M.Version
                                       (M.mkVersion
                                           {
-                                          self = netAddrNull,
+                                          self = !myNetaddr,
                                           remote = M.mkNetaddr addr,
                                           nonce = nonce,
                                           lastBlock = Blockchain.lastBlock ()
@@ -316,12 +341,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
          in
             handshakeIn addr sock
             (fn () => ())
-            (fn ver =>
-                let
-                   val peer = Peer.new addr
-                in
-                   initializeConn peer sock ver
-                end)
+            (fn ver => initializeConn (Peer.degenerate addr) sock ver)
          end
 
 
@@ -441,6 +461,10 @@ functor CommoFun (structure ConnState : CONN_STATE)
             pollingTid := Scheduler.once Time.zeroTime pollPeers;
             Scheduler.repeating Constants.keepAliveInterval broadcastPing;
 
+            setOwnAddress ();
+            (* Your IP address can change, so check it periodically. *)
+            Scheduler.repeating Constants.getOwnAddressInterval setOwnAddress;
+
             ()
          end
 
@@ -452,6 +476,12 @@ functor CommoFun (structure ConnState : CONN_STATE)
 
 
       fun numberOfConnections () = !numConnections
+
+      fun self () =
+         if !myAddrIsPrivate then
+            NONE
+         else
+            SOME (!myNetaddr)
 
       fun closed ({opn, ...}:conn) = not (!opn)
 
