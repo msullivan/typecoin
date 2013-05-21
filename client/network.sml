@@ -2,10 +2,10 @@
 structure Network :> NETWORK =
    struct
 
+      type addr = NetHostDB.in_addr
       type 'a sock = (INetSock.inet, 'a Socket.stream) Socket.sock
       type psock = Socket.passive sock
       type asock = Socket.active sock
-      type addr = NetHostDB.in_addr
 
 
       (* constants *)
@@ -23,15 +23,18 @@ structure Network :> NETWORK =
          in
             s
          end handle exn => raise (NetworkException ("listen", exn))
-      
+
+
       fun accept s =
          let
             val (s', a) = Socket.accept s
+            val (addr, port) = INetSock.fromAddr a
          in
-            Log.long (fn () => "Connection from " ^ NetHostDB.toString (#1 (INetSock.fromAddr a)));
-            s'
+            Log.long (fn () => "Connection from " ^ NetHostDB.toString addr);
+            (s', addr, port)
          end handle exn => raise (NetworkException ("accept", exn))
-      
+
+
       fun connect (addr, port) =
          let
             val saddr = INetSock.toAddr (addr, port)
@@ -42,6 +45,7 @@ structure Network :> NETWORK =
             s
          end handle exn => raise (NetworkException ("connect", exn))
 
+
       fun connectNB (addr, port) =
          let
             val saddr = INetSock.toAddr (addr, port)
@@ -50,6 +54,7 @@ structure Network :> NETWORK =
             Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             (s, Socket.connectNB (s, saddr))
          end handle exn => raise (NetworkException ("connectNB", exn))
+
 
       fun close sock = Socket.close sock handle OS.SysErr _ => ()
 
@@ -67,14 +72,8 @@ structure Network :> NETWORK =
                                        
 
       fun recvVec s =
-         let
-            val v = Socket.recvVec (s, bufsize)
-         in
-(*
-            Log.short ".";
-*)
-            v
-         end handle OS.SysErr (err, _) =>
+         Socket.recvVec (s, bufsize)
+         handle OS.SysErr (err, _) =>
             (
             Log.long (fn () => "Receive error: " ^ err);
             Bytestring.null

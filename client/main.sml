@@ -40,6 +40,7 @@ structure Main =
 
       fun cleanup () =
          (
+         Process.cleanup ();
          Blockchain.close ();
          Log.cleanup ()
          )

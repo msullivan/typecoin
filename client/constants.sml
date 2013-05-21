@@ -10,6 +10,9 @@ structure Constants =
       (* Send this agent name to peers. *)
       val agentName = "/MLBTC:a0/"
 
+      (* Reject any message with a payload larger than this. *)
+      val maximumPayload = 1800000                         (* 1.8 million bytes *)
+
 
 
       (*** Networking constants ***)

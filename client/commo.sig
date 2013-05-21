@@ -17,10 +17,12 @@ signature COMMO =
       val eq : conn * conn -> bool
       val lastBlock : conn -> int
       val state : conn -> state
+      val peer : conn -> Peer.peer
 
       val numberOfConnections : unit -> int
 
       (* first callback is for new connections, second is for messages over existing ones *)
       val initialize : (conn -> unit) -> (conn * Message.message -> unit) -> unit
+      val cleanup : unit -> unit
 
    end

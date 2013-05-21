@@ -87,6 +87,7 @@ structure Process :> PROCESS =
          end
 
 
+      (* This is really slow.  I'm guessing that's because of all the seeks, because it doesn't do much else. *)
       fun makeBlockInv conn curr =
          let
             val last = Blockchain.lastBlock ()
@@ -236,7 +237,7 @@ structure Process :> PROCESS =
                              [] => ()
                            | (timestamp, {address, ...}:M.netaddr) :: rest =>
                                 (
-                                Peer.new address (Time.- (Time.fromSeconds timestamp, Constants.relayedPenalty));
+                                Peer.insertMaybe address (Time.- (Time.fromSeconds timestamp, Constants.relayedPenalty));
                                 loop (n-1) rest
                                 ))
                    in
@@ -244,7 +245,6 @@ structure Process :> PROCESS =
                       loop (Int.min (Peer.wantPeers (), Constants.maxPeersFromSource)) l'
                    end
                 )
-
 
            | M.Inv invs =>
                 let
@@ -319,7 +319,7 @@ structure Process :> PROCESS =
                                                   [] => ()
                                                 | _ :: _ =>
                                                      let in
-                                                        Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks in respononse to trigger");
+                                                        Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to "^ Address.toString (Peer.address (Commo.peer conn)) ^" in response to trigger");
                                                         Commo.sendMessage conn (M.Inv invs)
                                                      end)
                                            end
@@ -368,7 +368,7 @@ structure Process :> PROCESS =
                        [] => ()
                      | _ :: _ =>
                           let in
-                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks");
+                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to"^ Address.toString (Peer.address (Commo.peer conn)));
                              Commo.sendMessage conn (M.Inv invs)
                           end)
                 end
@@ -606,6 +606,8 @@ structure Process :> PROCESS =
          Scheduler.repeating Constants.relayInterval relay;
          ()
          )
+
+      fun cleanup () = Commo.cleanup ()
 
    end
 

@@ -46,25 +46,30 @@ structure Peer :> PEER =
             timer := newtime
 
 
-      fun new addr newtime =
+      fun new addr =
+         let
+            val peer as {noder, ...}:peer =
+               H.lookupOrInsert theTable addr
+               (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref true})
+         in
+            if Q.orphan (!noder) then
+               (
+               noder := Q.insertBackNode theQueue peer;
+               queuedPeers := !queuedPeers + 1
+               )
+            else
+               ();
+
+            peer
+         end
+
+
+      fun insertMaybe addr time =
          if !queuedPeers >= Constants.maxPeers then
             ()
          else
-            let
-               val peer as {noder, ...}:peer =
-                  H.lookupOrInsert theTable addr
-                  (fn () => {addr=addr, timer=ref Time.zeroTime, noder=ref Q.dummy, valid=ref true})
-            in
-               update peer newtime;
-
-               if Q.orphan (!noder) then
-                  (
-                  noder := Q.insertBackNode theQueue peer;
-                  queuedPeers := !queuedPeers + 1
-                  )
-               else
-                  ()
-            end
+            update (new addr) time
+            
 
 
       fun next failures =
@@ -116,7 +121,7 @@ structure Peer :> PEER =
                reseed time llrest llout
           | (inaddr :: l) :: llrest =>
                (
-               new (Address.fromInAddr inaddr) time;
+               insertMaybe (Address.fromInAddr inaddr) time;
                reseed time llrest (l :: llout)
                ))
 

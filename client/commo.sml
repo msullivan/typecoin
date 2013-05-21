@@ -18,19 +18,15 @@ functor CommoFun (structure ConnState : CONN_STATE)
       structure M = Message
 
 
-      (* constants *)
-
-      (* Reject any message with a payload larger than this. *)
-      val maximumPayload = 1800000                         (* 1.8 million bytes *)
-
-
-
       (* precomputed values *)
       val netAddrNull = M.mkNetaddr Address.null
       val magic = BS.full (ConvertWord.word32ToBytesL Chain.magic)
       val msgVerack = M.writeMessage M.Verack
 
 
+      (* Attempts to receive a message.  If it succeeds, invokes sk with the message, which must return
+         a new sink.  If the connection is interrupted before it can process a message, invokes fk.
+      *)
       fun recvMessage fk sk =
          let
             fun k str =
@@ -38,7 +34,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
                   let
                      val sz = Word32.toInt (ConvertWord.bytesToWord32SL (BS.slice (str, 16, SOME 4)))
                   in
-                     if sz > maximumPayload then
+                     if sz > Constants.maximumPayload then
                         (fk (); Sink.DONE)
                      else
                         Sink.MORE (sz, fk, (fn str' => sk (M.readMessage (BS.full (BS.concat [str, str'])))))
@@ -51,90 +47,143 @@ functor CommoFun (structure ConnState : CONN_STATE)
          end
 
 
-      (* Connect to addr, handshake, then return the sock to sk, which must provide a sink.
-         If connection or handshaking fails, invoke fk.
+      (* Handshake, then invoke sk (giving it the remote's version), which much provide a sink.
+         If handshaking fails, invoke fk.
       *)
-      fun contact addr port fk sk =
+      fun handshakeOut addr sock fk sk =
          let
-            val (sock, already) = Network.connectNB (Address.toInAddr addr, port)
+            val tid =
+               Scheduler.once Constants.connectTimeout
+               (fn () =>
+                   (
+                   Log.long (fn () => "Timeout handshaking with " ^ Address.toString addr);
+                   Scheduler.delete sock;
+                   Network.close sock;
+                   fk ()
+                   ))
 
             fun fk' () =
                (
+               Scheduler.cancel tid;
                Log.long (fn () => "Handshake failed with " ^ Address.toString addr);
                fk ()
                )
 
-            fun handshake () =
-               let
-                  val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
+            val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
+
+            val msgVersion =
+               M.writeMessage
+                  (M.Version
+                      (M.mkVersion
+                          {
+                          self = netAddrNull,
+                          remote = M.mkNetaddr addr,
+                          nonce = nonce,
+                          lastBlock = Blockchain.lastBlock ()
+                          }))
+
+            fun k msg =
+               (case msg of
+                   M.Version (ver as {services, ...}) =>
+                      if Word64.andb (services, Message.serviceNetwork) = 0w0 then
+                         (* Ignore peers that don't offer the network service.  If there were a lot
+                            of them, it might be better to use them for the services they do offer.
+                         *)
+                         (fk' (); Sink.DONE)
+                      else
+                         recvMessage fk'
+                         (fn M.Verack =>
+                                if Network.sendVec (sock, BS.full msgVerack) then
+                                   (
+                                   Scheduler.cancel tid;
+                                   Log.long (fn () => "Handshake successful with " ^ Address.toString addr);
+                                   sk (sock, ver)
+                                   )
+                                else
+                                   (fk' (); Sink.DONE)
+                           | _ =>
+                                (* Did not handshake correctly. *)
+                                (fk' (); Sink.DONE))
+                 | _ =>
+                      (* Did not handshake correctly. *)
+                      (fk' (); Sink.DONE))
+
+         in
+            (* Send version, expect version and verack, then send verack. *)
+            if Network.sendVec (sock, BS.full msgVersion) then
+               Sink.register sock (recvMessage fk' k)
+            else
+               fk' ()
+         end
+
       
-                  val msgVersion =
-                     M.writeMessage
-                        (M.Version
-                            (M.mkVersion
-                                {
-                                self = netAddrNull,
-                                remote = M.mkNetaddr addr,
-                                nonce = nonce,
-                                lastBlock = Blockchain.lastBlock ()
-                                }))
-      
-                  fun k msg =
-                     (case msg of
-                         M.Version (ver as {services, ...}) =>
-                            if Word64.andb (services, Message.serviceNetwork) = 0w0 then
-                               (* Ignore peers that don't offer the network service.  If there were a lot
-                                  of them, it might be better to use them for the services they do offer.
-                               *)
+      (* Handshake, then invoke sk (giving it the remote's version), which much provide a sink.
+         If handshaking fails, invoke fk.
+      *)
+      fun handshakeIn addr sock fk sk =
+         let
+            val tid =
+               Scheduler.once Constants.connectTimeout
+               (fn () =>
+                   (
+                   Log.long (fn () => "Timeout handshaking with incoming " ^ Address.toString addr);
+                   Scheduler.delete sock;
+                   Network.close sock;
+                   fk ()
+                   ))
+
+            fun fk' () =
+               (
+               Scheduler.cancel tid;
+               Log.long (fn () => "Incoming handshake failed with " ^ Address.toString addr);
+               fk ()
+               )
+
+            fun k msg =
+               (case msg of
+                   M.Version (ver as {services, ...}) =>
+                      if Word64.andb (services, Message.serviceNetwork) = 0w0 then
+                         (* Ignore peers that don't offer the network service. Maybe we shouldn't
+                            do this for incoming connections.
+                         *)
+                         (fk' (); Sink.DONE)
+                      else
+                         let
+                            val nonce = ConvertWord.bytesToWord64B (AESFortuna.random 8)
+                
+                            val msgVersion =
+                               M.writeMessage
+                                  (M.Version
+                                      (M.mkVersion
+                                          {
+                                          self = netAddrNull,
+                                          remote = M.mkNetaddr addr,
+                                          nonce = nonce,
+                                          lastBlock = Blockchain.lastBlock ()
+                                          }))
+                         in
+                            if not (Network.sendVec (sock, BS.full msgVersion)) then
+                               (fk' (); Sink.DONE)
+                            else if not (Network.sendVec (sock, BS.full msgVerack)) then
                                (fk' (); Sink.DONE)
                             else
                                recvMessage fk'
                                (fn M.Verack =>
-                                      if Network.sendVec (sock, BS.full msgVerack) then
-                                         (
-                                         Log.long (fn () => "Handshake successful with " ^ Address.toString addr);
-                                         sk (sock, ver)
-                                         )
-                                      else
-                                         (fk' (); Sink.DONE)
+                                      let in
+                                         Scheduler.cancel tid;
+                                         Log.long (fn () => "Incoming handshake successful with " ^ Address.toString addr);
+                                         sk ver
+                                      end
                                  | _ =>
                                       (* Did not handshake correctly. *)
                                       (fk' (); Sink.DONE))
-                       | _ =>
-                            (* Did not handshake correctly. *)
-                            (fk' (); Sink.DONE))
-      
-               in
-                  (* Send version, expect version and verack, then send verack. *)
-                  if Network.sendVec (sock, BS.full msgVersion) then
-                     Sink.register sock (recvMessage fk' k)
-                  else
-                     fk' ()
-               end
+                         end
+                 | _ =>
+                      (* Did not handshake correctly. *)
+                      (fk' (); Sink.DONE))
          in
-            if already then
-               (* Does this ever happen? *)
-               handshake ()
-            else
-               let
-                  val tid =
-                     Scheduler.once Constants.connectTimeout
-                     (fn () =>
-                         (
-                         Log.long (fn () => "Timeout connecting to " ^ Address.toString addr);
-                         Scheduler.delete sock;
-                         Network.close sock;
-                         fk ()
-                         ))
-               in
-                  Scheduler.insertWrite sock
-                  (fn () =>
-                      (
-                      Scheduler.cancel tid;
-                      Scheduler.delete sock;
-                      handshake ()
-                      ))
-               end
+            (* Expect version, send version and verack, then expect verack. *)
+            Sink.register sock (recvMessage fk' k)
          end
 
 
@@ -177,7 +226,140 @@ functor CommoFun (structure ConnState : CONN_STATE)
             ()
 
 
-      fun closed ({opn, ...}:conn) = not (!opn)
+      fun processMessage (conn as ({peer, lastHeard, ...}:conn)) msg =
+         let
+            val time = Time.now ()
+         in
+            lastHeard := time;
+
+            (* If we haven't updated the peer since the threshold time, do so. *)
+            if Time.>= (time, Time.+ (Peer.time peer, Constants.peerUpdateThreshold)) then
+               Peer.update peer time
+            else
+               ();
+   
+            !theMsgCallback (conn, msg)
+         end
+
+
+      fun initializeConn peer sock ({lastBlock, ...}:M.version) =
+         let
+            val lastHeard = ref (Time.now ())
+            val conn = { sock=sock, peer=peer, lastHeard=lastHeard, opn=ref true,
+                         lastBlock=lastBlock, state=ConnState.new () }
+
+            fun loop () =
+               recvMessage
+               (fn () => closeConn conn true)
+               (fn msg =>
+                   (
+                   processMessage conn msg;
+                   loop ()
+                   ))
+         in
+            Peer.update peer (Time.now ());
+            numConnections := !numConnections + 1;
+            allConnections := conn :: !allConnections;
+            !theConnCallback conn;
+            loop ()
+         end
+      
+         
+      fun contact peer fk sk =
+         let
+            val addr = Peer.address peer
+            val (sock, already) = Network.connectNB (Address.toInAddr addr, Chain.port)
+
+            fun fk' () =
+               (
+               (* Couldn't contact this peer.  Delete it from the peer set. *)
+               Peer.delete peer;
+               fk ()
+               )
+
+            fun sk' (sock, ver) =
+               (
+               sk ();
+               initializeConn peer sock ver
+               )
+         in
+            if already then
+               (* Does this ever happen? *)
+               handshakeOut addr sock fk' sk'
+            else
+               let
+                  val tid =
+                     Scheduler.once Constants.connectTimeout
+                     (fn () =>
+                         (
+                         Log.long (fn () => "Timeout connecting to " ^ Address.toString addr);
+                         Scheduler.delete sock;
+                         Network.close sock;
+                         fk' ()
+                         ))
+               in
+                  Scheduler.insertWrite sock
+                  (fn () =>
+                      (
+                      Scheduler.cancel tid;
+                      Scheduler.delete sock;
+                      handshakeOut addr sock fk' sk'
+                      ))
+               end
+         end
+
+
+      fun answer insock =
+         let
+            val (sock, iaddr, port) = Network.accept insock
+            val addr = Address.fromInAddr iaddr
+         in
+            handshakeIn addr sock
+            (fn () => ())
+            (fn ver =>
+                let
+                   val peer = Peer.new addr
+                in
+                   initializeConn peer sock ver
+                end)
+         end
+
+
+
+      fun pollPeers () =
+         if !numConnections >= Constants.desiredConnections then
+            pollingTid := Scheduler.once Constants.pollInterval pollPeers
+         else
+            pollLoop 0
+            
+      and pollLoop failures = 
+         (case Peer.next failures of
+             NONE =>
+                (
+                Log.long (fn () => "No more known peers to contact");
+                pollingTid := Scheduler.once Constants.pollInterval pollPeers
+                )
+           | SOME peer =>
+                let in
+                   Log.long (fn () => "Contacting peer");
+   
+                   contact peer
+                   (fn () =>
+                       (* We might have gotten another connection while we waited for this one.
+                          If not, poll with failure count incremented.
+                       *)
+                       if !numConnections >= Constants.desiredConnections then
+                          pollingTid := Scheduler.once Constants.pollInterval pollPeers
+                       else
+                          pollLoop (failures+1))
+                   (fn () =>
+                       pollingTid := Scheduler.once Constants.pollInterval pollPeers)
+                end)
+
+      fun suspendPolling () = Scheduler.cancel (!pollingTid)
+
+      fun resumePolling () =
+         pollingTid := Scheduler.onceAbs Time.zeroTime pollPeers
 
 
       fun reapIdleConnections () =
@@ -199,90 +381,6 @@ functor CommoFun (structure ConnState : CONN_STATE)
             numConnections := n;
             allConnections := l
          end
-
-
-      fun processMessage (conn as ({peer, lastHeard, ...}:conn)) msg =
-         let
-            val time = Time.now ()
-         in
-            lastHeard := time;
-
-            (* If we haven't updated the peer since the threshold time, do so. *)
-            if Time.>= (time, Time.+ (Peer.time peer, Constants.peerUpdateThreshold)) then
-               Peer.update peer time
-            else
-               ();
-   
-            !theMsgCallback (conn, msg)
-         end
-
-
-      fun openConn peer fk sk =
-         contact (Peer.address peer) Chain.port
-         (fn () =>
-             (* Couldn't contact this peer.  Delete it from the peer set. *)
-             (
-             Peer.delete peer;
-             fk ()
-             ))
-         (fn (sock, {lastBlock, ...}:M.version) =>
-             let
-                val lastHeard = ref (Time.now ())
-                val conn = { sock=sock, peer=peer, lastHeard=lastHeard, opn=ref true,
-                             lastBlock=lastBlock, state=ConnState.new () }
-
-                fun loop () =
-                   recvMessage
-                   (fn () => closeConn conn true)
-                   (fn msg =>
-                       (
-                       processMessage conn msg;
-                       loop ()
-                       ))
-             in
-                Peer.update peer (Time.now ());
-                numConnections := !numConnections + 1;
-                allConnections := conn :: !allConnections;
-                sk conn;
-                loop ()
-             end)
-
-
-
-      fun pollPeers () =
-         if !numConnections >= Constants.desiredConnections then
-            pollingTid := Scheduler.once Constants.pollInterval pollPeers
-         else
-            pollLoop 0
-            
-      and pollLoop failures = 
-         (case Peer.next failures of
-             NONE =>
-                (
-                Log.long (fn () => "No more known peers to contact");
-                pollingTid := Scheduler.once Constants.pollInterval pollPeers
-                )
-           | SOME peer =>
-                (
-                Log.long (fn () => "Contacting peer");
-                openConn peer
-                   (fn () =>
-                       (* We might have gotten another connection while we waited for this one. *)
-                       if !numConnections >= Constants.desiredConnections then
-                          pollingTid := Scheduler.once Constants.pollInterval pollPeers
-                       else
-                          pollLoop (failures+1))
-                   (fn conn =>
-                       (
-                       pollingTid := Scheduler.once Constants.pollInterval pollPeers;
-                       !theConnCallback conn
-                       ))
-                ))
-
-      fun suspendPolling () = Scheduler.cancel (!pollingTid)
-
-      fun resumePolling () =
-         pollingTid := Scheduler.onceAbs Time.zeroTime pollPeers
 
 
 
@@ -310,6 +408,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
                        ()) (!allConnections)
          end
 
+
       fun broadcastPing () =
          (
          Log.short "(ping)";
@@ -317,28 +416,52 @@ functor CommoFun (structure ConnState : CONN_STATE)
          )
             
 
+      val theInsock : Network.psock option ref = ref NONE
+
+      fun initialize connCallback msgCallback =
+         let in
+            theConnCallback := connCallback;
+            theMsgCallback := msgCallback;
+            allConnections := [];
+            numConnections := 0;
+
+            (let
+                val insock = Network.listen Chain.port
+             in
+                theInsock := SOME insock;
+                Scheduler.insertRead insock (fn () => answer insock)
+             end
+             handle NetworkException =>
+                let in
+                   Log.long (fn () => "Unable to open socket for incoming connections");
+                   theInsock := NONE
+                end);
+
+            Scheduler.repeating Constants.reapInterval reapIdleConnections;
+            pollingTid := Scheduler.once Time.zeroTime pollPeers;
+            Scheduler.repeating Constants.keepAliveInterval broadcastPing;
+
+            ()
+         end
+
+      fun cleanup () =
+         let in
+            Option.app Network.close (!theInsock);
+            theInsock := NONE
+         end
+
 
       fun numberOfConnections () = !numConnections
 
-
-      fun initialize connCallback msgCallback =
-         (
-         theConnCallback := connCallback;
-         theMsgCallback := msgCallback;
-         allConnections := [];
-         numConnections := 0;
-         Scheduler.repeating Constants.reapInterval reapIdleConnections;
-         pollingTid := Scheduler.once Time.zeroTime pollPeers;
-         Scheduler.repeating Constants.keepAliveInterval broadcastPing;
-         ()
-         )
-
+      fun closed ({opn, ...}:conn) = not (!opn)
 
       fun eq ({opn=r, ...}:conn, {opn=r', ...}:conn) = r = r'
 
       fun lastBlock ({lastBlock, ...}:conn) = lastBlock
 
       fun state ({state, ...}:conn) = state
+
+      fun peer ({peer, ...}:conn) = peer
 
    end
 
