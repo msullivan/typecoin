@@ -528,7 +528,6 @@ structure Process :> PROCESS =
                    val poso =
                       let
                          val path = OS.Path.concat (Constants.dataDirectory, Constants.alertFile)
-                         val pos = OS.FileSys.fileSize path
                          val outs = Platform.BinIO_openAppend path
                       in
                          BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size payload)));
@@ -536,7 +535,7 @@ structure Process :> PROCESS =
                          BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size sg)));
                          BinIO.output (outs, sg);
                          BinIO.closeOut outs;
-                         SOME pos
+                         SOME (OS.FileSys.fileSize path)
                       end
                       handle 
                          OS.SysErr _ => NONE
