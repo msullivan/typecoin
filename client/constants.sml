@@ -40,6 +40,8 @@ structure Constants =
 
       val getOwnAddressInterval = Time.fromSeconds (4 * 60 * 60)  (* 4 hours *)
 
+      val advertise = false
+
 
 
       (*** Peer management constants ***)

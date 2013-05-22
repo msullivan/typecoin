@@ -132,6 +132,11 @@ structure Process :> PROCESS =
              NONE => false
            | SOME conn' => Commo.eq (conn, conn'))
 
+      fun syncingOnlyWith conn =
+         (case !syncing of
+             NONE => true
+           | SOME conn' => Commo.eq (conn, conn'))
+
 
       fun monitorSync conn remoteblocks =
          if Blockchain.lastBlock () >= remoteblocks orelse not (isSome (!syncing)) then
@@ -183,14 +188,17 @@ structure Process :> PROCESS =
             val remoteblocks = Commo.lastBlock conn
             val lastblock = Blockchain.lastBlock ()
          in
-            (case Commo.self () of
-                NONE => ()
-              | SOME netaddr =>
-                   (
-                   Log.long (fn () => "Advertising");
-                   Commo.sendMessage conn (M.Addr [(Time.toSeconds (Time.now ()), netaddr)])
-                   ));
-
+            if Constants.advertise then
+               (case Commo.self () of
+                   NONE => ()
+                 | SOME netaddr =>
+                      (
+                      Log.long (fn () => "Advertising");
+                      Commo.sendMessage conn (M.Addr [(Time.toSeconds (Time.now ()), netaddr)])
+                      ))
+            else
+               ();
+   
             if not (isSome (!syncing)) andalso remoteblocks > lastblock then
                (
                Log.long (fn () => "Block " ^ Int.toString remoteblocks ^ " available; syncing");
@@ -270,8 +278,12 @@ structure Process :> PROCESS =
                                  else if Blockchain.orphanageMember orphanage hash then
                                     (* We've already identified this block as an orphan, so go directly
                                        to downloading its ancestors without requesting the block again.
+                                       (Unless we're syncing right now.)
                                     *)
-                                    (invs', makeGetblocks (SOME hash) :: msgs)
+                                    if syncingOnlyWith conn then
+                                       (invs', makeGetblocks (SOME hash) :: msgs)
+                                    else
+                                       (invs', msgs)
                                  else
                                     (inv :: invs', msgs)
                             | M.TX =>
@@ -441,7 +453,10 @@ structure Process :> PROCESS =
                              Blockchain.ORPHAN =>
                                 if Blockchain.orphanageSize orphanage <= Constants.maxOrphans then
                                    (* request the ancestors of the orphan *)
-                                   Commo.sendMessage conn (makeGetblocks (SOME hash))
+                                   if syncingOnlyWith conn then
+                                      Commo.sendMessage conn (makeGetblocks (SOME hash))
+                                   else
+                                      ()
                                 else
                                    (* Too many orphans from this connection, drop it.
       
