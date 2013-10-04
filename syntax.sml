@@ -54,6 +54,7 @@ struct
       val & = L.seq
 
       val WIDTH = 80
+      val fmt = L.tostringex WIDTH
   in
 
   val look_good_but_be_wrong = true
@@ -74,11 +75,7 @@ struct
               toLayoutExp e2]
 
          | EPi (b, e1, e2) =>
-           (* XXX: do we ever want parens around e1? *)
-           & [$"pi ",
-              % [&[$b, $" : ", toLayoutExp e1, $"."],
-                 toLayoutExp e2]
-             ]
+           % [piPartLayout b e1, toLayoutExp e2]
          | ELam (b, e) =>
            & [$"\\",
               % [ &[$b, $"."],
@@ -99,13 +96,24 @@ struct
     | toLayoutTyParen (e as EPi _) = L.paren (toLayoutExp e)
     | toLayoutTyParen e = toLayoutExp e
 
+  and piPartLayout b e1 = &[$"pi ", $b, $" : ", toLayoutExp e1, $"."]
+
+  (* A nicer layout for "toplevel" pis *)
+  fun toLayoutTop e =
+      let fun loop l (e as EPi ("_", _, _)) = %[% (rev l), toLayoutExp e]
+            | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
+            | loop l e = %[% (rev l), toLayoutExp e]
+
+      in loop [] e end
 
   fun prettyExp e = L.tostringex WIDTH (toLayoutExp e)
 
-  fun prettyMsg msg e =
-      L.tostringex WIDTH (&[$msg, toLayoutExp e])
 
-  fun prettyDecl (_, c, e) = prettyMsg (c ^ ": ") e
+
+  fun prettyMsg msg e = fmt (&[$msg, toLayoutExp e])
+
+  fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e])
+
   fun prettySg sg =
       String.concatWith "\n" (map prettyDecl sg)
 
