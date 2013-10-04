@@ -7,6 +7,24 @@ sig
 end
 
 
+signature CONTEXT =
+sig
+  type ctx
+  val empty : ctx
+  val length : ctx -> int
+  val sub : ctx -> int -> LFSyntax.exp
+  val extend : ctx -> LFSyntax.exp -> ctx
+end
+
+signature SIGNATURE =
+sig
+  type sg = (LFSyntax.const * LFSyntax.exp) list
+  val empty : sg
+  val insert : sg -> LFSyntax.const -> LFSyntax.exp -> sg
+  val lookup : sg -> LFSyntax.const -> LFSyntax.exp
+end
+
+
 structure Subst :> LF_SUBST =
 struct
 
@@ -75,7 +93,7 @@ struct
   fun liftExp lift exp = substExp 0 [] lift exp
 end
 
-structure Context =
+structure Context :> CONTEXT =
 struct
   type ctx = LFSyntax.exp list
   val empty = nil
@@ -86,17 +104,19 @@ struct
   fun extend G t = t :: G
 end
 
-structure Signature =
+structure Signature :> SIGNATURE =
 struct
   type sg = (LF.const * LF.exp) list
-  fun lookup' sg c = List.find (fn (c', _) => c = c') sg
+
+  val empty = nil
+  fun lookup' (sg: sg) c = List.find (fn (c', _) => c = c') sg
   fun insert sg c typ =
       if isSome (lookup' sg c) then
           raise Fail (c ^ " is already in signature")
       else (c, typ) :: sg
   fun lookup sg c =
       (case lookup' sg c of
-           NONE => raise Fail (c ^ "not in signature")
+           NONE => raise Fail (c ^ " not in signature")
          | SOME (_, t) => t)
 
 end
@@ -116,8 +136,44 @@ in
 
   fun requireKind exp =
       if exp = EKind then () else raise TypeError "expected kind"
+  fun requireAtomic exp =
+      (case exp of
+           EType => ()
+         | EProp => ()
+         | EApp _ => ()
+         | _ => raise TypeError (PrettyLF.prettyMsg
+                                     "required atomic type, got: "
+                                     exp))
 
-  fun exprEquality e1 e2 = raise Fail "unimpl"
+  fun exprEquality e e' =
+      (case (e, e') of
+           (EKind, EKind) => ()
+         | (EType, EType) => ()
+         | (EProp, EProp) => ()
+         | (EPi (_, e1, e2), EPi (_, e1', e2')) =>
+           (exprEquality e1 e1'; exprEquality e2 e2')
+         | (ELam (_, e), ELam (_, e')) =>
+           exprEquality e e'
+         | (EApp (h, s), EApp (h', s')) =>
+           (headEquality h h'; spineEquality s s')
+         | _ => raise TypeError "exprs not equal")
+  and headEquality h h' =
+      (case (h, h') of
+           (HVar (i, _), HVar (i', _)) =>
+           if i = i' then () else
+           raise (TypeError ("bound variable mismatch: " ^
+                             Int.toString i ^ " vs. " ^ Int.toString i'))
+         | (HConst c, HConst c') =>
+           if c = c' then () else
+           raise (TypeError ("const mismatch: " ^ c ^ " vs. " ^ c'))
+         | _ => raise TypeError "const vs. var mismatch")
+  and spineEquality s s' =
+      (case (s, s') of
+           (SNil, SNil) => ()
+         | (SApp (e, s), SApp (e', s')) =>
+           (exprEquality e e'; spineEquality s s')
+         | _ => raise TypeError "spine length mismatch??")
+
 
   fun checkExpr sg ctx exp typ =
       (case exp of
@@ -137,7 +193,7 @@ in
          | EApp (h, spine) =>
            let val t = checkHead sg ctx h
                val t' = checkSpine sg ctx t spine
-           (* XXX: check atomic *)
+               val () = requireAtomic t'
            in exprEquality t' typ end)
   and checkHead _ ctx (HVar (n, _)) = Ctx.sub ctx n
     | checkHead sg _ (HConst c) = Signature.lookup sg c
@@ -150,6 +206,16 @@ in
           (* We could probably arrange to do one big substitution. *)
           val t2' = Subst.substExp 0 [e] 0 t2
       in checkSpine sg ctx t2' s end
+
+  fun checkSgEntry sg (entry_type, c, exp) =
+      let val classifier =
+              (case entry_type of SgFamilyDecl => EKind
+                                | SgObjectDecl => EType)
+          val () = checkExpr sg Ctx.empty exp classifier
+      in Signature.insert sg c exp end
+
+  fun checkSignature decls =
+      foldl (fn (e, sg) => checkSgEntry sg e) Signature.empty decls
 
 end
 end

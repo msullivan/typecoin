@@ -26,11 +26,92 @@ struct
                | EPi of binding * exp * exp
                | ELam of binding * exp
                | EApp of head * spine
+  (* Should spine just be a list? *)
        and spine = SNil
                  | SApp of exp * spine
 
+  datatype entry_type = SgFamilyDecl | SgObjectDecl
+  type sg_entry = entry_type * const * exp
+
+  val listToSpine = foldr SApp SNil
+  fun spineToList SNil = nil
+    | spineToList (SApp (e, s)) = e :: spineToList s
+  (* welp. *)
+  fun mapSpine f = listToSpine o map f o spineToList
+
 end
 structure LF = LFSyntax
+
+structure PrettyLF =
+struct
+  local
+      open LF
+
+      structure L = Layout
+
+      val $ = L.str
+      val % = L.mayAlign
+      val & = L.seq
+
+      val WIDTH = 80
+  in
+
+  val look_good_but_be_wrong = true
+
+
+  fun toLayoutHead (HVar (i, s)) =
+      if look_good_but_be_wrong then $s
+      else $(s ^ "/" ^ Int.toString i)
+    | toLayoutHead (HConst s) = $s
+  fun toLayoutExp e =
+      (case e of
+           EKind => $"kind"
+         | EType => $"type"
+         | EProp => $"prop"
+         (* Basing this on the variable being called "_" is a bit bogus. *)
+         | EPi ("_", e1, e2) =>
+           % [&[toLayoutTyParen e1, $" ->"],
+              toLayoutExp e2]
+
+         | EPi (b, e1, e2) =>
+           (* XXX: do we ever want parens around e1? *)
+           & [$"pi ",
+              % [&[$b, $" : ", toLayoutExp e1, $"."],
+                 toLayoutExp e2]
+             ]
+         | ELam (b, e) =>
+           & [$"\\",
+              % [ &[$b, $"."],
+                  toLayoutExp e]
+             ]
+         | EApp (h, SNil) => toLayoutHead h
+         | EApp (h, s) =>
+           & [toLayoutHead h, $" ",
+              toLayoutSpine s])
+  and toLayoutSpine s =
+      let val layouts = map toLayoutExpParen (spineToList s)
+      in % (layouts) end
+
+  and toLayoutExpParen (e as ELam _) = L.paren (toLayoutExp e)
+    | toLayoutExpParen (e as EApp (_, SApp _)) = L.paren (toLayoutExp e)
+    | toLayoutExpParen e = toLayoutExp e
+  and toLayoutTyParen (e as ELam _) = L.paren (toLayoutExp e)
+    | toLayoutTyParen (e as EPi _) = L.paren (toLayoutExp e)
+    | toLayoutTyParen e = toLayoutExp e
+
+
+  fun prettyExp e = L.tostringex WIDTH (toLayoutExp e)
+
+  fun prettyMsg msg e =
+      L.tostringex WIDTH (&[$msg, toLayoutExp e])
+
+  fun prettyDecl (_, c, e) = prettyMsg (c ^ ": ") e
+  fun prettySg sg =
+      String.concatWith "\n" (map prettyDecl sg)
+
+  end
+end
+
 
 
 structure Logic =
