@@ -14,8 +14,8 @@ struct
       in search' 0 l end
   fun findIndex y l = findIndexBy (op =) y l
 
-  fun convertHead G (HVar (_, "_")) = raise Fail "stop that."
-    | convertHead G (HVar (~1, s)) = HVar (valOf (findIndex s G), s)
+  fun convertHead G (HVar (~1, s)) = HVar (valOf (findIndex s G), s)
+    | convertHead G (HVar (i, _)) = raise Fail "stop that."
     | convertHead G h = h
 
   fun convertExp G e =

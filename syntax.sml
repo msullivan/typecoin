@@ -111,6 +111,9 @@ struct
 
 
   fun prettyMsg msg e = fmt (&[$msg, toLayoutExp e])
+  fun prettyMsg2 msg1 e1 sep msg2 e2 =
+      fmt (%[ &[$msg1, toLayoutExp e1, $sep],
+              &[$msg2, toLayoutExp e2]])
 
   fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e])
 

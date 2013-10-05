@@ -100,7 +100,7 @@ struct
   val length = List.length
   fun sub G n =
       let val t = List.nth (G, n)
-      in Subst.liftExp n t end
+      in Subst.liftExp (n+1) (*XXX?*) t end
   fun extend G t = t :: G
 end
 
@@ -175,6 +175,14 @@ in
          | _ => raise TypeError "spine length mismatch??")
 
 
+  fun exprEquality' e t t' =
+      ((exprEquality t t')
+       handle TypeError s => raise TypeError (
+          "equality failure: " ^ s ^ "\n" ^
+          PrettyLF.prettyMsg2 "expected: " t ","  "got: " t' ^ "\n" ^
+          PrettyLF.prettyMsg "while checking: " e))
+  val exprEquality = exprEquality'
+
   fun checkExpr sg ctx exp typ =
       (case exp of
            EKind => raise TypeError "kind is no classifier"
@@ -194,7 +202,7 @@ in
            let val t = checkHead sg ctx h
                val t' = checkSpine sg ctx t spine
                val () = requireAtomic t'
-           in exprEquality t' typ end)
+           in exprEquality exp typ t' end)
   and checkHead _ ctx (HVar (n, _)) = Ctx.sub ctx n
     | checkHead sg _ (HConst c) = Signature.lookup sg c
   and checkSpine sg ctx typ SNil = typ
