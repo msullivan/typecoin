@@ -46,7 +46,7 @@ end
 
 structure LogicContext (*:> CONTEXT*) =
 struct
-  val varToStr = Logic.varToStr
+  val varToStr = Variable.toStr
 
   datatype entry = E of
            {name: Logic.var,
@@ -59,7 +59,7 @@ struct
 
   fun lfContext (lf_ctx, _) = lf_ctx
 
-  fun lookup' ((_, ctx): ctx) v = List.find (fn E {name, ...} => v = name) ctx
+  fun lookup' ((_, ctx): ctx) v = List.find (fn E {name, ...} => Variable.eq (v, name)) ctx
 
   fun length (_, D) = List.length D
 
@@ -87,10 +87,10 @@ struct
   fun addToSet res x = x :: res
 
   fun containsResource (res: resource_set) x =
-      List.exists (fn x' => x = x') res
+      List.exists (fn x' => Variable.eq (x, x')) res
   (* PERF: stupid *)
   fun removeResource res x =
-      List.filter (fn x' => x <> x') res
+      List.filter (fn x' => not (Variable.eq (x, x'))) res
 
   fun addResource (ctx, res) x A =
       (insert ctx x A false, addToSet res x)
@@ -105,6 +105,7 @@ struct
   local
       open Logic LF
       structure Ctx = LogicContext
+      structure Var = Variable
   in
 
   exception ProofError of string
@@ -155,7 +156,7 @@ struct
 
   fun requireResource res v =
       if Ctx.containsResource res v then () else
-      raise ProofError ("missing required resource " ^ varToStr v)
+      raise ProofError ("missing required resource " ^ Var.toStr v)
   fun consumeResource res v =
       (requireResource res v; Ctx.removeResource res v)
 
@@ -163,7 +164,7 @@ struct
 
   fun discharge v (A, res) =
       (if Ctx.containsResource res v then
-           raise ProofError ("resource not used: " ^ varToStr v)
+           raise ProofError ("resource not used: " ^ Var.toStr v)
        else ();
        (A, res))
 

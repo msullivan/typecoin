@@ -1,20 +1,12 @@
 
 
-structure Binding =
+
+structure LFSyntax =
 struct
 
   type var = int * string
   type const = string
   type binding = string
-
-end
-
-structure LFSyntax =
-struct
-
-  type var = Binding.var
-  type const = Binding.const
-  type binding = Binding.binding
 
 
   datatype head = HVar of var
@@ -123,6 +115,24 @@ struct
   end
 end
 
+signature VARIABLE =
+sig
+  type var
+  type t = var
+  val toStr : var -> string
+  val eq : var * var -> bool
+  val compare : var * var -> order
+end
+
+
+structure Variable : VARIABLE =
+struct
+  type var = string
+  type t = var
+  fun toStr s = s
+  fun eq (v: var, v') = v = v'
+  val compare = String.compare
+end
 
 
 structure Logic =
@@ -136,9 +146,7 @@ struct
   type principal = LF.exp
 
   type const = string
-  type var = string (* XXX? *)
-
-  fun varToStr x = x
+  type var = Variable.var
 
   datatype prop = PAtom of atom
                 | PBang of prop
