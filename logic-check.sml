@@ -96,7 +96,6 @@ struct
       (insert ctx x A false, addToSet res x)
 
 
-
 end
 
 
@@ -110,9 +109,49 @@ struct
 
   exception ProofError of string
 
-  fun checkProp ctx prop = ()
+  fun checkProp sg ctx prop =
+      let val check = checkProp sg ctx
+          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+      in
+      (case prop of
+           PAtom t => checkLF t LF.EProp
+         | PBang A => check A
+         | PLolli (A1, A2) => (check A1; check A2)
+         | PTensor (A1, A2) => (check A1; check A2)
+         | PWith (A1, A2) => (check A1; check A2)
+         | POplus (A1, A2) => (check A1; check A2)
+         | POne => ()
+         | PZero => ()
 
-  fun propEquality (_: prop) (_: prop) = raise Fail "unimplemented"
+         | PForall (b, t, A) =>
+           (checkLF t LF.EType;
+            checkProp sg (Ctx.extendLF ctx t) A)
+         | PExists (b, t, A) =>
+           (checkLF t LF.EType;
+            checkProp sg (Ctx.extendLF ctx t) A)
+
+         | PAffirms (k, A) => raise Fail "affirms not implemented yet")
+      end
+
+  (* should we catch TypeErrors and raise proof errors? *)
+  fun propEquality A A' =
+      (case (A, A') of
+           (PAtom t, PAtom t') => TypeCheckLF.exprEquality t t'
+         | (PBang A, PBang A') => propEquality A A'
+         | (PLolli (A1, A2), PLolli (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
+         | (PTensor (A1, A2), PTensor (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
+         | (PWith (A1, A2), PWith (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
+         | (POplus (A1, A2), POplus (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
+         | (POne, POne) => ()
+         | (PZero, PZero) => ()
+         | (PForall (_, t, A), PForall (_, t', A'))  =>
+           (propEquality A A'; TypeCheckLF.exprEquality t t')
+         | (PExists (_, t, A), PExists (_, t', A'))  =>
+           (propEquality A A'; TypeCheckLF.exprEquality t t')
+         | (PAffirms (t, A), PAffirms (t', A'))  =>
+           (propEquality A A'; TypeCheckLF.exprEquality t t')
+         | _ => raise ProofError "props don't match"
+      )
 
   fun requireResource res v =
       if Ctx.containsResource res v then () else
@@ -133,6 +172,7 @@ struct
 
   fun checkProof sg (D as (ctx, res)) M =
       let val checkProof = checkProof sg
+          val checkProp = checkProp sg
       in
       (case M of
            MRule c => raise Fail "unimpl"

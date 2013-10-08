@@ -158,7 +158,6 @@ struct
 
   datatype proof = MRule of const
                  | MVar of var
-(*                 | MPVar of var (* persistent var *)*)
                  | MBang of proof
                  | MBangLet of proof * var * proof
                  | MLam of var * prop * proof

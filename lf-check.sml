@@ -182,7 +182,6 @@ in
           "equality failure: " ^ s ^ "\n" ^
           PrettyLF.prettyMsg2 "expected: " t ","  "got: " t' ^ "\n" ^
           PrettyLF.prettyMsg "while checking: " e))
-  val exprEquality = exprEquality'
 
   fun checkExpr sg ctx exp typ =
       (case exp of
@@ -203,7 +202,7 @@ in
            let val t = checkHead sg ctx h
                val t' = checkSpine sg ctx t spine
                val () = requireAtomic t'
-           in exprEquality exp typ t' end)
+           in exprEquality' exp typ t' end)
   and checkHead _ ctx (HVar (n, _)) = Ctx.sub ctx n
     | checkHead sg _ (HConst c) = Sig.lookup sg c
   and checkSpine sg ctx typ SNil = typ
