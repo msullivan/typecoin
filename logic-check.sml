@@ -44,58 +44,52 @@ struct
 end
 
 
-structure LogicContext (*:> CONTEXT*) =
+signature LOGIC_CONTEXT =
+sig
+  type ctx
+  val empty : ctx
+  val fromLFContext : LFContext.ctx -> ctx
+  val lfContext : ctx -> LFContext.ctx
+  val insert : ctx -> Variable.var -> Logic.prop -> bool -> ctx
+  val extendLF : ctx -> LFSyntax.exp -> ctx
+  val lookup : ctx -> Variable.var -> Logic.prop * bool
+end
+
+
+structure LogicContext :> LOGIC_CONTEXT =
 struct
   val varToStr = Variable.toStr
 
   datatype entry = E of
-           {name: Logic.var,
-            prop: Logic.prop,
+           {prop: Logic.prop,
             lf_ctx_len: int,
             persistent: bool}
 
-  type ctx = LFContext.ctx * entry list
-  val empty = (LFContext.empty, nil)
+  type ctx = LFContext.ctx * entry VarDict.dict
+  val empty = (LFContext.empty, VarDict.empty)
+
+  fun fromLFContext lf_ctx = (lf_ctx, VarDict.empty)
 
   fun lfContext (lf_ctx, _) = lf_ctx
 
-  fun lookup' ((_, ctx): ctx) v = List.find (fn E {name, ...} => Variable.eq (v, name)) ctx
 
-  fun length (_, D) = List.length D
 
-  fun insert (ctx as (lf_ctx, D)) v A persistent =
-      if isSome (lookup' ctx v) then
+  fun insert (lf_ctx, logic_ctx) v A persistent =
+      if VarDict.member logic_ctx v then
           raise Fail (varToStr v ^ " is already in context")
       else (lf_ctx,
-            (E {name=v, prop=A, lf_ctx_len=LFContext.length lf_ctx,
-                persistent=persistent}) :: D)
+            VarDict.insert logic_ctx v
+                           (E {prop=A, lf_ctx_len=LFContext.length lf_ctx,
+                               persistent=persistent}))
 
   fun extendLF (lf_ctx, logic_ctx) t = (LFContext.extend lf_ctx t, logic_ctx)
 
-  fun lookup (ctx as (lf_ctx, _)) v =
-      (case lookup' ctx v of
+  fun lookup (lf_ctx, logic_ctx) v =
+      (case VarDict.find logic_ctx v of
            NONE => raise Fail (varToStr v ^ " not in context")
          | SOME (E {prop, lf_ctx_len, persistent, ...}) =>
            (LogicSubst.liftProp (LFContext.length lf_ctx - lf_ctx_len) prop,
             persistent))
-
-  (* we want to maintain by invariant uniqueness *)
-  type resource_set = Logic.var list
-
-  val emptyResources = nil
-  val setIsEmpty = null
-  fun addToSet res x = x :: res
-
-  fun containsResource (res: resource_set) x =
-      List.exists (fn x' => Variable.eq (x, x')) res
-  (* PERF: stupid *)
-  fun removeResource res x =
-      List.filter (fn x' => not (Variable.eq (x, x'))) res
-
-  fun addResource (ctx, res) x A =
-      (insert ctx x A false, addToSet res x)
-
-
 end
 
 
@@ -154,16 +148,21 @@ struct
          | _ => raise ProofError "props don't match"
       )
 
+  fun addResource (ctx, res) x A =
+      (Ctx.insert ctx x A false, VarSet.insert res x)
+
   fun requireResource res v =
-      if Ctx.containsResource res v then () else
+      if VarSet.member res v then () else
       raise ProofError ("missing required resource " ^ Var.toStr v)
   fun consumeResource res v =
-      (requireResource res v; Ctx.removeResource res v)
+      (requireResource res v; VarSet.remove res v)
 
-  fun requireResourceEquality res1 res2 = raise Fail "unimplemented"
+  fun requireResourceEquality res1 res2 =
+      if VarSet.eq (res1, res2) then () else
+      raise ProofError "used resources don't match"
 
   fun discharge v (A, res) =
-      (if Ctx.containsResource res v then
+      (if VarSet.member res v then
            raise ProofError ("resource not used: " ^ Var.toStr v)
        else ();
        (A, res))
@@ -185,7 +184,7 @@ struct
            in (A, res') end
 
          | MBang M' =>
-           let val (A, empty_res) = checkProof (ctx, Ctx.emptyResources) M
+           let val (A, empty_res) = checkProof (ctx, VarSet.empty) M
            in (PBang A, res) end
          | MBangLet (M1, v, M2) =>
            let val (bA1', res') = checkProof D M1
@@ -196,7 +195,7 @@ struct
 
          | MLam (v, A, M) =>
            let val () = checkProp ctx A
-               val D' = Ctx.addResource D v A
+               val D' = addResource D v A
            in discharge v (checkProof D' M)
            end
          | MApp (M1, M2) =>
@@ -218,8 +217,8 @@ struct
                val (A1, A2) =
                    (case A' of PTensor As => As
                              | _ => raise ProofError "tensor let of non tensor")
-               val D' = Ctx.addResource
-                            (Ctx.addResource (ctx, res') v1 A1)
+               val D' = addResource
+                            (addResource (ctx, res') v1 A1)
                             v2 A2
            in discharge v1
               (discharge v2
@@ -254,9 +253,9 @@ struct
 
                val D' = (ctx, res')
                val (C1, res1) = discharge v1
-                                (checkProof (Ctx.addResource D' v1 A1) M1)
+                                (checkProof (addResource D' v1 A1) M1)
                val (C2, res2) = discharge v2
-                                (checkProof (Ctx.addResource D' v2 A2) M2)
+                                (checkProof (addResource D' v2 A2) M2)
                val () = requireResourceEquality res1 res2
                val () = propEquality C1 C2
            in (C1, res1) end
@@ -305,7 +304,7 @@ struct
                    (case etA of PExists x => x
                               | _ => raise ProofError "unpack of non exists")
                val ctx' = Ctx.extendLF ctx t
-               val D' = Ctx.addResource (ctx', res') v A
+               val D' = addResource (ctx', res') v A
                val (C, res'') = checkProof D' M2
 
                (* check that the result prop doesn't mention the variable *)

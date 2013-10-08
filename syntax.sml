@@ -133,6 +133,8 @@ struct
   fun eq (v: var, v') = v = v'
   val compare = String.compare
 end
+structure VarDict = SplayDict(structure Key = Variable)
+structure VarSet = SplaySet(structure Elem = Variable)
 
 
 structure Logic =
