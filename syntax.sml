@@ -1,11 +1,21 @@
 
 
+structure Const =
+struct
+  type namespace = string
+  datatype location = LThis | LId of namespace
+  type const = location * string
+
+  fun toStr (LThis, s) = s
+    | toStr (LId n, s) = n ^ "." ^ s
+
+end
 
 structure LFSyntax =
 struct
 
   type var = int * string
-  type const = string
+  type const = Const.const
   type binding = string
 
 
@@ -55,7 +65,7 @@ struct
   fun toLayoutHead (HVar (i, s)) =
       if look_good_but_be_wrong then $s
       else $(s ^ "/" ^ Int.toString i)
-    | toLayoutHead (HConst s) = $s
+    | toLayoutHead (HConst s) = $(Const.toStr s)
   fun toLayoutExp e =
       (case e of
            EKind => $"kind"
@@ -107,7 +117,7 @@ struct
       fmt (%[ &[$msg1, toLayoutExp e1, $sep],
               &[$msg2, toLayoutExp e2]])
 
-  fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e])
+  fun prettyDecl (_, c, e) = fmt (&[$(Const.toStr c), $": ", toLayoutTop e])
 
   fun prettySg sg =
       String.concatWith "\n" (map prettyDecl sg)

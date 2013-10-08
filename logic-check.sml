@@ -5,16 +5,16 @@ struct
 
   open Logic
 
-  (* substProp skip substs lift A
+  (* substProp skip substs lift loc A
 
      s = substs, l = lift, m = skip
 
      if    |s| = n
-     then  return A[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m]
+     then  return A[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m][loc/this]
    *)
-  fun substProp skip substs lift prop =
-      let val lfsubst = LFSubst.substExp skip substs lift
-          val subst = substProp skip substs lift
+  fun substPropMain skip substs lift loc prop =
+      let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc
+          val subst = substPropMain skip substs lift loc
       in
       (case prop of
            PAtom p => PAtom (lfsubst p)
@@ -28,16 +28,21 @@ struct
 
          | PForall (b, t, A) =>
            PForall (b, lfsubst t,
-                    substProp (skip+1) substs lift A)
+                    substPropMain (skip+1) substs lift loc A)
          | PExists (b, t, A) =>
            PExists (b, lfsubst t,
-                    substProp (skip+1) substs lift A)
+                    substPropMain (skip+1) substs lift loc A)
 
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
 
       )
       end
+
+  fun substProp skip substs lift prop =
+      substPropMain skip substs lift Const.LThis prop
+  fun replaceThisProp loc prop =
+      substPropMain 0 [] 0 loc prop
 
   fun liftProp 0 A = A (* optimiz *)
     | liftProp lift A = substProp 0 [] lift A
@@ -71,8 +76,6 @@ struct
   fun fromLFContext lf_ctx = (lf_ctx, VarDict.empty)
 
   fun lfContext (lf_ctx, _) = lf_ctx
-
-
 
   fun insert (lf_ctx, logic_ctx) v A persistent =
       if VarDict.member logic_ctx v then

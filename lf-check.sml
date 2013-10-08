@@ -4,6 +4,9 @@ sig
   val hereditaryReduce : LF.exp -> LF.spine -> LF.exp
   val substExp : int -> LF.exp list -> int -> LF.exp -> LF.exp
   val liftExp : int -> LF.exp -> LF.exp
+
+  val substAndReplaceExp : int -> LF.exp list -> int -> Const.location -> LF.exp -> LF.exp
+  val replaceThisExp : Const.location -> LF.exp -> LF.exp
 end
 
 
@@ -30,47 +33,48 @@ struct
 
   open LFSyntax
 
-  (* substXMain skip substs substs_len lift exp
+  (* substXMain skip substs substs_len lift ns exp
 
      s = substs, n = substs_len, l = lift, m = skip
 
      if    |s| = n
-     then  return exp[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m]
+     then  return exp[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m][ns/this]
    *)
-  fun substExpMain skip substs substs_len lift exp =
+  fun substExpMain skip substs substs_len lift ns exp =
       (case exp of
            EKind => EKind
          | EType => EType
          | EProp => EProp
          | ELam (b, e) =>
-           let val e' = substExpMain (skip+1) substs substs_len lift e
+           let val e' = substExpMain (skip+1) substs substs_len lift ns e
            in ELam (b, e') end
          | EPi (b, e1, e2) =>
-           let val e1' = substExpMain skip substs substs_len lift e1
-               val e2' = substExpMain (skip+1) substs substs_len lift e2
+           let val e1' = substExpMain skip substs substs_len lift ns e1
+               val e2' = substExpMain (skip+1) substs substs_len lift ns e2
            in EPi (b, e1', e2') end
          | EApp (head, spine) =>
-           let val spine' = substSpineMain skip substs substs_len lift spine
+           let val spine' = substSpineMain skip substs substs_len lift ns spine
            in (case head of
-                   HConst c => EApp (HConst c, spine')
+                   HConst (Const.LThis, c) => EApp (HConst (ns, c), spine')
+                 | HConst c => EApp (HConst c, spine')
                  | HVar (i, s) =>
                    if i < skip then
                        EApp (HVar (i, s), spine')
                    else if i < skip+substs_len then
                        let val sub = List.nth (substs, i-skip)
-                           val sub' = substExpMain 0 [] 0 skip sub
+                           val sub' = substExpMain 0 [] 0 skip ns sub
                        (* I'm *pretty* sure all of the index stuff is done.. *)
                        in hereditaryReduce sub' spine end
                    else
                        EApp (HVar (i-substs_len+lift, s), spine'))
            end
       )
-  and substSpineMain skip substs substs_len lift spine =
+  and substSpineMain skip substs substs_len lift ns spine =
       (case spine of
            SNil => SNil
          | SApp (exp, spine) =>
-           let val exp' = substExpMain skip substs substs_len lift exp
-               val spine' = substSpineMain skip substs substs_len lift spine
+           let val exp' = substExpMain skip substs substs_len lift ns exp
+               val spine' = substSpineMain skip substs substs_len lift ns spine
            in SApp (exp', spine') end)
 
   and hereditaryReduce head spine =
@@ -86,11 +90,15 @@ struct
            val () = if count = length subs then ()
                     else raise Fail "bogus application"
 
-      in substExpMain 0 subs (length subs) 0 body end
+      in substExpMain 0 subs (length subs) 0 Const.LThis body end
 
+  fun substAndReplaceExp skip substs lift loc exp =
+      substExpMain skip substs (length substs) lift loc exp
   fun substExp skip substs lift exp =
-      substExpMain skip substs (length substs) lift exp
+      substAndReplaceExp skip substs lift Const.LThis exp
   fun liftExp lift exp = substExp 0 [] lift exp
+  fun replaceThisExp loc exp = substAndReplaceExp 0 [] 0 loc exp
+
 end
 
 structure LFContext :> CONTEXT =
@@ -112,11 +120,11 @@ struct
   fun lookup' (sg: sg) c = List.find (fn (c', _) => c = c') sg
   fun insert sg c typ =
       if isSome (lookup' sg c) then
-          raise Fail (c ^ " is already in signature")
+          raise Fail (Const.toStr c ^ " is already in signature")
       else (c, typ) :: sg
   fun lookup sg c =
       (case lookup' sg c of
-           NONE => raise Fail (c ^ " not in signature")
+           NONE => raise Fail (Const.toStr c ^ " not in signature")
          | SOME (_, t) => t)
 
 end
@@ -166,7 +174,7 @@ in
                              Int.toString i ^ " vs. " ^ Int.toString i'))
          | (HConst c, HConst c') =>
            if c = c' then () else
-           raise (TypeError ("const mismatch: " ^ c ^ " vs. " ^ c'))
+           raise (TypeError ("const mismatch: " ^ Const.toStr c ^ " vs. " ^ Const.toStr c'))
          | _ => raise TypeError "const vs. var mismatch")
   and spineEquality s s' =
       (case (s, s') of

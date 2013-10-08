@@ -12,7 +12,7 @@ struct
   val (op -->) = arrow'
 
 
-  fun c_app c ls = EApp (HConst c, listToSpine ls)
+  fun c_app c ls = EApp (HConst (Const.LThis, c), listToSpine ls)
 
   val nat = c_app "nat" []
   val zero = c_app "z" []
@@ -25,7 +25,9 @@ struct
   val [n, m, p, A, B, e, e', D] =
       map var ["n", "m", "p", "A", "B", "e", "e'", "D"]
 
-  val a_test = FromNamed.convertSg
+  fun convertSg l = FromNamed.convertSg (map (fn (x, y, z) => (x, (Const.LThis, y), z)) l)
+
+  val a_test = convertSg
       [(T, "nat", EType),
        (O, "z", nat),
        (O, "s", arrow nat nat),
@@ -66,7 +68,7 @@ struct
   fun eapp t1 t2 = c_app "app" [t1, t2]
   fun eof e A = c_app "of" [e, A]
 
-  val lambda_test = FromNamed.convertSg
+  val lambda_test = convertSg
       [(T, "tp", EType),
        (O, "base", tp),
        (O, "arr", tp --> tp --> tp),
