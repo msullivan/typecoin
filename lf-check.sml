@@ -25,7 +25,7 @@ sig
 end
 
 
-structure Subst :> LF_SUBST =
+structure LFSubst :> LF_SUBST =
 struct
 
   open LFSyntax
@@ -93,18 +93,18 @@ struct
   fun liftExp lift exp = substExp 0 [] lift exp
 end
 
-structure Context :> CONTEXT =
+structure LFContext :> CONTEXT =
 struct
   type ctx = LFSyntax.exp list
   val empty = nil
   val length = List.length
   fun sub G n =
       let val t = List.nth (G, n)
-      in Subst.liftExp (n+1) (*XXX?*) t end
+      in LFSubst.liftExp (n+1) (*XXX?*) t end
   fun extend G t = t :: G
 end
 
-structure Signature :> SIGNATURE =
+structure LFSignature :> SIGNATURE =
 struct
   type sg = (LF.const * LF.exp) list
 
@@ -126,7 +126,8 @@ struct
 
 local
   open LFSyntax
-  structure Ctx = Context
+  structure Ctx = LFContext
+  structure Sig = LFSignature
 in
 
   exception TypeError of string
@@ -204,7 +205,7 @@ in
                val () = requireAtomic t'
            in exprEquality exp typ t' end)
   and checkHead _ ctx (HVar (n, _)) = Ctx.sub ctx n
-    | checkHead sg _ (HConst c) = Signature.lookup sg c
+    | checkHead sg _ (HConst c) = Sig.lookup sg c
   and checkSpine sg ctx typ SNil = typ
     | checkSpine sg ctx typ (SApp (e, s)) =
       let val (t1, t2) =
@@ -212,7 +213,7 @@ in
                           | _ => raise TypeError "lhs of app must be pi")
           val () = checkExpr sg ctx e t1
           (* We could probably arrange to do one big substitution. *)
-          val t2' = Subst.substExp 0 [e] 0 t2
+          val t2' = LFSubst.substExp 0 [e] 0 t2
       in checkSpine sg ctx t2' s end
 
   fun checkSgEntry sg (entry_type, c, exp) =
@@ -220,10 +221,10 @@ in
               (case entry_type of SgFamilyDecl => EKind
                                 | SgObjectDecl => EType)
           val () = checkExpr sg Ctx.empty exp classifier
-      in Signature.insert sg c exp end
+      in Sig.insert sg c exp end
 
   fun checkSignature decls =
-      foldl (fn (e, sg) => checkSgEntry sg e) Signature.empty decls
+      foldl (fn (e, sg) => checkSgEntry sg e) Sig.empty decls
 
 end
 end

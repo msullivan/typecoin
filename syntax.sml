@@ -135,6 +135,10 @@ struct
   (* principals are LF expressions with type "Key" ?? *)
   type principal = LF.exp
 
+  type const = string
+  type var = string (* XXX? *)
+
+  fun varToStr x = x
 
   datatype prop = PAtom of atom
                 | PBang of prop
@@ -144,10 +148,39 @@ struct
                 | POplus of prop * prop
                 | POne
                 | PZero
+
                 | PForall of LF.binding * LF.exp * prop
                 | PExists of LF.binding * LF.exp * prop
 
                 | PAffirms of principal * prop
+
+  datatype idx = L | R
+
+  datatype proof = MRule of const
+                 | MVar of var
+(*                 | MPVar of var (* persistent var *)*)
+                 | MBang of proof
+                 | MBangLet of proof * var * proof
+                 | MLam of var * prop * proof
+                 | MApp of proof * proof
+                 | MTensor of proof * proof
+                 | MTensorLet of proof * var * var * proof
+                 | MWith of proof * proof
+                 | MPi of idx * proof
+                 | MInj of idx * proof * prop
+                 | MCase of proof * var * proof * var * proof
+                 | MOne
+                 | MOneLet of proof * proof
+
+                 (* annotated with what parts of the context are consumed. *)
+                 | MAbort of proof * prop * var list
+
+                 | MForallLam of LF.binding * LF.exp * proof
+                 | MForallApp of proof * LF.exp
+                 | MPack of LF.exp * proof * prop
+                 | MUnpack of proof * LF.binding * var * proof
+
+                 (* and something with affirms whatever *)
 
 
 end
