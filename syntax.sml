@@ -157,7 +157,7 @@ struct
   (* principals are LF expressions with type "Key" ?? *)
   type principal = LF.exp
 
-  type const = string
+  type const = Const.const
   type var = Variable.var
 
   datatype prop = PAtom of atom

@@ -95,6 +95,23 @@ struct
             persistent))
 end
 
+structure LogicSignature (*:> SIGNATURE*) =
+struct
+  type sg = (Const.const * Logic.prop) list
+
+  val empty = nil
+  fun lookup' (sg: sg) c = List.find (fn (c', _) => c = c') sg
+  fun insert sg c typ =
+      if isSome (lookup' sg c) then
+          raise Fail (Const.toStr c ^ " is already in signature")
+      else (c, typ) :: sg
+  fun lookup sg c =
+      (case lookup' sg c of
+           NONE => raise Fail (Const.toStr c ^ " not in signature")
+         | SOME (_, t) => t)
+
+end
+
 
 structure LogicCheck =
 struct
@@ -173,12 +190,13 @@ struct
   fun projIdx L (x, _) = x
     | projIdx R (_, x) = x
 
-  fun checkProof sg (D as (ctx, res)) M =
+  fun checkProof (sg as (lf_sg, logic_sg)) (D as (ctx, res)) M =
       let val checkProof = checkProof sg
-          val checkProp = checkProp sg
+          val checkProp = checkProp lf_sg
+          val checkLF = TypeCheckLF.checkExpr lf_sg (Ctx.lfContext ctx)
       in
       (case M of
-           MRule c => raise Fail "unimpl"
+           MRule c => (LogicSignature.lookup logic_sg c, res)
          | MVar v =>
            let val (A, persistent) = Ctx.lookup ctx v
                val res' =
@@ -277,7 +295,7 @@ struct
            in (C, res'') end
 
          | MForallLam (b, t, M) =>
-           let val () = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx) t LF.EType
+           let val () = checkLF t LF.EType
                val ctx' = Ctx.extendLF ctx t
                val (A, res') = checkProof (ctx', res) M
            in (PForall (b, t, A), res') end
@@ -286,7 +304,7 @@ struct
                val (_, t, A) =
                    (case faA of PForall x => x
                               | _ => raise ProofError "fapp of non forall")
-               val () = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx) e t
+               val () = checkLF e t
                val A' = LogicSubst.substProp 0 [e] 0 A
            in (A', res) end
 
@@ -295,7 +313,7 @@ struct
                val (_, t, A') =
                    (case A of PExists x => x
                             | _ => raise ProofError "pack ann not an exists")
-               val () = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx) e t
+               val () = checkLF e t
                val A'' = LogicSubst.substProp 0 [e] 0 A'
 
                val (A''', res') = checkProof D M
