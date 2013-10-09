@@ -340,3 +340,48 @@ struct
 end
 
 end
+
+(* Check that constant declarations don't introduce anything bogus. *)
+structure ThawChecking =
+struct
+
+  local
+      open Logic LF
+  in
+
+  exception Frozen of string
+
+  fun thawedType e =
+      (case e of
+           EPi (_, _, t) => thawedType t
+         | EApp (HConst (Const.LThis, _), _) => ()
+         | EApp (HConst (Const.LId s, _), _) =>
+           raise Frozen ("cannot introduce type from txn " ^ s)
+         | _ => raise Fail "bogus type")
+
+
+  fun thawedProp A =
+      (case A of
+           PAtom (EApp (HConst (Const.LThis, _), _)) => ()
+         | PAtom (EApp (HConst (Const.LId s, _), _)) =>
+           raise Frozen ("cannot prove atom from txn " ^ s)
+         | PAtom _ => raise Fail "bogus atom"
+         | PBang A => thawedProp A
+         | PLolli (A, B) => thawedProp B
+         | PTensor (A, B) => (thawedProp A; thawedProp B)
+         | PWith (A, B) => (thawedProp A; thawedProp B)
+         | PForall (_, _, A) => thawedProp A
+
+         (* Not totally sure about whether we want to permit these. *)
+         | POplus (A, B) => raise Frozen "oplus not supported"
+         | POne => raise Frozen "one is silly"
+         | PExists (_, _, A) => raise Frozen "exists not supported"
+
+         | PZero => raise Frozen "can't introduce rule for zero!"
+         | PAffirms _ => raise Frozen "can't introduce rule for an affirmation!")
+
+
+
+  end
+
+end
