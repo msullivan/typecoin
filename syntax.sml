@@ -1,16 +1,55 @@
 
 
+signature VARIABLE =
+sig
+  type var
+  type t = var
+  val toStr : var -> string
+  val eq : var * var -> bool
+  val compare : var * var -> order
+end
+
+
+structure Variable : VARIABLE =
+struct
+  type var = string
+  type t = var
+  fun toStr s = s
+  fun eq (v: var, v') = v = v'
+  val compare = String.compare
+end
+structure VarDict = SplayDict(structure Key = Variable)
+structure VarSet = SplaySet(structure Elem = Variable)
+
+
 structure Const =
 struct
   type namespace = string
   datatype location = LThis | LId of namespace
   type id = string
   type const = location * id
+  type t = const
 
   fun toStr (LThis, s) = s
     | toStr (LId n, s) = n ^ "." ^ s
 
+  fun eq (x: const, y) = x = y
+
+  (* I *despise* writting comparison functions for datatypes. *)
+  fun cmp_location (LThis, LThis) = EQUAL
+    | cmp_location (LId s1, LId s2) = String.compare (s1, s2)
+    | cmp_location (LThis, LId _) = LESS
+    | cmp_location (LId _, LThis) = GREATER
+  fun compare ((l1, s1), (l2, s2)) =
+      (case cmp_location (l1, l2) of
+           EQUAL => String.compare (s1, s2)
+         | x => x)
+
 end
+
+structure ConstDict = SplayDict(structure Key = Const)
+structure ConstSet = SplaySet(structure Elem = Const)
+
 
 structure LFSyntax =
 struct
@@ -125,28 +164,6 @@ struct
 
   end
 end
-
-signature VARIABLE =
-sig
-  type var
-  type t = var
-  val toStr : var -> string
-  val eq : var * var -> bool
-  val compare : var * var -> order
-end
-
-
-structure Variable : VARIABLE =
-struct
-  type var = string
-  type t = var
-  fun toStr s = s
-  fun eq (v: var, v') = v = v'
-  val compare = String.compare
-end
-structure VarDict = SplayDict(structure Key = Variable)
-structure VarSet = SplaySet(structure Elem = Variable)
-
 
 structure Logic =
 struct

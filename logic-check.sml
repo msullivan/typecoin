@@ -17,17 +17,6 @@ sig
   val lookup : ctx -> Variable.var -> Logic.prop * bool
 end
 
-signature LOGIC_SIGNATURE =
-sig
-  type sg
-  val empty : sg
-  val insert : sg -> Const.const -> Logic.prop -> sg
-  val lookup : sg -> Const.const -> Logic.prop
-end
-
-
-
-
 structure LogicSubst :> LOGIC_SUBST =
 struct
 
@@ -112,24 +101,6 @@ struct
             persistent))
 end
 
-structure LogicSignature :> LOGIC_SIGNATURE =
-struct
-  type sg = (Const.const * Logic.prop) list
-
-  val empty = nil
-  fun lookup' (sg: sg) c = List.find (fn (c', _) => c = c') sg
-  fun insert sg c typ =
-      if isSome (lookup' sg c) then
-          raise Fail (Const.toStr c ^ " is already in signature")
-      else (c, typ) :: sg
-  fun lookup sg c =
-      (case lookup' sg c of
-           NONE => raise Fail (Const.toStr c ^ " not in signature")
-         | SOME (_, t) => t)
-
-end
-
-
 structure LogicCheck =
 struct
 
@@ -207,13 +178,13 @@ struct
   fun projIdx L (x, _) = x
     | projIdx R (_, x) = x
 
-  fun checkProof (sg as (lf_sg, logic_sg)) (D as (ctx, res)) M =
+  fun checkProof sg (D as (ctx, res)) M =
       let val checkProof = checkProof sg
-          val checkProp = checkProp lf_sg
-          val checkLF = TypeCheckLF.checkExpr lf_sg (Ctx.lfContext ctx)
+          val checkProp = checkProp sg
+          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
       in
       (case M of
-           MRule c => (LogicSignature.lookup logic_sg c, res)
+           MRule c => (Signature.lookup_rule sg c, res)
          | MVar v =>
            let val (A, persistent) = Ctx.lookup ctx v
                val res' =
