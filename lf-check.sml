@@ -247,11 +247,23 @@ in
           val t2' = LFSubst.substExp 0 [e] 0 t2
       in checkSpine sg ctx t2' s end
 
+  (* Check that we aren't creating ways to build things of
+   * types declared in other namespaces. *)
+  fun thawedType e =
+      (case e of
+           EPi (_, _, t) => thawedType t
+         | EApp (HConst (Const.LThis, _), _) => ()
+         | EApp (HConst (Const.LId s, _), _) =>
+           raise TypeError ("cannot introduce type from txn " ^ s)
+         | _ => raise Fail "bogus type")
+
   fun checkSgEntry sg ((entry_type, c, exp): LF.sg_entry) =
       let val classifier =
               (case entry_type of SgFamilyDecl => EKind
                                 | SgObjectDecl => EType)
           val () = checkExpr sg Ctx.empty exp classifier
+          val () = (case entry_type of SgFamilyDecl => ()
+                                     | SgObjectDecl => thawedType exp)
       in Sig.insert sg (Const.LThis, c) exp end
 
   fun checkSignature decls =

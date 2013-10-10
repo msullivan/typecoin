@@ -221,6 +221,6 @@ struct
 
 
   datatype sg_entry = SRule of Const.id * prop
-                    | SConst of Const.id * LFSyntax.sg_entry
+                    | SConst of LFSyntax.sg_entry
 
 end
