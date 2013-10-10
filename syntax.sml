@@ -157,7 +157,7 @@ struct
       fmt (%[ &[$msg1, toLayoutExp e1, $sep],
               &[$msg2, toLayoutExp e2]])
 
-  fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e])
+  fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e, $"."])
 
   fun prettySg sg =
       String.concatWith "\n" (map prettyDecl sg)

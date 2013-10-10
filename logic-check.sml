@@ -112,6 +112,10 @@ struct
 
   exception ProofError of string
 
+  val basis_location = "$"
+  val principal_ty = EApp (HConst (Const.LId basis_location, "principal"), SNil)
+
+
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
@@ -133,7 +137,9 @@ struct
            (checkLF t LF.EType;
             checkProp sg (Ctx.extendLF ctx t) A)
 
-         | PAffirms (k, A) => raise Fail "affirms not implemented yet")
+         | PAffirms (k, A) =>
+           (checkLF k principal_ty;
+            check A))
       end
 
   (* Check that we aren't creating ways to prove things of
