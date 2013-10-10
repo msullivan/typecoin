@@ -4,7 +4,7 @@ structure FromNamed =
 struct
 
   local
-      open LF
+      open LF Logic
   in
 
   fun findIndexBy f y l =
@@ -27,6 +27,31 @@ struct
          | EPi (b, e1, e2) => EPi (b, convertExp G e1, convertExp (b :: G) e2)
          | EApp (h, s) => EApp (convertHead G h, convertSpine G s))
   and convertSpine G s = LF.mapSpine (convertExp G) s
+
+  fun convertProp G prop =
+      let val convert = convertProp G
+          val lfconvert = convertExp G
+      in
+      (case prop of
+           PAtom P => PAtom (lfconvert P)
+         | PBang A => PBang (convert A)
+         | PLolli (A, B) => PLolli (convert A, convert B)
+         | PTensor (A, B) => PTensor (convert A, convert B)
+         | PWith (A, B) => PWith (convert A, convert B)
+         | POplus (A, B) => POplus (convert A, convert B)
+         | POne => POne
+         | PZero => PZero
+
+         | PForall (b, t, A) =>
+           PForall (b, lfconvert t,
+                    convertProp (b :: G) A)
+         | PExists (b, t, A) =>
+           PExists (b, lfconvert t,
+                    convertProp (b :: G) A)
+
+         | PAffirms (k, A) =>
+           PAffirms (lfconvert k, convert A))
+      end
 
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
