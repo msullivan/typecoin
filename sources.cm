@@ -7,4 +7,4 @@ Group is
         lf-check.sml
         logic-check.sml
         from-named.sml
-	lf-tests.sml
+	tests.sml
