@@ -172,7 +172,7 @@ struct
 
   (* atoms are LF expressions with kind Prop *)
   type atom = LF.exp
-  (* principals are LF expressions with type "Key" ?? *)
+  (* principals are LF expressions with type "$.principal" ?? *)
   type principal = LF.exp
 
   type const = Const.const

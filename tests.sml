@@ -1,7 +1,7 @@
 
-structure LFTests =
+structure Tests =
 struct
-  open LF
+  open LF Logic
   val T = SgFamilyDecl
   val O = SgObjectDecl
 
@@ -111,6 +111,100 @@ struct
 
   (***********************************)
 
+
+  val logic_test_lf_part = FromNamed.convertSg
+      [(T, "A", EProp), (T, "B", EProp), (T, "C", EProp)]
+  val A = PAtom (c_app "A" [])
+  val B = PAtom (c_app "B" [])
+  val C = PAtom (c_app "C" [])
+
+  val [x, y, z, w, x1, y1, z1, w1, x2, y2, z2, w2, z1', z2'] =
+      map MVar ["x", "y", "z", "w", "x1", "y1", "z1", "w1", "x2", "y2", "z2", "w2", "z1'", "z2'"]
+
+
+  (* prove A x B -o B x A *)
+  val tensor_comm =
+      MLam ("z", PTensor (A, B),
+            MTensorLet (z, "z1", "z2",
+                        MTensor (z2, z1)))
+  (* prove (A -o B -o C) -> (A x B) -o C *)
+  val uncurry =
+      MLam ("y", PLolli (A, PLolli (B, C)),
+       MLam ("z", PTensor (A, B),
+        MTensorLet (z, "z1", "z2",
+         MApp (MApp (y, z1), z2))))
+
+  (* don't prove A x B -o A & B *)
+  val tensor_imp_with =
+      MLam ("z", PTensor (A, B),
+            MTensorLet (z, "z1", "z2",
+                        MWith (z1, z2)))
+
+  (* prove !A x !B -o !A & !B *)
+  val tensor_imp_with_bang =
+      MLam ("z", PTensor (PBang A, PBang B),
+       MTensorLet (z, "z1", "z2",
+        MBangLet (z1, "z1'",
+        MBangLet (z2, "z2'",
+         MWith (MBang z1', MBang z2')))))
+  (* don't prove !A & !B -o !A x !B  *)
+  val with_imp_tensor_bang_wrong =
+      MLam ("z", PWith (PBang A, PBang B),
+            MTensor (MPi (L, z), MPi (R, z)))
+
+  (* prove !A x !B -o !(A & B) *)
+  val tensor_imp_with_bang2 =
+      MLam ("z", PTensor (PBang A, PBang B),
+       MTensorLet (z, "z1", "z2",
+        MBangLet (z1, "z1'",
+        MBangLet (z2, "z2'",
+         MBang (MWith (z1', z2'))))))
+  (* prove !(A & B) -o !A x !B  *)
+  val with_imp_tensor_bang =
+      MLam ("z", PBang (PWith (A, B)),
+       MBangLet (z, "y",
+        MTensor (MBang (MPi (L, y)), MBang (MPi (R, y)))))
+
+  (* don't prove !(A x B) -o !(A & B) *)
+  val tensor_imp_with_bang_wrong =
+      MLam ("y", PBang (PTensor (A, B)),
+       MBangLet (y, "z",
+        MTensorLet (z, "z1", "z2",
+         MBang (MWith (z1, z2)))))
+
+  (* fail to accept this bogus proof *)
+  val tensor_imp_bang =
+      MLam ("z", PTensor (PBang A, PBang B),
+       MTensorLet (z, "z1", "z2",
+        MBangLet (z1, "z1'",
+                  MBang z1')))
+
+
+  val one_lolli_a_equiv_a =
+      MWith (
+      MLam ("x", PLolli (POne, A),
+            MApp (x, MOne)),
+      MLam ("y", A,
+            MLam ("z", POne,
+                  MOneLet (z, y))))
+
+  (* prove A + B -o B + A *)
+  val oplus_comm =
+      MLam ("z", POplus (A, B),
+       MCase (z,
+              "z1", MInj (R, z1, POplus (B, A)),
+              "z2", MInj (L, z2, POplus (B, A))))
+
+  (* prove A x (B + 0) -o A x B *)
+  val thing_with_zero =
+      MLam ("z", PTensor (A, POplus (B, PZero)),
+       MTensorLet (z, "z1", "z2",
+        MCase (z2,
+               "x", MTensor (z1, x),
+               "y", MAbort (y, PTensor (A, B), ["z1"]))))
+
+
+
   fun println s = print (s ^ "\n")
 
   fun check sg =
@@ -120,7 +214,10 @@ struct
        println "")
       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
 
-
+  fun checkProof sg M =
+      ((LogicCheck.inferProofOuter sg M)
+       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
+            | (e as LogicCheck.ProofError s) => (println s; raise e))
 
 
 end

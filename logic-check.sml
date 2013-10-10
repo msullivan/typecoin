@@ -223,7 +223,7 @@ struct
            in (A, res') end
 
          | MBang M' =>
-           let val (A, empty_res) = checkProof (ctx, VarSet.empty) M
+           let val (A, empty_res) = checkProof (ctx, VarSet.empty) M'
            in (PBang A, res) end
          | MBangLet (M1, v, M2) =>
            let val (bA1', res') = checkProof D M1
@@ -235,8 +235,8 @@ struct
          | MLam (v, A, M) =>
            let val () = checkProp ctx A
                val D' = addResource D v A
-           in discharge v (checkProof D' M)
-           end
+               val (B, res') = discharge v (checkProof D' M)
+           in (PLolli (A, B), res') end
          | MApp (M1, M2) =>
            let val (A', res') = checkProof D M1
                val (A1, A2) =
@@ -353,6 +353,13 @@ struct
       )
 
       end
+
+      fun inferProofOuter sg M =
+          let val D = (LogicContext.empty, VarSet.empty)
+              val (A, res) = checkProof sg D M
+              val () = if VarSet.isEmpty res then () else
+                       raise ProofError "not all resources used"
+          in A end
 
       fun checkRuleSgEntry sg (id, prop) =
           (checkProp sg Ctx.empty prop;
