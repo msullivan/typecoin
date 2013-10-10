@@ -1,6 +1,34 @@
 
+signature LOGIC_SUBST =
+sig
+  val substProp : int -> LFSyntax.exp list -> int -> Logic.prop -> Logic.prop
+  val replaceThisProp : Const.location -> Logic.prop -> Logic.prop
+  val liftProp : int -> Logic.prop -> Logic.prop
+end
 
-structure LogicSubst(* :> LOGIC_SUBST*) =
+signature LOGIC_CONTEXT =
+sig
+  type ctx
+  val empty : ctx
+  val fromLFContext : LFContext.ctx -> ctx
+  val lfContext : ctx -> LFContext.ctx
+  val insert : ctx -> Variable.var -> Logic.prop -> bool -> ctx
+  val extendLF : ctx -> LFSyntax.exp -> ctx
+  val lookup : ctx -> Variable.var -> Logic.prop * bool
+end
+
+signature LOGIC_SIGNATURE =
+sig
+  type sg
+  val empty : sg
+  val insert : sg -> Const.const -> Logic.prop -> sg
+  val lookup : sg -> Const.const -> Logic.prop
+end
+
+
+
+
+structure LogicSubst :> LOGIC_SUBST =
 struct
 
   open Logic
@@ -49,17 +77,6 @@ struct
 end
 
 
-signature LOGIC_CONTEXT =
-sig
-  type ctx
-  val empty : ctx
-  val fromLFContext : LFContext.ctx -> ctx
-  val lfContext : ctx -> LFContext.ctx
-  val insert : ctx -> Variable.var -> Logic.prop -> bool -> ctx
-  val extendLF : ctx -> LFSyntax.exp -> ctx
-  val lookup : ctx -> Variable.var -> Logic.prop * bool
-end
-
 
 structure LogicContext :> LOGIC_CONTEXT =
 struct
@@ -95,7 +112,7 @@ struct
             persistent))
 end
 
-structure LogicSignature (*:> SIGNATURE*) =
+structure LogicSignature :> LOGIC_SIGNATURE =
 struct
   type sg = (Const.const * Logic.prop) list
 
@@ -340,6 +357,7 @@ struct
 end
 
 end
+
 
 (* Check that constant declarations don't introduce anything bogus. *)
 structure ThawChecking =

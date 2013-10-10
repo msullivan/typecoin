@@ -223,12 +223,12 @@ in
           val t2' = LFSubst.substExp 0 [e] 0 t2
       in checkSpine sg ctx t2' s end
 
-  fun checkSgEntry sg (entry_type, c, exp) =
+  fun checkSgEntry sg ((entry_type, c, exp): LF.sg_entry) =
       let val classifier =
               (case entry_type of SgFamilyDecl => EKind
                                 | SgObjectDecl => EType)
           val () = checkExpr sg Ctx.empty exp classifier
-      in Sig.insert sg c exp end
+      in Sig.insert sg (Const.LThis, c) exp end
 
   fun checkSignature decls =
       foldl (fn (e, sg) => checkSgEntry sg e) Sig.empty decls

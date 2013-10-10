@@ -4,7 +4,8 @@ structure Const =
 struct
   type namespace = string
   datatype location = LThis | LId of namespace
-  type const = location * string
+  type id = string
+  type const = location * id
 
   fun toStr (LThis, s) = s
     | toStr (LId n, s) = n ^ "." ^ s
@@ -33,7 +34,7 @@ struct
                  | SApp of exp * spine
 
   datatype entry_type = SgFamilyDecl | SgObjectDecl
-  type sg_entry = entry_type * const * exp
+  type sg_entry = entry_type * Const.id * exp
 
   val listToSpine = foldr SApp SNil
   fun spineToList SNil = nil
@@ -117,7 +118,7 @@ struct
       fmt (%[ &[$msg1, toLayoutExp e1, $sep],
               &[$msg2, toLayoutExp e2]])
 
-  fun prettyDecl (_, c, e) = fmt (&[$(Const.toStr c), $": ", toLayoutTop e])
+  fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e])
 
   fun prettySg sg =
       String.concatWith "\n" (map prettyDecl sg)
@@ -201,5 +202,8 @@ struct
 
                  (* and something with affirms whatever *)
 
+
+  datatype sg_entry = SRule of Const.id * prop
+                    | SConst of Const.id * LFSyntax.sg_entry
 
 end

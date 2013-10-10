@@ -25,7 +25,7 @@ struct
   val [n, m, p, A, B, e, e', D] =
       map var ["n", "m", "p", "A", "B", "e", "e'", "D"]
 
-  fun convertSg l = FromNamed.convertSg (map (fn (x, y, z) => (x, (Const.LThis, y), z)) l)
+  val convertSg = FromNamed.convertSg
 
   val a_test = convertSg
       [(T, "nat", EType),
