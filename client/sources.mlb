@@ -47,8 +47,5 @@
         process.sig
         process.sml
         main.sml
-(*
         go.sml
-*)
-foo.sml
 
