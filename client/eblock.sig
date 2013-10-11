@@ -11,6 +11,7 @@ signature EBLOCK =
       val toBlock : eblock -> Block.block
 
       val hash : eblock -> Bytestring.string
+      val txcount : eblock -> int
       val txhashes : eblock -> Bytestring.string list
 
    end

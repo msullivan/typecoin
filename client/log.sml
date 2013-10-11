@@ -2,7 +2,7 @@
 structure Log :> LOG =
    struct
 
-      val theOutstream = ref TextIO.stdErr
+      val theOutstream = ref TextIOUtil.nullOut
 
       fun short str =
          (

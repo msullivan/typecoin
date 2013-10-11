@@ -66,6 +66,8 @@ structure Blockchain :> BLOCKCHAIN =
          n  bytes: the block
       *)
 
+      val blockOffsetInRecord : pos = 40
+
       fun outputBlock hash blstr =
          let
             val pos = !theOutPos
@@ -214,8 +216,8 @@ structure Blockchain :> BLOCKCHAIN =
          UNKNOWN (if it was never verified).
 
          On the primary fork we do not distinguish between OK and UNKNOWN.  However, we ensure that
-         any verified blocks are far enough back in the chain that they would be accepted if they
-         happened to be dubious.  We ensure this by calling verifying the last several block at the
+         any unverified blocks are far enough back in the chain that they would be accepted if they
+         happened to be dubious.  We ensure this by verifying the last several blocks at the
          end of any period during which verification is turned off (ie, sync and load).  Thus, if
          verification is on, all blocks on the primary fork are either OK or DUBIOUS.  When we move
          a block from the primary fork while verifcation is off, we must put down its status as
@@ -278,6 +280,10 @@ structure Blockchain :> BLOCKCHAIN =
       *)
       fun rewind backto =
          let
+            (* Shunt every block back to (but not including) "backto" onto a secondary fork.
+               Return the lineage reference for the block that is last on the primary fork
+               when the operation begins.
+            *)
             fun loop () =
                if !lastblock = backto then
                   let
@@ -294,6 +300,9 @@ structure Blockchain :> BLOCKCHAIN =
                      val diff = Verify.decodeDifficulty (inputDiffBits pos)
 
                      (* Undo everything but the table entry, which we can't do until the recursion returns. *)
+(*
+                     val () = Utxo.undo (inputData pos)
+*)
                      val () = lastblock := num - 1
                      val () = totaldiff := cumdiff - diff
                      (* Reducing the total difficulty could mean that things that we've removed from
@@ -323,7 +332,8 @@ structure Blockchain :> BLOCKCHAIN =
                      lineager
                   end
          in
-            loop ()
+            loop ();
+            ()
          end
 
 
@@ -405,21 +415,22 @@ structure Blockchain :> BLOCKCHAIN =
             fun loop lineage =
                (case lineage of
                    Nil num =>
-                      let in
-                         rewind num;
-                         ()
-                      end
+                      rewind num
                  | Cons (pos, num, cumdiff, predlin, verstat) =>
                       let 
                          val () = loop (!predlin)
 
                          val hash = inputHash pos
                          val lineager = T.lookup theTable hash
+                         val blockstr = inputData pos
                       in
                          lineager := Nil num;
                          Array.update (thePrimaryFork, num, pos);
                          lastblock := num;
                          totaldiff := cumdiff;
+(*
+                         Utxo.process false (pos+blockOffsetInRecord) blockstr;
+*)
                          checkDubiousFront ();
                          
                          (case verstat of
@@ -430,7 +441,7 @@ structure Blockchain :> BLOCKCHAIN =
                                 if
                                    !verification
                                    andalso
-                                   not (Verify.verifyBlock (EBlock.fromBytes (inputData pos)))
+                                   not (Verify.verifyBlock (EBlock.fromBytes blockstr))
                                 then
                                    setDubious num
                                 else
@@ -508,7 +519,7 @@ structure Blockchain :> BLOCKCHAIN =
             ORPHAN
          else
             let
-               val prev = #previous (EBlock.toBlock eblock)
+               val prev = #previous (#1 (EBlock.toBlock eblock))
             in
                (case T.find theTable prev of
                    NONE =>
@@ -541,7 +552,7 @@ structure Blockchain :> BLOCKCHAIN =
                                   | Cons (_, n, _, _, _) => n)
     
                          val diff =
-                            Verify.decodeDifficulty (#bits (EBlock.toBlock eblock))
+                            Verify.decodeDifficulty (#bits (#1 (EBlock.toBlock eblock)))
                             +
                             (case predlin of
                                 Nil n =>
@@ -578,6 +589,9 @@ structure Blockchain :> BLOCKCHAIN =
                                T.insert theTable hash (ref (Nil num));
                                lastblock := num;
                                totaldiff := diff;
+(*
+                               Utxo.process false (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
+*)
                                checkDubiousFront ();
    
                                if dubious then
@@ -829,19 +843,19 @@ structure Blockchain :> BLOCKCHAIN =
                   val instream = MIO.openIn path
                   val () = theInstream := SOME (MIO.openIn path);
                   
-                  val (startpos, doWriteIndex) =
+                  val startpos =
                      (* Try loading an index. *)
                      (case readIndex () of
                          SOME pos =>
                             let in
                                MIO.SeekIO.seekIn (instream, pos);
-                               (pos, false)
+                               pos
                             end
                        | NONE =>
                             (* Couldn't load an index, start from the beginning. *)
                             (* Verify that the first record looks right. *)
                             if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
-                               (Pos.fromInt (B.size genesisRecord), true)
+                               Pos.fromInt (B.size genesisRecord)
                             else
                                let in
                                   MIO.closeIn instream;

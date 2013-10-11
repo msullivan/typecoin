@@ -2,6 +2,8 @@
 structure Platform :> PLATFORM =
    struct
 
+(* No longer needed since v110.76
+
       structure SI = SMLofNJ.SysInfo
 
       val Socket_sameDesc =
@@ -35,6 +37,7 @@ structure Platform :> PLATFORM =
             BinIO.openAppend filename
          else
             BinIO.openOut filename
+*)
          
       fun hashWord32 w =
          MJHash.hashInc (ConvertWord.word32ToWord w) (ConvertWord.word32ToWord (Word32.>> (w, 0w1)))

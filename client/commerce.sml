@@ -70,8 +70,8 @@ structure Commerce :> COMMERCE =
            | SOME (blocknum, i) =>
                 let
                    val blstr = Blockchain.dataByNumber blocknum
-                   val block = Block.readBlock blstr
-                   val tx = List.nth (#transactions block, i)
+                   val (_, txs) = Block.readBlock blstr
+                   val tx = List.nth (txs, i)
 
                    val () =
                       (* This shouldn't be necessary, but let's double-check that we've got

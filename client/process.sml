@@ -388,7 +388,7 @@ structure Process :> PROCESS =
                        [] => ()
                      | _ :: _ =>
                           let in
-                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to"^ Address.toString (Peer.address (Commo.peer conn)));
+                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to "^ Address.toString (Peer.address (Commo.peer conn)));
                              Commo.sendMessage conn (M.Inv invs)
                           end)
                 end
@@ -543,7 +543,7 @@ structure Process :> PROCESS =
                    val poso =
                       let
                          val path = OS.Path.concat (Constants.dataDirectory, Constants.alertFile)
-                         val outs = Platform.BinIO_openAppend path
+                         val outs = BinIO.openAppend path
                       in
                          BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (B.size payload)));
                          BinIO.output (outs, payload);

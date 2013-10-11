@@ -94,6 +94,16 @@ structure Constants =
 
 
 
+      (*** Confirmation constants ***)
+
+      (* Accept an invalid block with this many confirmations.
+         (Also, consequently, only verify this many blocks at
+         the end of the blockchain.)
+      *)
+      val chainTrustConfirmations = 10
+
+
+
       (*** Blockchain record constants ***)
 
       (* Allocate a block hash table of this size. *)
@@ -105,7 +115,13 @@ structure Constants =
       (* Write a new index if processed this much additional data. *)
       val indexThreshold = 1024 * 1024                            (* 1 meg *)
 
+      (* Allocate a UTXO table of this size. *)
+      val utxoTableSize = 1024 * 1024                             (* 1 meg XXX *)
 
+      (* Record UTXO undo data for this many blocks. *)
+      val maxUndoRecords = chainTrustConfirmations
+      
+     
 
       (*** Pool and relay constants ***)
 
@@ -117,16 +133,6 @@ structure Constants =
 
       (* Keep relayed transactions in the pool this long. *)
       val poolRetentionTime = Time.fromSeconds (10 * 60)          (* 10 minutes *)
-
-
-
-      (*** Confirmation constants ***)
-
-      (* Accept an invalid block with this many confirmations.
-         (Also, consequently, only verify this many blocks at
-         the end of the blockchain.)
-      *)
-      val chainTrustConfirmations = 10
 
 
 

@@ -11,6 +11,7 @@ structure EBlock :> EBLOCK =
          bytes : B.string,
          block : Block.block S.susp,
          hash : B.string S.susp,
+         txcount : int S.susp,
          txhashes : B.string list S.susp
          }
 
@@ -27,14 +28,18 @@ structure EBlock :> EBLOCK =
             val hash =
                S.delay (fn () => hashBlockHeader bytes)
 
+            val txcount =
+               S.delay
+               (fn () => length (#2 (S.force block)))
+
             val txhashes =
                S.delay
                (fn () =>
                    map
                    (fn tx => dhash (Transaction.writeTx tx))
-                   (#transactions (S.force block)))
+                   (#2 (S.force block)))
          in
-            { bytes=bytes, block=block, hash=hash, txhashes=txhashes }
+            { bytes=bytes, block=block, hash=hash, txcount=txcount, txhashes=txhashes }
          end
 
       fun toBytes ({bytes, ...}:eblock) = bytes
@@ -42,6 +47,8 @@ structure EBlock :> EBLOCK =
       fun toBlock ({block, ...}:eblock) = S.force block
 
       fun hash ({hash, ...}:eblock) = S.force hash
+
+      fun txcount ({txcount, ...}:eblock) = S.force txcount
 
       fun txhashes ({txhashes, ...}:eblock) = S.force txhashes
 

@@ -3,6 +3,7 @@ signature BLOCKCHAIN =
    sig
 
       type hash = Bytestring.string
+      type pos = Int64.int
 
       type orphanage
       val newOrphanage : unit -> orphanage
@@ -18,7 +19,7 @@ signature BLOCKCHAIN =
 
       exception Absent
       val member : hash -> bool
-      val blockPosition : hash -> Int64.int        (* position in the record *)
+      val blockPosition : hash -> pos              (* position in the record *)
       val blockNumber : hash -> int                (* block number in the chain *)
       val blockData : hash -> Bytestring.string    (* the block itself *)
       val blockPrimary : hash -> bool              (* is the block on the primary chain *)
@@ -28,7 +29,7 @@ signature BLOCKCHAIN =
 
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
-      val positionByNumber : int -> Int64.int
+      val positionByNumber : int -> pos
 
       val initialize : unit -> unit
       val writeIndex : unit -> unit

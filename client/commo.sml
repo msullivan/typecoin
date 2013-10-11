@@ -478,10 +478,15 @@ functor CommoFun (structure ConnState : CONN_STATE)
       fun numberOfConnections () = !numConnections
 
       fun self () =
-         if !myAddrIsPrivate then
-            NONE
-         else
-            SOME (!myNetaddr)
+         (case !theInsock of
+             NONE =>
+                (* Don't bother advertising if you can't take incoming connections. *)
+                NONE
+           | SOME _ =>
+                if !myAddrIsPrivate then
+                   NONE
+                else
+                   SOME (!myNetaddr))
 
       fun closed ({opn, ...}:conn) = not (!opn)
 

@@ -36,6 +36,8 @@
         message.sml
         peer.sig
         peer.sml
+        utxo.sig
+        utxo.sml
         verify.sig
         verify.sml
         blockchain.sig
@@ -45,4 +47,8 @@
         process.sig
         process.sml
         main.sml
+(*
         go.sml
+*)
+foo.sml
+

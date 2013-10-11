@@ -100,7 +100,6 @@ structure Reader : READER =
          (fn n => count n r)
 
 
-
       fun readS f str =
          f str
          (* Make sure we don't stop the program over an integer out of range. *)

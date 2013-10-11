@@ -8,7 +8,7 @@ structure Scheduler :> SCHEDULER =
 
       structure S = Socket
       structure Q = PairingPQueue (TimeOrdered)
-      val sameDesc = Platform.Socket_sameDesc
+      val sameDesc = Socket.sameDesc
 
 
       type tid = (unit -> unit) ref
@@ -35,7 +35,7 @@ structure Scheduler :> SCHEDULER =
       val rsocks : S.sock_desc list ref = ref []
       val wsocks : S.sock_desc list ref = ref []
       val callbacks : (S.sock_desc * (unit -> unit)) list ref = ref []
-      val theQueue : tid Q.pq ref = ref (Q.empty ())
+      val theQueue : tid Q.pqueue ref = ref (Q.empty ())
       val queueSize = ref 0
 
 
@@ -137,7 +137,7 @@ structure Scheduler :> SCHEDULER =
          let
             val fr = ref f
          in
-            theQueue := Q.insert (time, fr) (!theQueue);
+            theQueue := Q.insert (!theQueue) (time, fr);
             queueSize := !queueSize + 1;
             fr
          end
@@ -146,7 +146,7 @@ structure Scheduler :> SCHEDULER =
          let
             val fr = ref f
          in
-            theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+            theQueue := Q.insert (!theQueue) (Time.+ (Time.now (), time), fr);
             queueSize := !queueSize + 1;
             fr
          end
@@ -157,13 +157,13 @@ structure Scheduler :> SCHEDULER =
 
             fun loop () =
                (
-               theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+               theQueue := Q.insert (!theQueue) (Time.+ (Time.now (), time), fr);
                queueSize := !queueSize + 1;
                f ()
                )
          in
             fr := loop;
-            theQueue := Q.insert (Time.+ (Time.now (), time), fr) (!theQueue);
+            theQueue := Q.insert (!theQueue) (Time.+ (Time.now (), time), fr);
             queueSize := !queueSize + 1;
             fr
          end

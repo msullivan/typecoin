@@ -124,24 +124,42 @@ structure Verify :> VERIFY =
 
       fun verifyBlockGross eblock =
          let
-            val {bits, root, count, transactions, ...} =
+            val ({bits, root, ...}, transactions) =
                EBlock.toBlock eblock
-               handle Reader.SyntaxError => raise VerifyFailed
+               handle Reader.SyntaxError =>
+                  (
+                  Log.long (fn () => "Verify parse failed");
+                  raise VerifyFailed
+                  )
 
             val () =
                (case Bytestring.compare (B.rev (EBlock.hash eblock), decodeTarget bits) of
                    GREATER =>
+                      (
+                      Log.long (fn () => "Verify difficulty failed");
                       raise VerifyFailed
+                      )
                  | _ => ())
 
             val () =
-               if B.eq (root, merkleRoot count (EBlock.txhashes eblock)) then
+               if B.eq (root, merkleRoot (EBlock.txcount eblock) (EBlock.txhashes eblock)) then
                   ()
                else
+                  (
+                  Log.long (fn () => "Verify merkle root failed");
                   raise VerifyFailed
+                  )
          in
             true
-         end handle VerifyFailed => false
+         end handle VerifyFailed =>
+            let
+               val path = OS.Path.concat (Constants.dataDirectory, "offending-block")
+               val outs = BinIO.openOut path
+            in
+               BinIO.output (outs, EBlock.toBytes eblock);
+               BinIO.closeOut outs;
+               false
+            end
 
 
 

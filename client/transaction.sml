@@ -46,7 +46,8 @@ structure Transaction :> TRANSACTION =
 
 
 
-      type coord = Bytestring.string * int
+      type hash = Bytestring.string
+      type coord = hash * int
 
       type txin =
          {
