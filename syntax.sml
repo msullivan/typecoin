@@ -235,8 +235,19 @@ struct
                  | MReturn of principal * proof
                  | MBind of proof * var * proof
 
+  (* ????????????? *)
+  type crypto_sig = string
+  type crypto_address = string
+  type crypto_principal = string
+
+  type signed_affirmation =
+       {principal: crypto_principal,
+        prop: prop,
+        crypto_sig: crypto_sig}
 
   datatype sg_entry = SRule of Const.id * prop
                     | SConst of LFSyntax.sg_entry
+                    | SSignedAffirmation of Const.id * signed_affirmation
+
 
 end

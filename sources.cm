@@ -9,6 +9,7 @@ Group is
 	tests.sml
 	test-util.sml
 	typecoin-basis.sml
+	typecoin.sml
 
         (* stuff copied and modified from tom-lib *)
         layout.sml
