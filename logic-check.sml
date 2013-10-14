@@ -350,6 +350,25 @@ struct
                val () = checkProp ctx C
            in (C, res'') end
 
+
+         | MReturn (k, M) =>
+           let val () = checkLF k principal_ty
+               val (A, res') = checkProof D M
+           in (PAffirms (k, A), res') end
+         | MBind (M1, v, M2) =>
+           let val (affkA, res') = checkProof D M1
+               val (k, A) =
+                   (case affkA of PAffirms x => x
+                                | _ => raise ProofError "bind of non affirms")
+               val D' = addResource (ctx, res') v A
+               val (affkB, res'') = discharge v (checkProof D' M2)
+               val (k', B) =
+                   (case affkB of PAffirms x => x
+                                | _ => raise ProofError "bind must result in affirms")
+               (* principals must match *)
+               val () = TypeCheckLF.exprEquality k k'
+           in (PAffirms (k, B), res'') end
+
       )
 
       end

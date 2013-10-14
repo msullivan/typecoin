@@ -180,7 +180,7 @@ struct
 
   (* atoms are LF expressions with kind Prop *)
   type atom = LF.exp
-  (* principals are LF expressions with type "$.principal" ?? *)
+  (* principals are LF expressions with type "$.principal" *)
   type principal = LF.exp
 
   type const = Const.const
@@ -225,7 +225,9 @@ struct
                  | MPack of LF.exp * proof * prop
                  | MUnpack of proof * LF.binding * var * proof
 
-                 (* and something with affirms whatever *)
+                 (* and affirmation stuff; proof terms are monadic *)
+                 | MReturn of principal * proof
+                 | MBind of proof * var * proof
 
 
   datatype sg_entry = SRule of Const.id * prop

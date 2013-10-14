@@ -77,6 +77,8 @@ struct
          | MForallApp (M, t) => MForallApp (convert M, lfconvert t)
          | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)
          | MUnpack (M1, x, v, M2) => MUnpack (convert M1, x, v, convertProof (x::G) M2)
+         | MReturn (k, M) => MReturn (lfconvert k, convert M)
+         | MBind (M1, v, M2) => MBind (convert M1, v, convert M2)
       )
       end
 
