@@ -1,19 +1,8 @@
 
 structure Tests =
 struct
-  open LF Logic
-  val T = SgFamilyDecl
-  val O = SgObjectDecl
-
-  (* This depends on the bullshit we are doing. *)
-  fun arrow t1 t2 = EPi ("_", t1, t2)
-  fun arrow' (t1, t2) = arrow t1 t2
+  open LF Logic TestUtil
   infixr -->
-  val (op -->) = arrow'
-
-
-  fun c_app c ls = EApp (HConst (Const.LThis, c), listToSpine ls)
-  fun c_app' ns c ls = EApp (HConst (Const.LId ns, c), listToSpine ls)
 
   val nat = c_app "nat" []
   val zero = c_app "z" []
@@ -85,31 +74,6 @@ struct
 
       ]
 
-  (**** "The Basis" ****)
-  val nibble' = c_app "nibble" []
-  val hash160' = c_app "hash160" []
-  val principal' = c_app "principal" []
-  val address' = c_app "address" []
-  fun makeArrow 0 = hash160'
-    | makeArrow n = nibble' --> makeArrow (n-1)
-  val basis_test = convertSg
-      [(T, "nibble", EType)] @
-      List.tabulate (16, fn i => (O, "n"^Int.fmt StringCvt.HEX i, nibble')) @
-      [(T, "hash160", EType),
-       (O, "hash160_", makeArrow 40),
-       (T, "principal", EType),
-       (O, "principal_hash", hash160' --> principal'),
-       (T, "address", EType),
-       (O, "address_hash", hash160' --> address')
-      ]
-
-  (* convert a string containing a hash to an LF object of type hash160 *)
-  fun hashStringToHashObj s =
-      c_app "hash160_"
-      (map (fn c => c_app ("n" ^ str (Char.toUpper c)) []) (explode s))
-  val test_hash = "349823092af349823092af349823092afbde3434"
-
-  (***********************************)
 
 
   val i = c_app "i" []

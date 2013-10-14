@@ -114,9 +114,8 @@ struct
 
   exception ProofError of string
 
-  val basis_location = "$"
-  val principal_ty = EApp (HConst (Const.LId basis_location, "principal"), SNil)
-  val address_ty = EApp (HConst (Const.LId basis_location, "address"), SNil)
+  val principal_ty = TypeCoinBasis.principal
+  val address_ty = TypeCoinBasis.address
 
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
@@ -398,6 +397,24 @@ struct
 
       fun checkSignature sg decls =
           foldl (fn (e, sg) => checkSgEntry sg e) sg decls
+
+
+      (* Install a declaration in the signature at a certain namespace.
+       * Should have already been checked. *)
+      fun installSgEntry sg ns (SRule (id, prop)) =
+          let val prop' = LogicSubst.replaceThisProp (Const.LId ns) prop
+          in Signature.insert_rule sg (Const.LId ns, id) prop' end
+        | installSgEntry sg ns (SConst (_, id, e)) =
+          let val e' = LFSubst.replaceThisExp (Const.LId ns) e
+          in Signature.insert sg (Const.LId ns, id) e' end
+
+     fun installSignature sg ns decls =
+         foldl (fn (decl, sg) => installSgEntry sg ns decl) sg decls
+
+     (* Make a signature containing the basis *)
+     val basis_sg =
+         (checkSignature Signature.empty TypeCoinBasis.basis;
+          installSignature Signature.empty "$" TypeCoinBasis.basis)
 
 
 end
