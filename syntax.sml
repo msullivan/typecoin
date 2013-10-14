@@ -93,6 +93,7 @@ struct
 
       val $ = L.str
       val % = L.mayAlign
+      val %% = L.freeStyleAlign
       val & = L.seq
 
       val WIDTH = 80
@@ -129,7 +130,7 @@ struct
               toLayoutSpine s])
   and toLayoutSpine s =
       let val layouts = map toLayoutExpParen (spineToList s)
-      in % (layouts) end
+      in %% layouts end
 
   and toLayoutExpParen (e as ELam _) = L.paren (toLayoutExp e)
     | toLayoutExpParen (e as EApp (_, SApp _)) = L.paren (toLayoutExp e)
@@ -145,8 +146,15 @@ struct
       let fun loop l (e as EPi ("_", _, _)) = %[% (rev l), toLayoutExp e]
             | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
             | loop l e = %[% (rev l), toLayoutExp e]
-
       in loop [] e end
+
+  (* Another try that doesn't screw over ->s ?? *)
+  fun toLayoutTop e =
+      let fun loop l (e as EPi ("_", e1, e2)) = loop (&[toLayoutTyParen e1, $" ->"] :: l) e2
+            | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
+            | loop l e = %[%% (rev l), toLayoutExp e]
+      in loop [] e end
+
 
   fun prettyExp e = L.tostringex WIDTH (toLayoutExp e)
 
