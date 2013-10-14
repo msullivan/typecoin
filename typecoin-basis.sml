@@ -37,8 +37,9 @@ struct
   (* convert a string containing a hash to an LF object of type hash160 *)
   fun hashStringToHashObj s =
       c_app' "$" "hash160_"
-      (map (fn c => c_app ("n" ^ str (Char.toUpper c)) []) (explode s))
-  val test_hash = "1badd00ddeadbeefcafef00d0123456789abcdef"
+      (map (fn c => c_app' "$" ("n" ^ str (Char.toUpper c)) []) (explode s))
+  val test_hash_str = "1badd00ddeadbeefcafef00d0123456789abcdef"
+  val test_hash = hashStringToHashObj test_hash_str
 
   val basis = basis
 

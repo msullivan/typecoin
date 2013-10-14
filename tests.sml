@@ -12,12 +12,10 @@ struct
   fun v s = HVar (~1, s)
   fun var s = EApp (v s, SNil)
 
-  val [n, m, p, A, B, e, e', D] =
-      map var ["n", "m", "p", "A", "B", "e", "e'", "D"]
+  val [n, m, p, A, B, e, e', D, k] =
+      map var ["n", "m", "p", "A", "B", "e", "e'", "D", "k"]
 
-  val convertSg = FromNamed.convertSg
-
-  val a_test = convertSg
+  val a_test = FromNamed.convertSg
       [(T, "nat", EType),
        (O, "z", nat),
        (O, "s", arrow nat nat),
@@ -58,7 +56,7 @@ struct
   fun eapp t1 t2 = c_app "app" [t1, t2]
   fun eof e A = c_app "of" [e, A]
 
-  val lambda_test = convertSg
+  val lambda_test = FromNamed.convertSg
       [(T, "tp", EType),
        (O, "base", tp),
        (O, "arr", tp --> tp --> tp),
@@ -81,6 +79,7 @@ struct
       [(T, "A", EProp), (T, "B", EProp), (T, "C", EProp),
        (T, "i", EType),
        (T, "P", i --> EProp), (T, "Q", i --> EProp), (T, "R", i --> EProp)]
+  val logic_test = map SConst logic_test_lf_part
 
   val A = PAtom (c_app "A" [])
   val B = PAtom (c_app "B" [])
@@ -209,6 +208,47 @@ struct
           MPack (n,
                  MWith (z1', z2'),
                  PExists ("n", i, PWith (P n, Q n))))))))))
+
+
+  val K = TypeCoinBasis.principal_hash (TypeCoinBasis.test_hash)
+  (* prove (A -o B) -o (<K>A -o <K>B) *)
+  val affirmation_fmap_specific = FromNamed.convertProof []
+      (MLam ("x", PLolli (A, B),
+        MLam ("y", PAffirms (K, A),
+         MBind (y, "z",
+          MReturn (K, MApp (x, z))))))
+
+  (* prove !k:principal. (A -o B) -o (<k>A -o <k>B) *)
+  val affirmation_fmap = FromNamed.convertProof []
+      (MForallLam ("k", TypeCoinBasis.principal,
+        MLam ("x", PLolli (A, B),
+         MLam ("y", PAffirms (k, A),
+          MBind (y, "z",
+           MReturn (k, MApp (x, z)))))))
+
+
+  (* prove !k:principal. <k><k>A -o <k>A *)
+  val affirmation_join = FromNamed.convertProof []
+      (MForallLam ("k", TypeCoinBasis.principal,
+         MLam ("z", PAffirms (k, PAffirms (k, A)),
+          MBind (z, "z1",
+           MBind (z1, "z2",
+            MReturn (k, z2))))))
+
+  (* fail to prove !k:principal. <k>A -o A *)
+  val affirmation_unsafe_perform_io = FromNamed.convertProof []
+      (MForallLam ("k", TypeCoinBasis.principal,
+         MLam ("z", PAffirms (k, A),
+          MBind (z, "z1", z1))))
+
+  (* fail to prove !k, k':principal. <k>A -o <k'>A *)
+  val affirmation_coerce = FromNamed.convertProof []
+      (MForallLam ("k", TypeCoinBasis.principal,
+        MForallLam ("n", TypeCoinBasis.principal,
+         MLam ("z", PAffirms (k, A),
+          MBind (z, "z1", MReturn (n, z1))))))
+
+
 
 
   fun println s = print (s ^ "\n")
