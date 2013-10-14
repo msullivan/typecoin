@@ -52,6 +52,8 @@ struct
 
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
+         | PReceipt (k, A) =>
+           PReceipt (lfsubst k, subst A)
 
       )
       end
@@ -114,7 +116,7 @@ struct
 
   val basis_location = "$"
   val principal_ty = EApp (HConst (Const.LId basis_location, "principal"), SNil)
-
+  val address_ty = EApp (HConst (Const.LId basis_location, "address"), SNil)
 
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
@@ -139,6 +141,9 @@ struct
 
          | PAffirms (k, A) =>
            (checkLF k principal_ty;
+            check A)
+         | PReceipt (k, A) =>
+           (checkLF k address_ty;
             check A))
       end
 
@@ -163,7 +168,8 @@ struct
          | PExists (_, _, A) => raise Frozen "exists not supported"
 
          | PZero => raise Frozen "can't introduce rule for zero!"
-         | PAffirms _ => raise Frozen "can't introduce rule for an affirmation!")
+         | PAffirms _ => raise Frozen "can't introduce rule for an affirmation!"
+         | PReceipt _ => raise Frozen "can't introduce rule for a receipt!")
 
 
   (* should we catch TypeErrors and raise proof errors? *)
@@ -182,6 +188,8 @@ struct
          | (PExists (_, t, A), PExists (_, t', A'))  =>
            (propEquality A A'; TypeCheckLF.exprEquality t t')
          | (PAffirms (t, A), PAffirms (t', A'))  =>
+           (propEquality A A'; TypeCheckLF.exprEquality t t')
+         | (PReceipt (t, A), PReceipt (t', A'))  =>
            (propEquality A A'; TypeCheckLF.exprEquality t t')
          | _ => raise ProofError "props don't match"
       )

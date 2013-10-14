@@ -50,7 +50,9 @@ struct
                     convertProp (b :: G) A)
 
          | PAffirms (k, A) =>
-           PAffirms (lfconvert k, convert A))
+           PAffirms (lfconvert k, convert A)
+         | PReceipt (k, A) =>
+           PReceipt (lfconvert k, convert A))
       end
 
   fun convertProof G proof =

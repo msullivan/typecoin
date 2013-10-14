@@ -182,6 +182,8 @@ struct
   type atom = LF.exp
   (* principals are LF expressions with type "$.principal" *)
   type principal = LF.exp
+  (* addresses are LF expressions with type "$.address" *)
+  type address = LF.exp
 
   type const = Const.const
   type var = Variable.var
@@ -199,6 +201,10 @@ struct
                 | PExists of LF.binding * LF.exp * prop
 
                 | PAffirms of principal * prop
+                (* receipts don't have any rules; they are introduced by
+                 * typecoin things *)
+                | PReceipt of address * prop
+
 
   datatype idx = L | R
 
