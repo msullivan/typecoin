@@ -112,14 +112,21 @@ struct
   (***********************************)
 
 
+  val i = c_app "i" []
   val logic_test_lf_part = FromNamed.convertSg
-      [(T, "A", EProp), (T, "B", EProp), (T, "C", EProp)]
+      [(T, "A", EProp), (T, "B", EProp), (T, "C", EProp),
+       (T, "i", EType),
+       (T, "P", i --> EProp), (T, "Q", i --> EProp), (T, "R", i --> EProp)]
+
   val A = PAtom (c_app "A" [])
   val B = PAtom (c_app "B" [])
   val C = PAtom (c_app "C" [])
+  fun P x = PAtom (c_app "P" [x])
+  fun Q x = PAtom (c_app "Q" [x])
+  fun S x = PAtom (c_app "S" [x])
 
-  val [x, y, z, w, x1, y1, z1, w1, x2, y2, z2, w2, z1', z2'] =
-      map MVar ["x", "y", "z", "w", "x1", "y1", "z1", "w1", "x2", "y2", "z2", "w2", "z1'", "z2'"]
+  val [x, y, z, z', w, x1, y1, z1, w1, x2, y2, z2, w2, z1', z2'] =
+      map MVar ["x", "y", "z", "z'", "w", "x1", "y1", "z1", "w1", "x2", "y2", "z2", "w2", "z1'", "z2'"]
 
 
   (* prove A x B -o B x A *)
@@ -203,6 +210,41 @@ struct
                "x", MTensor (z1, x),
                "y", MAbort (y, PTensor (A, B), ["z1"]))))
 
+
+  (* prove ((?x:i. P(x)) -o C) => (!x:i. P(x) -o C) *)
+  val qcurry = FromNamed.convertProof []
+      (MLam ("z", PLolli (PExists ("n", i, P n), C),
+        MForallLam ("m", i,
+         MLam ("y", P m,
+          MApp (z,
+                MPack (m, y, PExists ("n", i, P n)))))))
+
+
+  (* prove !(!x:t. A(x) & B(x)) -o (!x:t. A(x)) & (!x:t. B(x)) *)
+  (* meh, later. *)
+
+
+  (* prove (?x:t. P(x) & Q(x)) -o (?x:t. P(x)) & (?x:t. Q(x)) *)
+  val distrib_ex_and_1 = FromNamed.convertProof []
+      (MLam ("z", PExists ("n", i, PWith (P n, Q n)),
+        MUnpack (z, "n", "y",
+         MWith (
+          MPack (n, MPi (L, y), PExists ("n", i, P n)),
+          MPack (n, MPi (R, y), PExists ("n", i, Q n))))))
+
+
+
+  (* fail to prove !((?x:t. !P(x)) & (?x:t. !Q(x))) -o (?x:t. P(x) & Q(x)) *)
+  val distrib_ex_and_2 = FromNamed.convertProof []
+      (MLam ("z", PBang (PWith (PExists ("n", i, PBang (P n)), PExists ("n", i, PBang (Q n)))),
+        MBangLet (z, "z'",
+         MUnpack (MPi (L, z'), "n", "z1",
+         MUnpack (MPi (R, z'), "m", "z2",
+         MBangLet (z1, "z1'",
+         MBangLet (z2, "z2'",
+          MPack (n,
+                 MWith (z1', z2'),
+                 PExists ("n", i, PWith (P n, Q n))))))))))
 
 
   fun println s = print (s ^ "\n")

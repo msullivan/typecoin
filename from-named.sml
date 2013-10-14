@@ -53,6 +53,34 @@ struct
            PAffirms (lfconvert k, convert A))
       end
 
+  fun convertProof G proof =
+      let val convert = convertProof G
+          val lfconvert = convertExp G
+      in
+      (case proof of
+           MRule c => MRule c
+         | MVar v => MVar v
+         | MBang M => MBang (convert M)
+         | MBangLet (M1, v, M2) => MBangLet (convert M1, v, convert M2)
+         | MLam (v, A, M) => MLam (v, convertProp G A, convert M)
+         | MApp (M1, M2) => MApp (convert M1, convert M2)
+         | MTensor (M1, M2) => MTensor (convert M1, convert M2)
+         | MTensorLet (M1, v1, v2, M2) => MTensorLet (convert M1, v1, v2, convert M2)
+         | MWith (M1, M2) => MWith (convert M1, convert M2)
+         | MPi (i, M) => MPi (i, convert M)
+         | MInj (i, M, A) => MInj (i, convert M, convertProp G A)
+         | MCase (M, v1, M1, v2, M2) => MCase (convert M, v1, convert M1, v2, convert M2)
+         | MOne => MOne
+         | MOneLet (M1, M2) => MOneLet (convert M1, convert M2)
+         | MAbort (M, A, vs) => MAbort (convert M, convertProp G A, vs)
+         | MForallLam (x, t, M) => MForallLam (x, lfconvert t, convertProof (x::G) M)
+         | MForallApp (M, t) => MForallApp (convert M, lfconvert t)
+         | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)
+         | MUnpack (M1, x, v, M2) => MUnpack (convert M1, x, v, convertProof (x::G) M2)
+      )
+      end
+
+
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
 
