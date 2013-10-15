@@ -41,6 +41,7 @@ struct
          | POplus (A, B) => POplus (convert A, convert B)
          | POne => POne
          | PZero => PZero
+         | PTop => PTop
 
          | PForall (b, t, A) =>
            PForall (b, lfconvert t,
@@ -75,6 +76,7 @@ struct
          | MOne => MOne
          | MOneLet (M1, M2) => MOneLet (convert M1, convert M2)
          | MAbort (M, A, vs) => MAbort (convert M, convertProp G A, vs)
+         | MTop vs => MTop vs
          | MForallLam (x, t, M) => MForallLam (x, lfconvert t, convertProof (x::G) M)
          | MForallApp (M, t) => MForallApp (convert M, lfconvert t)
          | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)

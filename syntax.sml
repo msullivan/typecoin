@@ -107,6 +107,7 @@ struct
                 | POplus of prop * prop
                 | POne
                 | PZero
+                | PTop
 
                 | PForall of LF.binding * LF.exp * prop
                 | PExists of LF.binding * LF.exp * prop
@@ -136,6 +137,7 @@ struct
 
                  (* annotated with what parts of the context are consumed. *)
                  | MAbort of proof * prop * var list
+                 | MTop of var list
 
                  | MForallLam of LF.binding * LF.exp * proof
                  | MForallApp of proof * LF.exp

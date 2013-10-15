@@ -182,6 +182,13 @@ struct
           MApp (z,
                 MPack (m, y, PExists ("n", i, P n)))))))
 
+  (* prove A -o B -o T *)
+  val top_thing =
+      MLam ("y", A,
+       MLam ("z", B,
+        MTop ["y", "z"]))
+
+
 
   (* prove !(!x:t. A(x) & B(x)) -o (!x:t. A(x)) & (!x:t. B(x)) *)
   (* meh, later. *)

@@ -42,6 +42,7 @@ struct
          | POplus (A, B) => POplus (subst A, subst B)
          | POne => POne
          | PZero => PZero
+         | PTop => PTop
 
          | PForall (b, t, A) =>
            PForall (b, lfsubst t,
@@ -130,6 +131,7 @@ struct
          | POplus (A1, A2) => (check A1; check A2)
          | POne => ()
          | PZero => ()
+         | PTop => ()
 
          | PForall (b, t, A) =>
            (checkLF t LF.EType;
@@ -164,6 +166,7 @@ struct
          (* Not totally sure about whether we want to permit these. *)
          | POplus (A, B) => raise Frozen "oplus not supported"
          | POne => raise Frozen "one is silly"
+         | PTop => raise Frozen "top is silly"
          | PExists (_, _, A) => raise Frozen "exists not supported"
 
          | PZero => raise Frozen "can't introduce rule for zero!"
@@ -318,6 +321,10 @@ struct
                val (A, res'') = checkProof (ctx, res') M
                val () = propEquality A PZero
            in (C, res'') end
+         | MTop consumed =>
+           let val res' = foldl (fn (v, res') => consumeResource res' v) res consumed
+           in (PTop, res') end
+
 
          | MForallLam (b, t, M) =>
            let val () = checkLF t LF.EType
