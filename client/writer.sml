@@ -3,57 +3,56 @@ structure Writer :> WRITER =
    struct
 
       structure B = Bytestring
+      structure O = Output
 
       exception InvalidData
 
-      type writer = B.string list -> B.string list
+      type writer = B.string O.output
 
-      fun null acc = acc
+      val null = O.nothing
+      val seq = O.seq
 
-      fun seq wr1 wr2 acc = wr2 (wr1 acc)
+      fun seql l =
+         List.foldl (fn (wr, acc) => seq acc wr) null l
 
-      fun seql l acc =
-         List.foldl (fn (wr, acc) => wr acc) acc l
-
-      fun repeat n wr acc =
+      fun repeat n wr =
          let
             fun loop i acc =
                if i = 0 then
                   acc
                else
-                  loop (i-1) (wr acc)
+                  loop (i-1) (seq acc wr)
          in
-            loop n acc
+            loop n null
          end
 
-      fun list f l acc =
-         List.foldl (fn (x, acc') => f x acc') acc l
+      fun list f l =
+         List.foldl (fn (x, acc) => seq acc (f x)) null l
          
 
-      fun byte w acc =
-         B.str w :: acc
+      fun byte w = O.output (B.str w)
 
-      fun word16B w acc =
+      fun word16B w =
          if w > 0wxffff then
             raise InvalidData
          else
-            B.substring (ConvertWord.wordToBytesB w, 2, 2) :: acc
+            O.output (B.substring (ConvertWord.wordToBytesB w, 2, 2))
 
-      fun word16L w acc =
+      fun word16L w =
          if w > 0wxffff then
             raise InvalidData
          else
-            B.substring (ConvertWord.wordToBytesL w, 0, 2) :: acc
+            O.output (B.substring (ConvertWord.wordToBytesL w, 0, 2))
 
-      fun word32L w acc =
-         ConvertWord.word32ToBytesL w :: acc
+      fun word32L w =
+         O.output (ConvertWord.word32ToBytesL w)
 
-      fun word64L w acc =
-         ConvertWord.word64ToBytesL w :: acc
+      fun word64L w =
+         O.output (ConvertWord.word64ToBytesL w)
 
-      fun bytes s acc = s :: acc
+      val bytes = O.output
 
-      fun bytesS s acc = Bytesubstring.string s :: acc
+      fun bytesS s = O.output (Bytesubstring.string s)
 
 
 
@@ -92,6 +91,9 @@ structure Writer :> WRITER =
 
 
       fun write wr =
-         B.concat (rev (wr []))
+         B.concat (O.append wr)
+
+      fun writeOutstream outs wr =
+         O.app (fn str => BinIO.output (outs, str)) wr
 
    end

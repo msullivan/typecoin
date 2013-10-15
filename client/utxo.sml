@@ -1,5 +1,5 @@
 
-structure Utxo (* :> UTXO *) =
+structure Utxo (* :> UTXO *)  =
    struct
 
       structure B = Bytestring
@@ -396,5 +396,139 @@ structure Utxo (* :> UTXO *) =
                    (Word64.toLargeInt
                        (ConvertWord.bytesToWord64SL (BS.substring (entry, 32, 8))))
                 end)
+
+
+      (* I/O *)
+
+      structure W = Writer
+      structure R = Reader
+
+      fun >>= (r, f) = R.bind r f
+      fun >> (r, r') = R.seq r r'
+      fun >>> (w, w') = W.seq w w'
+      infixr 3 >>= >> >>>
+
+      fun fileExists filename =
+         (OS.FileSys.fileSize filename; true)
+         handle OS.SysErr _ => false
+              | Overflow => true
+
+      fun must esc f (s, n) =
+         let
+            val str = f (s, n)
+         in
+            if B.size str = n then
+               str
+            else
+               esc ()
+         end
+
+      fun decodeInstream esc ins d =
+         (case d of
+             Decoder.ANSWER x => x
+           | Decoder.INPUT f =>
+                (case BinIO.input1 ins of
+                    NONE =>
+                       esc ()
+                  | SOME b =>
+                       decodeInstream esc ins (f b)))
+
+
+      (* Should find a way to do this better. *)
+      fun int64ToBytesL x = 
+         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
+
+      fun bytesToInt64L str =
+         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
+
+
+      (* The UTXO file has the form:
+         8 bytes: final position, little-endian
+         4 bytes: number of UTXO table entries, little-endian (m)
+         ? bytes: m UTXO table entries
+
+         A UTXO table entry looks like:
+         ? byte: varint specifying the size of the entry (n, which is at least 41)
+         n bytes: the entry
+
+         This assumes that no entry is ever larger than 255 bytes.  That would be 1720 outputs.
+      *)
       
+      fun writeTable finalpos =
+         let
+            val () = Log.long (fn () => "Writing UTXO table")
+
+            val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile ^ ".new")
+            val path' = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
+            val outs = BinIO.openOut path
+         in
+            BinIO.output (outs, int64ToBytesL finalpos);
+            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (T.size theTable)));
+            T.app (fn entry => W.writeOutstream outs (W.bytesVar entry)) theTable;
+            BinIO.closeOut outs;
+            OS.FileSys.rename {old=path, new=path'};
+            Log.long (fn () => "UTXO table written")
+         end
+         handle OS.SysErr _ => Log.long (fn () => "Error writing index")
+
+
+      exception ReadTable
+      fun readTable finalpos =
+         let
+            val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
+            fun esc () = raise ReadTable
+         in
+            if fileExists path then
+               let
+                  val () = Log.long (fn () => "Loading UTXO table")
+                  val ins = BinIO.openIn path
+               in
+                  let
+                     val finalpos' = bytesToInt64L (must esc BinIO.inputN (ins, 8))
+                     val () =
+                        if finalpos = finalpos' then
+                           ()
+                        else
+                           (
+                           Log.long (fn () => "UTXO table is inconsistent with index");
+                           raise ReadTable
+                           )
+
+                     val entries = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
+
+                     fun loop i =
+                        if i >= entries then
+                           ()
+                        else
+                           let
+                              val sz = decodeInstream esc ins Decoder.varint
+
+                              val () =
+                                 if sz < 41 then
+                                    raise ReadTable
+                                 else
+                                    ()
+
+                              val str = must esc BinIO.inputN (ins, sz)
+                           in
+                              T.insert theTable str;
+                              loop (i+1)
+                           end
+                  in
+                     loop 0;
+                     Log.long (fn () => "Finished loading UTXO table");
+                     true
+                  end
+                  handle ReadTable =>
+                     let in
+                        BinIO.closeIn ins;
+                        Log.long (fn () => "Failed to load UTXO table");
+                        T.reset theTable Constants.utxoTableSize;
+                        false
+                      end
+               end
+            else
+               false
+         end
+
    end

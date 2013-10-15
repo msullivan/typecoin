@@ -34,4 +34,10 @@ signature UTXO =
       *)
       val lookup : Transaction.coord -> pos
 
+      (* The input is the position in the blockchain record, up to which the table accounts for.
+         It's included in the table so that we can make sure it is consistent with the index.
+      *)
+      val writeTable : Int64.int -> unit  
+      val readTable : Int64.int -> bool  (* true if success *)
+
    end

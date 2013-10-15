@@ -4,9 +4,10 @@ structure Reader : READER =
 
       structure B = Bytestring
       structure BS = Bytesubstring
+      structure C = BytesubstringCostring
 
       structure Parsing = ParsingFun (type token = Word8.word
-                                      structure Streamable = BytesubstringMonoStreamable)
+                                      structure Streamable = C.Streamable)
 
       open Parsing
 
@@ -14,58 +15,63 @@ structure Reader : READER =
 
 
       fun byte str =
-         (case BS.getc str of
+         (case C.getc str of
              NONE =>
                 raise SyntaxError
            | SOME (b, str') =>
                 (b, str'))
 
       fun word16B str =
-         if BS.size str < 2 then
-            raise SyntaxError
-         else
+         if C.minSize (str, 2) then
             let
                val w = 
-                  Word.orb (Word.<< (ConvertWord.word8ToWord (BS.sub (str, 0)), 0w8),
-                            ConvertWord.word8ToWord (BS.sub (str, 1)))
+                  Word.orb (Word.<< (ConvertWord.word8ToWord (C.sub (str, 0)), 0w8),
+                            ConvertWord.word8ToWord (C.sub (str, 1)))
             in
-               (w, BS.slice (str, 2, NONE))
+               (w, C.suffix (str, 2))
             end
+         else
+            raise SyntaxError
 
       fun word16L str =
-         if BS.size str < 2 then
-            raise SyntaxError
-         else
+         if C.minSize (str, 2) then
             let
                val w = 
-                  Word.orb (Word.<< (ConvertWord.word8ToWord (BS.sub (str, 1)), 0w8),
-                            ConvertWord.word8ToWord (BS.sub (str, 0)))
+                  Word.orb (Word.<< (ConvertWord.word8ToWord (C.sub (str, 1)), 0w8),
+                            ConvertWord.word8ToWord (C.sub (str, 0)))
             in
-               (w, BS.slice (str, 2, NONE))
+               (w, C.suffix (str, 2))
             end
-
-      fun word32L str =
-         if BS.size str < 4 then
-            raise SyntaxError
          else
-            (ConvertWord.bytesToWord32SL (BS.slice (str, 0, SOME 4)),
-             BS.slice (str, 4, NONE))
-
-      fun word64L str =
-         if BS.size str < 8 then
             raise SyntaxError
-         else
-            (ConvertWord.bytesToWord64SL (BS.slice (str, 0, SOME 8)),
-             BS.slice (str, 8, NONE))
 
-      fun bytesS n str =
-         if BS.size str < n then
+      fun word32L cos =
+         if C.minSize (cos, 4) then
+            let
+               val (str, cos') = C.splitAt (cos, 4)
+            in
+               (ConvertWord.bytesToWord32SL str, cos')
+            end
+         else
             raise SyntaxError
-         else
-            (BS.slice (str, 0, SOME n),
-             BS.slice (str, n, NONE))
 
-      fun all str = (str, BS.null)
+      fun word64L cos =
+         if C.minSize (cos, 8) then
+            let
+               val (str, cos') = C.splitAt (cos, 8)
+            in
+               (ConvertWord.bytesToWord64SL str, cos')
+            end
+         else
+            raise SyntaxError
+
+      fun bytesS n cos =
+         if C.minSize (cos, n) then
+            C.splitAt (cos, n)
+         else
+            raise SyntaxError
+
+      fun all cos = (C.all cos, C.null)
 
 
       fun bytes n str =
@@ -75,24 +81,15 @@ structure Reader : READER =
             (BS.string b, str')
          end
 
-      val varint =
-         bind byte
-         (fn w =>
-             if w < 0wxfd then
-                return (Word8.toInt w)
-             else if w = 0wxfd then
-                wrap Word.toInt word16L
-             else if w = 0wxfe then
-                bind word32L
-                (fn w' =>
-                    if w' > 0wx3fffffff then
-                       (* We allow sizes only up to 2^30. *)
-                       raise SyntaxError
-                    else
-                       return (Word32.toInt w'))
-             else
-                raise SyntaxError)
-
+      fun fromDecoder d =
+         (case d of
+             Decoder.ANSWER x => return x
+           | Decoder.INPUT f =>
+                bind byte
+                (fn b => fromDecoder (f b)))
+                
+      val varint = fromDecoder Decoder.varint
+         
       val bytesVar = bind varint bytes
 
       fun varlist r =
@@ -101,7 +98,11 @@ structure Reader : READER =
 
 
       fun readS f str =
-         f str
+         let
+            val (x, cos) = f (C.full str)
+         in
+            (x, C.all cos)
+         end
          (* Make sure we don't stop the program over an integer out of range. *)
          handle Overflow => raise SyntaxError
 
@@ -109,13 +110,14 @@ structure Reader : READER =
 
       fun readfullS f str =
          let
-            val (x, str') = readS f str
+            val (x, cos) = f (C.full str)
          in
-            if BS.isEmpty str' then
+            if C.maxSize (cos, 0) then
                x
             else
                raise SyntaxError
          end
+         handle Overflow => raise SyntaxError
 
       fun readfull f str = readfullS f (BS.full str)
 

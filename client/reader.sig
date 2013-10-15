@@ -4,9 +4,11 @@ signature READER =
 
       include PARSING
               where type token = Word8.word
-              where type Streamable.t = Bytesubstring.substring
+              where type Streamable.t = BytesubstringCostring.costring
 
-      type 'a reader = 'a parser
+      type 'a reader = BytesubstringCostring.costring -> 'a * BytesubstringCostring.costring
+
+      val fromDecoder : 'a Decoder.decoder -> 'a reader
 
       val varint : int reader
       val byte : Word8.word reader

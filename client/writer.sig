@@ -4,7 +4,7 @@ signature WRITER =
 
       exception InvalidData
 
-      type writer
+      type writer = Bytestring.string Output.output
 
       val null : writer
       val seq : writer -> writer -> writer
@@ -27,5 +27,6 @@ signature WRITER =
       val varlist : ('a -> writer) -> 'a list -> writer
 
       val write : writer -> Bytestring.string
+      val writeOutstream : BinIO.outstream -> writer -> unit
 
    end

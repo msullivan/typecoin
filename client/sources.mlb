@@ -10,6 +10,8 @@
         log.sml
         base58.sig
         base58.sml
+        decoder.sig
+        decoder.sml
         reader.sig
         reader.sml
         writer.sig

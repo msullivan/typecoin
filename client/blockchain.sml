@@ -300,9 +300,7 @@ structure Blockchain :> BLOCKCHAIN =
                      val diff = Verify.decodeDifficulty (inputDiffBits pos)
 
                      (* Undo everything but the table entry, which we can't do until the recursion returns. *)
-(*
                      val () = Utxo.undo (inputData pos)
-*)
                      val () = lastblock := num - 1
                      val () = totaldiff := cumdiff - diff
                      (* Reducing the total difficulty could mean that things that we've removed from
@@ -428,9 +426,7 @@ structure Blockchain :> BLOCKCHAIN =
                          Array.update (thePrimaryFork, num, pos);
                          lastblock := num;
                          totaldiff := cumdiff;
-(*
-                         Utxo.process false (pos+blockOffsetInRecord) blockstr;
-*)
+                         Utxo.process (verstat = OK) (pos+blockOffsetInRecord) blockstr;
                          checkDubiousFront ();
                          
                          (case verstat of
@@ -589,9 +585,7 @@ structure Blockchain :> BLOCKCHAIN =
                                T.insert theTable hash (ref (Nil num));
                                lastblock := num;
                                totaldiff := diff;
-(*
-                               Utxo.process false (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
-*)
+                               Utxo.process (verstat = OK) (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
                                checkDubiousFront ();
    
                                if dubious then
@@ -657,6 +651,19 @@ structure Blockchain :> BLOCKCHAIN =
          end
 
 
+      fun reset () =
+         let in
+            lastblock := 0;
+            totaldiff := 0;
+            T.reset theTable Constants.blockTableSize;
+            T.insert theTable Chain.genesisHash (ref (Nil 0));
+            A.update (thePrimaryFork, 0, 0);
+            Q.reset theDubiousQueue;
+            verification := false;
+            Utxo.reset ()
+         end
+
+      
       val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
       exception LoadFile of pos
@@ -689,10 +696,18 @@ structure Blockchain :> BLOCKCHAIN =
 
 
 
+      (* Should find a way to do this better. *)
+      fun int64ToBytesL x = 
+         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
+
+      fun bytesToInt64L str =
+         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
+
+
       (* Index format:
 
-         8   bytes: final position
-         4   bytes: number of blocks (n)
+         8   bytes: final position, little-endian
+         4   bytes: number of blocks, little-endian (n)
          8n  bytes: thePrimaryFork contents
          36m bytes: theTable contents  (m=number of Nil entries in theTable)
 
@@ -701,13 +716,6 @@ structure Blockchain :> BLOCKCHAIN =
          4   bytes: block number
       *)
 
-
-      (* Should find a way to do this better. *)
-      fun int64ToBytesL x = 
-         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
-
-      fun bytesToInt64L str =
-         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
 
       fun writeIndex () =
          if !theOutPos >= !lastIndexPos + Int64.fromInt Constants.indexThreshold then
@@ -750,7 +758,8 @@ structure Blockchain :> BLOCKCHAIN =
                BinIO.closeOut outs;
                OS.FileSys.rename {old=path, new=path'};
                lastIndexPos := !theOutPos;
-               Log.long (fn () => "Index written")
+               Log.long (fn () => "Index written");
+               Utxo.writeTable (!theOutPos)
             end
             handle OS.SysErr _ => Log.long (fn () => "Error writing index")
          else
@@ -767,6 +776,7 @@ structure Blockchain :> BLOCKCHAIN =
          in
             if fileExists path then
                let
+                  val () = Log.long (fn () => "Loading index")
                   val ins = BinIO.openIn path
                in
                   let
@@ -797,20 +807,25 @@ structure Blockchain :> BLOCKCHAIN =
                      (* We don't bother setting totaldiff. It's only the relative amounts that ever matter,
                         so we can just start it at zero.
                      *)
-                     Log.long (fn () => "Loading index");
                      lastblock := blocks;
                      readPrimaryFork 0;
                      readTable ();
                      BinIO.closeIn ins;
                      Log.long (fn () => "Index load complete at block "^ Int.toString blocks);
-                     SOME finalpos
+
+                     if Utxo.readTable finalpos then
+                        SOME finalpos
+                     else
+                        let in
+                           reset ();
+                           NONE
+                        end
                   end
                   handle ReadIndex =>
                      let in
                         BinIO.closeIn ins;
                         Log.long (fn () => "Failed to load index");
-                        lastblock := 0;
-                        T.reset theTable Constants.blockTableSize;
+                        reset ();
                         NONE
                      end
                end
@@ -818,19 +833,13 @@ structure Blockchain :> BLOCKCHAIN =
                NONE
          end
 
-      
+
       fun initialize () =
          let
             val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
          in
-            lastblock := 0;
-            totaldiff := 0;
-            T.reset theTable Constants.blockTableSize;
-            T.insert theTable Chain.genesisHash (ref (Nil 0));
-            A.update (thePrimaryFork, 0, 0);
-            Q.reset theDubiousQueue;
-            verification := false;
-   
+            reset ();
+
             if MIO.exists path then
                (* Load the blockchain record:
                   We need two instreams: one for the load (instream), the other for random access
@@ -853,14 +862,18 @@ structure Blockchain :> BLOCKCHAIN =
                             end
                        | NONE =>
                             (* Couldn't load an index, start from the beginning. *)
-                            (* Verify that the first record looks right. *)
-                            if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
-                               Pos.fromInt (B.size genesisRecord)
-                            else
-                               let in
-                                  MIO.closeIn instream;
-                                  raise BlockchainIO
-                               end)
+                            let in
+                               MIO.SeekIO.seekIn (instream, 0);
+
+                               (* Verify that the first record looks right. *)
+                               if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
+                                  Pos.fromInt (B.size genesisRecord)
+                               else
+                                  let in
+                                     MIO.closeIn instream;
+                                     raise BlockchainIO
+                                  end
+                            end)
 
                   val () = lastIndexPos := startpos
 

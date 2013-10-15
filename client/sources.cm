@@ -17,6 +17,8 @@ is
         commo.sig
         commo.sml
         constants.sml
+        decoder.sig
+        decoder.sml
         eblock.sig
         eblock.sml
         log.sig

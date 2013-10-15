@@ -10,6 +10,7 @@ signature CHAIN =
       val seeds : string list
       val blockchainFile : string
       val indexFile : string
+      val utxoFile : string
       val alertKey : ECDSAp.pubkey
 
    end
