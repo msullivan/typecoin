@@ -3,6 +3,7 @@ Group is
         $smlnj-tdp/back-trace.cm
 
         syntax.sml
+	pretty.sml
         lf-check.sml
         logic-check.sml
         from-named.sml
