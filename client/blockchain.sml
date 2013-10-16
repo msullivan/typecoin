@@ -426,7 +426,13 @@ structure Blockchain :> BLOCKCHAIN =
                          Array.update (thePrimaryFork, num, pos);
                          lastblock := num;
                          totaldiff := cumdiff;
-                         Utxo.process (verstat = OK) (pos+blockOffsetInRecord) blockstr;
+
+                         (* It's tempting to say that the block passes verification if verstat=OK.
+                            That's not right, because a block that fails verification (ie, a dubious
+                            block) but is later accepted is marked OK.
+                         *)
+                         Utxo.process false (pos+blockOffsetInRecord) blockstr;
+
                          checkDubiousFront ();
                          
                          (case verstat of

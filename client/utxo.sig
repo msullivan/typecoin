@@ -34,6 +34,8 @@ signature UTXO =
       *)
       val lookup : Transaction.coord -> pos
 
+      val size : unit -> int
+
       (* The input is the position in the blockchain record, up to which the table accounts for.
          It's included in the table so that we can make sure it is consistent with the index.
       *)

@@ -1,5 +1,5 @@
 
-structure Utxo (* :> UTXO *)  =
+structure Utxo :> UTXO =
    struct
 
       structure B = Bytestring
@@ -15,6 +15,23 @@ structure Utxo (* :> UTXO *)  =
                 else
                    ())
 
+
+      fun repeat n (f : unit -> unit) =
+         if n <= 0 then
+            ()
+         else
+            (f (); repeat (n-1) f)
+
+      fun repeatlist n f =
+         let
+            fun loop n acc =
+               if n <= 0 then
+                  acc
+               else
+                  loop (n-1) (f () :: acc)
+         in
+            loop n []
+         end
 
       fun replicate x n l =
          if n = 0 then
@@ -93,7 +110,10 @@ structure Utxo (* :> UTXO *)  =
          the work to undo can be determined from the block being undone.
 
          A TrailGeneral trail contains a script to undo the entire block.  This is general
-         (and simple) but ties up a lot of space.
+         (and simple) but ties up more space.
+
+         (Is it really worth having TrailValid?  It saves some space, but it is worth the
+         complexity?)
       *)
 
       datatype trail_elem =
@@ -103,6 +123,8 @@ structure Utxo (* :> UTXO *)  =
       datatype trail =
          TrailValid of B.string list
        | TrailGeneral of trail_elem list
+
+      (* Trails appear in the undoQueue with the most recent at the front. *)
 
       val theTable = T.table Constants.utxoTableSize
       val undoCount = ref 0
@@ -397,63 +419,156 @@ structure Utxo (* :> UTXO *)  =
                        (ConvertWord.bytesToWord64SL (BS.substring (entry, 32, 8))))
                 end)
 
-
-      (* I/O *)
-
-      structure W = Writer
-      structure R = Reader
-
-      fun >>= (r, f) = R.bind r f
-      fun >> (r, r') = R.seq r r'
-      fun >>> (w, w') = W.seq w w'
-      infixr 3 >>= >> >>>
-
-      fun fileExists filename =
-         (OS.FileSys.fileSize filename; true)
-         handle OS.SysErr _ => false
-              | Overflow => true
-
-      fun must esc f (s, n) =
-         let
-            val str = f (s, n)
-         in
-            if B.size str = n then
-               str
-            else
-               esc ()
-         end
-
-      fun decodeInstream esc ins d =
-         (case d of
-             Decoder.ANSWER x => x
-           | Decoder.INPUT f =>
-                (case BinIO.input1 ins of
-                    NONE =>
-                       esc ()
-                  | SOME b =>
-                       decodeInstream esc ins (f b)))
+      fun size () = T.size theTable
 
 
-      (* Should find a way to do this better. *)
+
+      (* Conversions *)
+
+      (* Should find a way to do 64-bit conversions this better. *)
       fun int64ToBytesL x = 
          ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
 
       fun bytesToInt64L str =
          Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
 
+      fun bytesToWord16L str =
+         Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 1)), 0w8),
+                   ConvertWord.word8ToWord (B.sub (str, 0)))
+
+      fun idequeExtract q =
+         let
+            fun loop acc =
+               if IDeque.isEmpty q then
+                  acc
+               else
+                  let
+                     val x = IDeque.removeBack q
+                  in
+                     loop (x :: acc)
+                  end
+
+            val l = loop []
+         in
+            (* put elements back in *)
+            List.app (IDeque.insertBack q) l;
+            l
+         end
+
+
+      (* I/O *)
+
+      fun fileExists filename =
+         (OS.FileSys.fileSize filename; true)
+         handle OS.SysErr _ => false
+              | Overflow => true
+
+      exception ReadTable
+
+      fun inputN ins n =
+         let
+            val str = BinIO.inputN (ins, n)
+         in
+            if B.size str = n then
+               str
+            else
+               raise ReadTable
+         end
+
+      fun input1 ins =
+         (case BinIO.input1 ins of
+             NONE =>
+                raise ReadTable
+           | SOME b =>
+                b)
+
+      fun inputWord16L ins = bytesToWord16L (inputN ins 2)
+
+      fun inputWord32L ins = ConvertWord.bytesToWord32L (inputN ins 4)
+
+      fun inputInt32L ins =
+         Word32.toInt (inputWord32L ins)
+         handle Overflow => raise ReadTable
+
+      structure Varint =
+         VarintFun
+         (struct
+             type 'a m = BinIO.instream -> 'a
+             exception SyntaxError = ReadTable
+             fun return x ins = x
+             fun seq f g ins = (f ins; g ins)
+             fun bind f g ins = g (f ins) ins
+             val byte = input1
+             val word16L = inputWord16L
+             val word32L = inputWord32L
+          end)
+
+      val inputVarint = Varint.varint
+
+      fun inputEntry ins =
+         let
+            val sz = inputVarint ins
+
+            val () =
+               if sz < 41 then
+                  raise ReadTable
+               else
+                  ()
+         in
+            inputN ins sz
+         end
+
+      fun inputBranch ins l =
+         let
+            val b = input1 ins
+
+            fun loop l =
+               (case l of
+                   [] =>
+                      raise ReadTable
+                 | (b', f) :: rest =>
+                      if b = b' then
+                         f ()
+                      else
+                         loop rest)
+         in
+            loop l
+         end
+
+      fun outputInt32L (outs, x) =
+         BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt x))
+
+      fun outputBytesVar (outs, str) = Writer.writeOutstream outs (Writer.bytesVar str)
+      
 
       (* The UTXO file has the form:
          8 bytes: final position, little-endian
          4 bytes: number of UTXO table entries, little-endian (m)
          ? bytes: m UTXO table entries
+         1 byte: number of trails (n)
+         ? bytes: n trails, starting with the most recent
 
          A UTXO table entry looks like:
-         ? byte: varint specifying the size of the entry (n, which is at least 41)
+         ? bytes: varint specifying the size of the entry (n, which is at least 41)
          n bytes: the entry
+         (This assumes that no entry is ever larger than 255 bytes.  That would be 1720 outputs.)
 
-         This assumes that no entry is ever larger than 255 bytes.  That would be 1720 outputs.
+         A trail looks like:
+         1 byte: trail type (1=TrailValid, 2=TrailGeneral)
+         4 bytes: number of trail elements, little-endian (k)
+         ? bytes: k entries
+
+         A TrailValid trail entry looks like:
+         ? bytes: varint specifying the size of the entry (l)
+         l bytes: the entry
+
+         A TrailGeneral trail entry looks like:
+         1 byte: trail element type (1=TrailRemove, 2=TrailInsert)
+         ? bytes: varint specifying the size of the entry (l)
+         l bytes: the entry
       *)
-      
+
+
       fun writeTable finalpos =
          let
             val () = Log.long (fn () => "Writing UTXO table")
@@ -461,10 +576,38 @@ structure Utxo (* :> UTXO *)  =
             val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile ^ ".new")
             val path' = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
             val outs = BinIO.openOut path
+
+            fun writeTrail tr =
+               (case tr of
+                   TrailValid l =>
+                      let in
+                         BinIO.output1 (outs, 0w1);
+                         outputInt32L (outs, length l);
+                         List.app (fn entry => outputBytesVar (outs, entry)) l
+                      end
+                 | TrailGeneral l =>
+                      let in
+                         BinIO.output1 (outs, 0w2);
+                         outputInt32L (outs, length l);
+                         List.app 
+                            (fn TrailRemove str =>
+                                   let in
+                                      BinIO.output1 (outs, 0w1);
+                                      outputBytesVar (outs, str)
+                                   end
+                              | TrailInsert str =>
+                                   let in
+                                      BinIO.output1 (outs, 0w2);
+                                      outputBytesVar (outs, str)
+                                   end)
+                            l
+                      end)
          in
             BinIO.output (outs, int64ToBytesL finalpos);
-            BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt (T.size theTable)));
-            T.app (fn entry => W.writeOutstream outs (W.bytesVar entry)) theTable;
+            outputInt32L (outs, T.size theTable);
+            T.app (fn entry => outputBytesVar (outs, entry)) theTable;
+            BinIO.output1 (outs, Word8.fromInt (!undoCount));
+            List.app writeTrail (idequeExtract undoQueue);
             BinIO.closeOut outs;
             OS.FileSys.rename {old=path, new=path'};
             Log.long (fn () => "UTXO table written")
@@ -472,19 +615,19 @@ structure Utxo (* :> UTXO *)  =
          handle OS.SysErr _ => Log.long (fn () => "Error writing index")
 
 
-      exception ReadTable
       fun readTable finalpos =
          let
             val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
-            fun esc () = raise ReadTable
          in
             if fileExists path then
                let
                   val () = Log.long (fn () => "Loading UTXO table")
+                  val () = reset ()
                   val ins = BinIO.openIn path
+
                in
                   let
-                     val finalpos' = bytesToInt64L (must esc BinIO.inputN (ins, 8))
+                     val finalpos' = bytesToInt64L (inputN ins 8)
                      val () =
                         if finalpos = finalpos' then
                            ()
@@ -494,28 +637,45 @@ structure Utxo (* :> UTXO *)  =
                            raise ReadTable
                            )
 
-                     val entries = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
+                     val entries = inputInt32L ins
 
-                     fun loop i =
-                        if i >= entries then
-                           ()
-                        else
-                           let
-                              val sz = decodeInstream esc ins Decoder.varint
+                     val () =
+                        repeat entries
+                        (fn () => T.insert theTable (inputEntry ins))
 
-                              val () =
-                                 if sz < 41 then
-                                    raise ReadTable
-                                 else
-                                    ()
+                     val undoEntries =
+                        Int.min (Word8.toInt (input1 ins),
+                                 Constants.maxUndoRecords)
 
-                              val str = must esc BinIO.inputN (ins, sz)
-                           in
-                              T.insert theTable str;
-                              loop (i+1)
-                           end
+                     val () =
+                        repeat undoEntries
+                        (fn () =>
+                            IDeque.insertBack undoQueue
+                            (inputBranch ins
+                             [(0w1, (fn () =>
+                                        (* read TrailValid *)
+                                        let
+                                           val k = inputInt32L ins
+                                        in
+                                           TrailValid
+                                           (rev (repeatlist k (fn () => inputEntry ins)))
+                                        end)),
+                              (0w2, (fn () =>
+                                        (* read TrailGeneral *)
+                                        let
+                                           val k = inputInt32L ins
+                                        in
+                                           TrailGeneral
+                                           (rev (repeatlist k
+                                                 (fn () =>
+                                                     inputBranch ins
+                                                     [(0w1, (fn () => TrailRemove (inputEntry ins))),
+                                                      (0w2, (fn () => TrailInsert (inputEntry ins)))])))
+                                        end))]))
+
+                     val () = undoCount := undoEntries
                   in
-                     loop 0;
+                     BinIO.closeIn ins;
                      Log.long (fn () => "Finished loading UTXO table");
                      true
                   end
@@ -523,12 +683,15 @@ structure Utxo (* :> UTXO *)  =
                      let in
                         BinIO.closeIn ins;
                         Log.long (fn () => "Failed to load UTXO table");
-                        T.reset theTable Constants.utxoTableSize;
+                        reset ();
                         false
                       end
                end
             else
-               false
+               let in
+                  Log.long (fn () => "No UTXO table");
+                  false
+               end
          end
 
    end

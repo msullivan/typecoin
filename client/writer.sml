@@ -9,11 +9,10 @@ structure Writer :> WRITER =
 
       type writer = B.string O.output
 
-      val null = O.nothing
-      val seq = O.seq
+      structure M = MonadUtilFun (structure Monad = OutputMonad (type elem = B.string))
+      open M
 
-      fun seql l =
-         List.foldl (fn (wr, acc) => seq acc wr) null l
+      val null = O.nothing
 
       fun repeat n wr =
          let
@@ -26,9 +25,8 @@ structure Writer :> WRITER =
             loop n null
          end
 
-      fun list f l =
-         List.foldl (fn (x, acc) => seq acc (f x)) null l
-         
+      val list = MonadList.appM
+
 
       fun byte w = O.output (B.str w)
 
@@ -87,7 +85,7 @@ structure Writer :> WRITER =
             bytes s
 
       fun varlist f l =
-         seq (varint (length l)) (list f l)
+         Output.lazy (fn () => bind (varint (length l)) (fn () => list f l))
 
 
       fun write wr =

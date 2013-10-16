@@ -1,4 +1,40 @@
 
+functor VarintFun (M : sig
+                          include MONAD
+                          exception SyntaxError
+                          val byte : Word8.word m
+                          val word16L : Word.word m
+                          val word32L : Word32.word m
+                       end)
+   :>
+   sig
+      val varint : int M.m
+   end
+   =
+   struct
+      open M
+
+      val varint =
+         bind byte
+         (fn w =>
+             if w < 0wxfd then
+                return (Word8.toInt w)
+             else if w = 0wxfd then
+                bind word16L (fn x => return (Word.toInt x))
+             else if w = 0wxfe then
+                bind word32L
+                (fn w' =>
+                    if w' > 0wx3fffffff then
+                       (* We allow sizes only up to 2^30. *)
+                       raise SyntaxError
+                    else
+                       return (Word32.toInt w'))
+             else
+                raise SyntaxError)
+
+   end
+
+
 structure Reader : READER =
    struct
 
@@ -81,14 +117,16 @@ structure Reader : READER =
             (BS.string b, str')
          end
 
-      fun fromDecoder d =
-         (case d of
-             Decoder.ANSWER x => return x
-           | Decoder.INPUT f =>
-                bind byte
-                (fn b => fromDecoder (f b)))
-                
-      val varint = fromDecoder Decoder.varint
+      structure Varint =
+         VarintFun
+         (struct
+             open Parsing
+             val byte = byte
+             val word16L = word16L
+             val word32L = word32L
+          end)
+
+      val varint = Varint.varint
          
       val bytesVar = bind varint bytes
 

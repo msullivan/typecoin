@@ -70,9 +70,6 @@ Libraries
 Address (address.sml)
 An abstraction of internet addresses.
 
-Decoder (decoder.sml)
-Non-branching deserialization combinators.
-
 Log (log.sml)
 Logging operations.
 

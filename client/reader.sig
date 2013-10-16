@@ -8,8 +8,6 @@ signature READER =
 
       type 'a reader = BytesubstringCostring.costring -> 'a * BytesubstringCostring.costring
 
-      val fromDecoder : 'a Decoder.decoder -> 'a reader
-
       val varint : int reader
       val byte : Word8.word reader
       val word16B : Word.word reader

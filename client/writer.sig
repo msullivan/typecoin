@@ -6,11 +6,11 @@ signature WRITER =
 
       type writer = Bytestring.string Output.output
 
+      include MONAD_UTIL where type 'a m = (Bytestring.string, 'a) Output.outputm
+
       val null : writer
-      val seq : writer -> writer -> writer
-      val seql : writer list -> writer
-      val repeat : int -> writer -> writer
       val list : ('a -> writer) -> 'a list -> writer
+      val repeat : int -> writer -> writer
 
       val byte : Word8.word -> writer
       val word16B : Word.word -> writer
