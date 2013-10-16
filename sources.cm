@@ -2,15 +2,17 @@ Group is
         $SMACKAGE/cmlib/v1/cmlib.cm
         $smlnj-tdp/back-trace.cm
 
-        syntax.sml
-	pretty.sml
+        iotype-lib.sml
+        syntax-io.sml
+
+        pretty.sml
         lf-check.sml
         logic-check.sml
         from-named.sml
-	tests.sml
-	test-util.sml
-	typecoin-basis.sml
-	typecoin.sml
+        tests.sml
+        test-util.sml
+        typecoin-basis.sml
+        typecoin.sml
 
         (* stuff copied and modified from tom-lib *)
         layout.sml
