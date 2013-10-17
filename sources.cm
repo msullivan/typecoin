@@ -1,5 +1,5 @@
 Group is
-        $SMACKAGE/cmlib/v1/cmlib.cm
+        $CMLIB/cmlib.cm
         $smlnj-tdp/back-trace.cm
 
         iotype-lib.sml

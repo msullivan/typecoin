@@ -25,8 +25,8 @@ struct
 
   fun checkOutput sg (Output {dest, prop, ...}) =
       let val () = LogicCheck.checkProp sg LogicContext.empty prop
-          val receipt = PReceipt (TypeCoinBasis.address_hash
-                                      (TypeCoinBasis.hashStringToHashObj dest),
+          val lf_hash = TypeCoinBasis.hashBytestringToHashObj dest
+          val receipt = PReceipt (TypeCoinBasis.address_hash lf_hash,
                                   prop)
       in (prop, receipt) end
 

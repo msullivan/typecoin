@@ -41,6 +41,10 @@ struct
   val test_hash_str = "1badd00ddeadbeefcafef00d0123456789abcdef"
   val test_hash = hashStringToHashObj test_hash_str
 
+  (* this is a silly way to implement this *)
+  fun hashBytestringToHashObj bs =
+      hashStringToHashObj (Bytestring.toStringHex bs)
+
   val basis = basis
 
   end

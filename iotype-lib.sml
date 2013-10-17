@@ -25,6 +25,8 @@
 
 
 functor IOIntFun (Integer: INTEGER) = struct
+        type elem = Integer.int
+
 	local
 		fun fixed n =
 			let
@@ -74,6 +76,7 @@ functor IOIntFun (Integer: INTEGER) = struct
 		val {readInt, writeInt} = case Integer.precision of
 			NONE => raise Fail "unsupported"
 			| SOME n => fixed n
+                val (readElem, writeElem) = (readInt, writeInt)
 	end
 end
 
@@ -82,7 +85,50 @@ structure IOInt31 = IOIntFun (Int31)
 structure IOInt32 = IOIntFun (Int32)
 structure IOInt = IOIntFun (Int)
 
+functor IOWordFun (Word: WORD) = struct
+        type elem = Word.word
+
+	local
+		val (bytesPerElem, subVec, update) =
+			if Int.<= (Word.wordSize, 8) then (
+				1
+				, Word8.toLarge o Word8Vector.sub
+				, fn (a, i, w) =>
+					Word8Array.update (a, i, Word8.fromLarge w)
+			) else if Int.<= (Word.wordSize, 16) then (
+				2
+				, PackWord16Little.subVec
+				, PackWord16Little.update
+			) else if Int.<= (Word.wordSize, 32) then (
+				4
+				, PackWord32Little.subVec
+				, PackWord32Little.update
+			) else raise Fail "unsupported word size"
+	in
+		fun readWord p =
+			let
+				val v = BinIO.inputN (p, bytesPerElem)
+			in
+				if Int.< (Word8Vector.length v, bytesPerElem) then NONE
+				else SOME (Word.fromLarge (subVec (v, 0)))
+			end
+		fun writeWord (p, w) =
+			let
+				val a = Word8Array.array (bytesPerElem, 0w0)
+			in
+				update (a, 0, Word.toLarge w)
+				; BinIO.output (p, Word8Array.vector a)
+			end
+                val (readElem, writeElem) = (readWord, writeWord)
+	end
+end
+
+structure IOWord8 = IOWordFun (Word8)
+structure IOWord32 = IOWordFun (Word32)
+structure IOWord = IOWordFun (Word)
+
 structure IOString = struct
+        type elem = string
 	fun writeString (p, x) = (
 		IOInt.writeInt (p, size x)
 		; BinIO.output (p, Byte.stringToBytes x)
@@ -96,6 +142,7 @@ structure IOString = struct
 				if Int.< (Word8Vector.length v, n) then NONE
 				else SOME (Byte.bytesToString v)
 			end
+        val (readElem, writeElem) = (readString, writeString)
 end
 
 structure IOList = struct
@@ -131,6 +178,48 @@ structure IOList = struct
 			end
 end
 
+signature ELEMENT = sig
+	type elem
+	val writeElem: BinIO.outstream * elem -> unit
+	val readElem: BinIO.instream -> elem option
+end
+
+functor IOMonoVector (
+	structure Element: ELEMENT
+	structure Vector: MONO_VECTOR where type elem = Element.elem
+) = struct
+	open Vector
+	val writeElem = Element.writeElem
+	val readElem = Element.readElem
+	fun writeVector (p, v) = (
+		IOInt.writeInt (p, length v)
+		; app (fn x => Element.writeElem (p, x)) v
+	)
+	fun readVector p = case IOInt.readInt p of
+		NONE => NONE
+		| SOME n =>
+			let
+				exception Eof
+			in
+				SOME (tabulate (n, fn _ => case Element.readElem p of
+					NONE => raise Eof
+					| SOME x => x
+				)) handle Eof => NONE
+			end
+        val (readElem, writeElem) = (readVector, writeVector)
+end
+
+structure IOCharVector = struct
+	val readVector = IOString.readString
+	val writeVector = IOString.writeString
+        val (readElem, writeElem) = (readVector, writeVector)
+end
+structure IOWord8Vector = IOMonoVector (
+	structure Element = IOWord8
+	structure Vector = Word8Vector
+)
+
+
 structure IOTypes =
 struct
 
@@ -141,6 +230,7 @@ struct
   val writeString = IOString.writeString
   val writeList = IOList.writeList
   val readList = IOList.readList
-
+  val readWord8Vector = IOWord8Vector.readVector
+  val writeWord8Vector = IOWord8Vector.writeVector
 
 end

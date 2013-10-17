@@ -401,7 +401,7 @@ struct
 
       fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
           PAffirms (TypeCoinBasis.principal_hash
-                        (TypeCoinBasis.hashStringToHashObj principal),
+                        (TypeCoinBasis.hashBytestringToHashObj principal),
                     prop)
 
       (* XXX: I don't like this being here. Where should the crypto go? *)

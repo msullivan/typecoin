@@ -149,9 +149,10 @@ struct
                  | MBind of proof * var * proof
 
   (* ????????????? *)
-  type crypto_sig = string
-  type crypto_address = string
-  type crypto_principal = string
+  type bytestring = Word8Vector.vector
+  type crypto_sig = bytestring
+  type crypto_address = bytestring
+  type crypto_principal = bytestring
 
   type signed_affirmation =
        {principal: crypto_principal,
