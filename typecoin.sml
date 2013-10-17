@@ -16,7 +16,8 @@ struct
     | build_tensor (x::xs) = PTensor (x, build_tensor xs)
 
   fun checkInput tr (Input {source=(source_txn, idx), prop, ...}) =
-      let val source_outputs = TxnDict.lookup tr source_txn
+      let (* XXX: This should deal with nonexistent txns being 1. *)
+          val source_outputs = TxnDict.lookup tr source_txn
           val output_prop = Vector.sub (source_outputs, idx)
           val () = LogicCheck.propEquality prop output_prop
       in prop end
@@ -39,10 +40,27 @@ struct
     | checkLinearSigEntry sg (LSSignedAffirmation affirm) =
       let val prop' = LogicCheck.affirmationToProp affirm
           val () = LogicCheck.checkProp sg LogicContext.empty prop'
-          (* XXX: TODO: crypto checking here or somewhere! *)
+          (* crypto is checked in checkCrypto *)
       in prop' end
 
   fun checkLinearSig sg linear_sg = map (checkLinearSigEntry sg) linear_sg
+
+
+  fun checkCrypto (TxnBody {inputs, persistent_sg, linear_sg, ...}) =
+      let val txnId = TypeCoinCrypto.buildTxnIdentifier inputs
+          fun checkAffirmation affirmation =
+              if TypeCoinCrypto.checkAffirmation txnId affirmation then ()
+              else raise TypeCoinError "affirmation signature failure"
+          fun checkSgEntry (SSignedAffirmation (_, affirm)) =
+              checkAffirmation affirm
+            | checkSgEntry _ = ()
+          fun checkLinearSgEntry (LSSignedAffirmation affirm) =
+              checkAffirmation affirm
+            | checkLinearSgEntry _ = ()
+
+          val () = app checkSgEntry persistent_sg
+          val () = app checkLinearSgEntry linear_sg
+      in () end
 
 
   fun checkTransaction sg tr

@@ -233,4 +233,12 @@ struct
   val readWord8Vector = IOWord8Vector.readVector
   val writeWord8Vector = IOWord8Vector.writeVector
 
+  fun writeToVector writer object =
+      let val (data, stream) = VectorWriterBin.mkVectorWriter ();
+          val () = writer (stream, object)
+      in VectorWriterBin.getWriterData data end
+
+  fun readFromVector reader vector =
+      reader (VectorWriterBin.openVector vector)
+
 end

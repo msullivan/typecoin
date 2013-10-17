@@ -14,6 +14,7 @@ Group is
         test-util.sml
         typecoin-basis.sml
         typecoin.sml
+        crypto-check.sml
 
         (* stuff copied and modified from tom-lib *)
         layout.sml

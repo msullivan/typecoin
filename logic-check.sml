@@ -400,15 +400,14 @@ struct
            Signature.insert_rule sg (Const.LThis, id) prop)
 
       fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
-          PAffirms (TypeCoinBasis.principal_hash
-                        (TypeCoinBasis.hashBytestringToHashObj principal),
-                    prop)
+          let val hashed_key = TypeCoinCrypto.hashKey principal
+              val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
+          in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
 
-      (* XXX: I don't like this being here. Where should the crypto go? *)
       fun checkSignedAffirmationSgEntry sg (id, affirm) =
           let val prop' = affirmationToProp affirm
               val () = checkProp sg Ctx.empty prop'
-              (* XXX: TODO: crypto checking here or somewhere! *)
+              (* crypto is checked in checkCrypto *)
           in Signature.insert_rule sg (Const.LThis, id) prop' end
 
       fun checkSgEntry sg (SRule entry) = checkRuleSgEntry sg entry

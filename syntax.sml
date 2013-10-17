@@ -152,6 +152,7 @@ struct
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring
   type crypto_address = bytestring
+  (* Here the principal is the entire public key. *)
   type crypto_principal = bytestring
 
   type signed_affirmation =
