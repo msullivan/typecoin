@@ -4,6 +4,7 @@ Group is
 
         iotype-lib.sml
         syntax-io.sml
+        vector-stream.sml
 
         pretty.sml
         lf-check.sml
