@@ -27,9 +27,6 @@ structure Transaction :> TRANSACTION =
       (* constants *)
       val theVersion : Word32.word = 0w1
 
-      (* precomputed values *)
-      val power32 = Word64.toLargeInt 0wx100000000
-      val maxAmount = Word64.toLargeInt 0wxffffffffffffffff
 
 
       fun sword32ToInt w =
@@ -58,7 +55,7 @@ structure Transaction :> TRANSACTION =
          
       type txout =
          {
-         amount : LargeInt.int,
+         amount : Word64.word,
          script : Bytestring.string
          }
 
@@ -105,15 +102,12 @@ structure Transaction :> TRANSACTION =
 
 
       fun txoutWriter {amount, script} =
-         if amount < 0 orelse amount > maxAmount then
-            raise InvalidTransaction
-         else
-            W.word64L (Word64.fromLargeInt amount)
-            >>>
-            W.bytesVar script
+         W.word64L amount
+         >>>
+         W.bytesVar script
 
       val txoutReader =
-         R.wrap Word64.toLargeInt R.word64L
+         R.word64L
          >>= (fn amount =>
          R.bytesVar
          >>= (fn script =>
@@ -146,32 +140,5 @@ structure Transaction :> TRANSACTION =
       fun writeTx tx = Writer.write (writer tx)
 
       fun readTx str = Reader.readfull reader str
-
-
-      fun modifyInputsForSig inputs i prevScript =
-         let
-            fun loop j l =
-               (case l of
-                   [] =>
-                      if i > j then
-                         raise InvalidTransaction
-                      else
-                         []
-                 | {from, script=_, sequence} :: rest =>
-                      if i = j then
-                         {from=from, script=prevScript, sequence=sequence}
-                         :: loop (j+1) rest
-                      else
-                         {from=from, script=B.null, sequence=sequence}
-                         :: loop (j+1) rest)
-         in
-            if i < 0 then
-               raise InvalidTransaction
-            else
-               loop 0 inputs
-         end
-
-      fun modifyForSig { version, inputs, outputs, lockTime } i prevScript =
-         { version=version, inputs=modifyInputsForSig inputs i prevScript, outputs=outputs, lockTime=lockTime }
 
    end

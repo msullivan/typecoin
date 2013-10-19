@@ -703,11 +703,13 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       (* Should find a way to do this better. *)
+
       fun int64ToBytesL x = 
-         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
+         ConvertIntInf.toFixedBytesL (8, Int64.toLarge x)
 
       fun bytesToInt64L str =
-         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
+         Int64.fromLarge (ConvertIntInf.fromBytesL str)
+
 
 
       (* Index format:

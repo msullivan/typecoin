@@ -6,7 +6,7 @@ signature READER =
               where type token = Word8.word
               where type Streamable.t = BytesubstringCostring.costring
 
-      type 'a reader = BytesubstringCostring.costring -> 'a * BytesubstringCostring.costring
+      type 'a reader = 'a parser  (* BytesubstringCostring.costring -> 'a * BytesubstringCostring.costring *)
 
       val varint : int reader
       val byte : Word8.word reader

@@ -1,5 +1,5 @@
 
-structure Utxo :> UTXO =
+functor UtxoFun () :> UTXO =
    struct
 
       structure B = Bytestring
@@ -426,11 +426,12 @@ structure Utxo :> UTXO =
       (* Conversions *)
 
       (* Should find a way to do 64-bit conversions this better. *)
+
       fun int64ToBytesL x = 
-         ConvertWord.word64ToBytesL (ConvertWord.intInfToWord64 (Int64.toLarge x))
+         ConvertIntInf.toFixedBytesL (8, Int64.toLarge x)
 
       fun bytesToInt64L str =
-         Int64.fromLarge (ConvertWord.word64ToIntInf (ConvertWord.bytesToWord64L str))
+         Int64.fromLarge (ConvertIntInf.fromBytesL str)
 
       fun bytesToWord16L str =
          Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 1)), 0w8),
@@ -610,7 +611,7 @@ structure Utxo :> UTXO =
             List.app writeTrail (idequeExtract undoQueue);
             BinIO.closeOut outs;
             OS.FileSys.rename {old=path, new=path'};
-            Log.long (fn () => "UTXO table written")
+            Log.long (fn () => "UTXO table written, " ^ Int.toString (T.size theTable) ^ " entries")
          end
          handle OS.SysErr _ => Log.long (fn () => "Error writing index")
 
@@ -676,7 +677,7 @@ structure Utxo :> UTXO =
                      val () = undoCount := undoEntries
                   in
                      BinIO.closeIn ins;
-                     Log.long (fn () => "Finished loading UTXO table");
+                     Log.long (fn () => "Finished loading UTXO table, " ^ Int.toString (T.size theTable) ^ " entries");
                      true
                   end
                   handle ReadTable =>
@@ -695,3 +696,6 @@ structure Utxo :> UTXO =
          end
 
    end
+
+
+structure Utxo = UtxoFun ()

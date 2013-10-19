@@ -19,6 +19,8 @@ is
         constants.sml
         eblock.sig
         eblock.sml
+        interpret.sig
+        interpret.sml
         log.sig
         log.sml
         main.sml
@@ -40,6 +42,8 @@ is
         scheduler.sml
         seed.sig
         seed.sml
+        signature.sig
+        signature.sml
         sink.sig
         sink.sml
         transaction.sig

@@ -26,6 +26,10 @@
         script.sml
         transaction.sig
         transaction.sml
+        signature.sig
+        signature.sml
+        interpret.sig
+        interpret.sml
         block.sig
         block.sml
         eblock.sig
@@ -48,4 +52,3 @@
         process.sml
         main.sml
         go.sml
-

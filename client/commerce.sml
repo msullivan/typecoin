@@ -5,6 +5,11 @@ structure Commerce :> COMMERCE =
       structure B = Bytestring
       structure BS = Bytesubstring
       structure S = Script
+      structure W = Writer
+
+      fun >>> (w, w') = W.seq w w'
+      infixr 3 >>>
+      
 
       structure BytestringHashable =
          struct
@@ -48,8 +53,7 @@ structure Commerce :> COMMERCE =
       val dhash = SHA256.hashBytes o SHA256.hashBytes
       val secp256k1 = EllipticCurveParams.secp256k1
 
-      val hashAll = 0w1 : Word8.word
-      val hashAllLong = ConvertWord.word32ToBytesL (ConvertWord.word8ToWord32 hashAll)
+      val maxAmount = Word64.toLargeInt (Word64.~ 0w1)
 
 
 
@@ -88,19 +92,19 @@ structure Commerce :> COMMERCE =
                          (* Input transaction doesn't have this many outputs *)
                          raise Invalid
                 in
-                   (txhash, n, amount, script)
+                   (txhash, n, Word64.toLargeInt amount, script)
                 end)
          
 
       fun synthesize output =
          (case output of
              Standard addr =>
-                [S.Dup, S.Hash160, S.Const addr, S.Equalverify, S.Checksig])
+                [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig])
 
 
       fun analyze l =
          (case l of
-             [S.Dup, S.Hash160, S.Const addr, S.Equalverify, S.Checksig] =>
+             [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig] =>
                 Standard addr
            | _ =>
                 (* Don't understand this script. *)
@@ -109,6 +113,14 @@ structure Commerce :> COMMERCE =
 
       fun createTx { inputs, outputs, fee } =
          let
+            val () =
+               (* Check that the amounts are in range. *)
+               app (fn (_, amount) => 
+                          if amount <= 0 orelse amount > maxAmount then
+                             raise Invalid
+                          else
+                             ()) outputs
+
             val inputs' = map resolveInput inputs
 
             val () =
@@ -130,7 +142,7 @@ structure Commerce :> COMMERCE =
 
             val txouts =
                map
-               (fn (output, amount) => { amount=amount, script=Script.writeScript (synthesize output) })
+               (fn (output, amount) => { amount=Word64.fromLargeInt amount, script=Script.writeScript (synthesize output) })
                outputs
 
             val pretx : Transaction.tx =
@@ -139,13 +151,8 @@ structure Commerce :> COMMERCE =
             fun signloop j acc l =
                (case l of
                    [] => rev acc
-                 | (hash, n, _, ioscript) :: rest =>
+                 | (txinhash, n, _, ioscript) :: rest =>
                       let
-                         val tosign =
-                            dhash
-                            (B.^ (Transaction.writeTx (Transaction.modifyForSig pretx n ioscript),
-                                  hashAllLong))
-
                          val script =
                             (* Figure out what ioscript is looking for. *)
                             (case analyze (Script.readScript ioscript) of
@@ -156,8 +163,7 @@ structure Commerce :> COMMERCE =
                                           raise NoKey
                                      | SOME (privkey, compress) =>
                                           let
-                                             val sg = ECDSAp.sign (secp256k1, privkey, tosign)
-                                             val sgstr = B.^ (ECDERp.encodeSg sg, B.str hashAll)
+                                             val sg = Signature.sign pretx j ioscript (Signature.HashAll, false) privkey
 
                                              val pubkey = ECDSAp.privkeyToPubkey (secp256k1, privkey)
                                              val pubkeystr =
@@ -167,10 +173,10 @@ structure Commerce :> COMMERCE =
                                                    ECDERp.encodePubkey (secp256k1, pubkey)
                                           in
                                              S.writeScript
-                                             [S.Const sgstr, S.Const pubkeystr]
+                                             [S.Const sg, S.Const pubkeystr]
                                           end))
 
-                         val txin = { from=(hash, n), script=script, sequence=0wxffffffff }
+                         val txin = { from=(txinhash, n), script=script, sequence=0wxffffffff }
                       in
                          signloop (j+1) (txin :: acc) rest
                       end)

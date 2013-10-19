@@ -162,6 +162,9 @@ structure Verify :> VERIFY =
             end
 
 
+(* 
+script should be no larger than 10000 bytes
+*)
 
       (* XXX *)
       fun verifyTx tx = true

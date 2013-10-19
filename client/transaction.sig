@@ -14,7 +14,7 @@ signature TRANSACTION =
          
       type txout =
          {
-         amount : LargeInt.int,
+         amount : Word64.word,
          script : Bytestring.string
          }
 
@@ -36,8 +36,5 @@ signature TRANSACTION =
 
       val writeTx : tx -> Bytestring.string
       val readTx : Bytestring.string -> tx
-
-      (* transaction, input # to replace the script of, replacement script *)
-      val modifyForSig : tx -> int -> Bytestring.string -> tx
 
    end

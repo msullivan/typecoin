@@ -4,7 +4,8 @@ signature SCRIPT =
 
       datatype inst =
          Const of Bytestring.string
-       | Constn of IntInf.int
+       | Constn of IntInf.int (* in 1 .. 16 *)
+       | MinusOne
        | Nop
        | If
        | Notif
@@ -12,8 +13,8 @@ signature SCRIPT =
        | Endif
        | Verify
        | Return
-       | Toaltstack
-       | Fromaltstack
+       | ToAltstack
+       | FromAltstack
        | Ifdup
        | Depth
        | Drop
@@ -41,7 +42,7 @@ signature SCRIPT =
        | Or
        | Xor
        | Equal
-       | Equalverify
+       | EqualVerify
        | OneAdd
        | OneSub
        | TwoMul
@@ -49,7 +50,7 @@ signature SCRIPT =
        | Negate
        | Abs
        | Not
-       | ZeroNotequal
+       | ZeroNotEqual
        | Add
        | Sub
        | Mul
@@ -57,11 +58,11 @@ signature SCRIPT =
        | Mod
        | Lshift
        | Rshift
-       | Booland
-       | Boolor
-       | Numequal
-       | Numequalverify
-       | Numnotequal
+       | BoolAnd
+       | BoolOr
+       | NumEqual
+       | NumEqualVerify
+       | NumNotEqual
        | Lt
        | Gt
        | Leq
@@ -76,11 +77,18 @@ signature SCRIPT =
        | Hash256
        | Codeseparator
        | Checksig
-       | Checksigverify
+       | ChecksigVerify
        | Checkmultisig
-       | Checkmultisigverify
+       | CheckmultisigVerify
+       | Reserved
+       | Verif
+       | Vernotif
 
-       | Unsupported
+      (* NB: the writers and readers are not inverses, because some instructions
+         have multiple representations. *)
+
+      val instWriter : inst -> Writer.writer
+      val instReader : inst Reader.reader
 
       val writer : inst list -> Writer.writer
       val reader : inst list Reader.reader
