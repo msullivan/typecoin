@@ -185,7 +185,8 @@ struct
 
   datatype output = Output of
            {dest: crypto_address,
-            prop: Logic.prop
+            prop: Logic.prop,
+            needs_receipt: bool
            }
   type outputs = output list
 

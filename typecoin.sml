@@ -25,11 +25,14 @@ struct
 
   fun checkInputs tr inputs = map (checkInput tr) inputs
 
-  fun checkOutput sg (Output {dest, prop, ...}) =
+  fun checkOutput sg (Output {dest, prop, needs_receipt, ...}) =
       let val () = LogicCheck.checkProp sg LogicContext.empty prop
           val lf_hash = TypeCoinBasis.hashBytestringToHashObj dest
-          val receipt = PReceipt (TypeCoinBasis.address_hash lf_hash,
-                                  prop)
+          val receipt =
+              if needs_receipt then
+                  SOME (PReceipt (TypeCoinBasis.address_hash lf_hash,
+                                  prop))
+              else NONE
       in (prop, receipt) end
 
   fun checkOutputs sg outputs = ListPair.unzip (map (checkOutput sg) outputs)
@@ -72,6 +75,7 @@ struct
           val sg' = LogicCheck.checkSignature sg persistent_sg
           val linear_sg_props = checkLinearSig sg' linear_sg
           val (output_props, receipt_props) = checkOutputs sg' outputs
+          val receipt_props = List.mapPartial (fn x => x) receipt_props
 
           (* Build up the prop that we need to prove. *)
           val input_prop = build_tensor (input_props @ linear_sg_props @ receipt_props)
