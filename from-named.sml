@@ -4,7 +4,7 @@ structure FromNamed =
 struct
 
   local
-      open LF Logic
+      open LF Logic TypeCoinTxn
   in
 
   fun findIndexBy f y l =
@@ -89,6 +89,23 @@ struct
 
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
+
+  fun convertAffirmation {principal, prop, crypto_sig} =
+      {principal = principal,
+       crypto_sig = crypto_sig,
+       prop = convertProp [] prop}
+
+  fun convertLogicSgEntry (SRule (i, prop)) = SRule (i, convertProp [] prop)
+    | convertLogicSgEntry (SConst (d, c, e)) = SConst (d, c, convertExp [] e)
+    | convertLogicSgEntry (SSignedAffirmation (id, affirmation)) =
+      SSignedAffirmation (id, convertAffirmation affirmation)
+  fun convertLogicSg sg = map convertLogicSgEntry sg
+
+  fun convertLinearSgEntry (LSResource prop) = LSResource (convertProp [] prop)
+    | convertLinearSgEntry (LSSignedAffirmation affirmation) =
+      LSSignedAffirmation (convertAffirmation affirmation)
+  fun convertLinearSg sg = map convertLinearSgEntry sg
+
 
   end
 end
