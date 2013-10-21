@@ -16,11 +16,12 @@ struct
     | build_tensor (x::xs) = PTensor (x, build_tensor xs)
 
   fun checkInput tr (Input {source=(source_txn, idx), prop, ...}) =
-      let (* XXX: This should deal with nonexistent txns being 1. *)
-          val source_outputs = TxnDict.lookup tr source_txn
-          val output_prop = Vector.sub (source_outputs, idx)
-          val () = LogicCheck.propEquality prop output_prop
-      in prop end
+      ((case TxnDict.find tr source_txn of
+            NONE => (* Not a typecoin txn. Type must be 1 *)
+            LogicCheck.propEquality prop POne
+          | SOME source_outputs =>
+            LogicCheck.propEquality prop (Vector.sub (source_outputs, idx)));
+       prop)
 
   fun checkInputs tr inputs = map (checkInput tr) inputs
 
