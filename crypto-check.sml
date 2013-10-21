@@ -26,6 +26,12 @@ struct
    * concivably exist inputs, inputs', prop, prop' such that
    * inputs || prop == inputs' || prop' but prop != prop'.
    *
+   * Actually, that isn't true. The encoding we use of things is self
+   * delimiting, so it has to contain information about when the
+   * inputs part ends and the prop begins. So it isn't actually
+   * conceivable that this could happen. Hashing it still seems
+   * pretty reasonable, though.
+   *
    * I really hope this is right. Should we include the principal in the data?
    *)
 
