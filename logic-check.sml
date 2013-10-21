@@ -174,6 +174,8 @@ struct
          | PReceipt _ => raise Frozen "can't introduce rule for a receipt!")
 
 
+  val mismatched_props_debug = ref (POne, POne)
+
   (* should we catch TypeErrors and raise proof errors? *)
   fun propEquality A A' =
       (case (A, A') of
@@ -193,7 +195,7 @@ struct
            (propEquality A A'; TypeCheckLF.exprEquality t t')
          | (PReceipt (t, A), PReceipt (t', A'))  =>
            (propEquality A A'; TypeCheckLF.exprEquality t t')
-         | _ => raise ProofError "props don't match"
+         | ps => (mismatched_props_debug := ps; raise ProofError "props don't match")
       )
 
   fun addResource (ctx, res) x A =

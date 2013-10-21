@@ -1,7 +1,7 @@
 
 structure Tests =
 struct
-  open LF Logic TestUtil
+  open LF Logic TypeCoinTxn TestUtil
   infixr -->
 
   val nat = c_app "nat" []
@@ -12,8 +12,8 @@ struct
   fun v s = HVar (~1, s)
   fun var s = EApp (v s, SNil)
 
-  val [n, m, p, A, B, e, e', D, k] =
-      map var ["n", "m", "p", "A", "B", "e", "e'", "D", "k"]
+  val [n, m, p, A, B, e, e', D, k, r] =
+      map var ["n", "m", "p", "A", "B", "e", "e'", "D", "k", "r"]
 
   val a_test = FromNamed.convertSg
       [(T, "nat", EType),
@@ -256,7 +256,150 @@ struct
           MBind (z, "z1", MReturn (n, z1))))))
 
 
+  (*****************************************************************)
+  (* Some standard test keypairs. *)
+  structure Signing = ECDSAp
+  structure Encoding = ECDERp
+  val param = EllipticCurveParams.secp256k1
+  fun hashPubKey key = TypeCoinCrypto.hashKey (Encoding.encodePubkey (param, key))
 
+  type keypair = ECDSAp.pubkey * ECDSAp.privkey
+  val (test_keypair1 : keypair as (test_pubkey1, test_privkey1)) =
+      (SOME
+           (11831032065352454438641876800627675216545526971670677831117729227462543208862,
+            115110513735647463363474328864503181748072497052594184213934648437348368030219),
+       84949032573639129980743211979748855589646357655829367172829447606736725751911)
+  val (test_keypair2 : keypair as (test_pubkey2, test_privkey2)) =
+      (SOME
+           (58983369042593963632619891589595911832440092793514839008342864010329496907151,
+            62162639805088467693464181659153423717612090991394312282516252926635931265248),
+       30031085134376089938835666959011487879061968753113189013180106434494274397669)
+  val (test_keypair3 : keypair as (test_pubkey3, test_privkey3)) =
+      (SOME
+           (91414779336211869123681701981829070536738525253602829724283724650164868267290,
+            45324093941933083857292792809424115783627380967806617052739798377324684734767),
+       63864662182596890716986802929790865809740337433382096343017620806541489714467)
+  val (alice_keypair as (alice_pubkey, alice_privkey)) = test_keypair1
+  val alice_hash = hashPubKey alice_pubkey
+  val (bob_keypair as (bob_pubkey, bob_privkey)) = test_keypair2
+  val bob_hash = hashPubKey bob_pubkey
+  val (charlie_keypair as (charlie_pubkey, charlie_privkey)) = test_keypair3
+  val charlie_hash = hashPubKey charlie_pubkey
+
+
+  (* Ok, lets test some transaction stuff. *)
+  val P = SRule
+  val C = SConst
+  structure TB = TypeCoinBasis
+
+  val alice = TB.principal_hash (TB.hashBytestringToHashObj alice_hash)
+  val bob = TB.principal_hash (TB.hashBytestringToHashObj bob_hash)
+  val charlie = TB.principal_hash (TB.hashBytestringToHashObj charlie_hash)
+
+  (*******************************************************************************************)
+  (* First, somebody publishes a transaction with some
+   * simple rules about authorization. *)
+  local
+    (* Set up the initial signature for a simple authorization logic. *)
+    val input_txid = "bogus_tx"
+    val inputs = [Input {source = (input_txid, 0), prop = POne}]
+    val resource' = c_app "resource" []
+    val nonce = TB.hash256
+    val auth_sg = FromNamed.convertLogicSg
+        [(* Resources named by bytestrings *)
+         C (T, "resource", EType),
+         C (O, "resource_named", TB.bytestring --> resource'),
+
+         C (T, "can_access", resource' --> EProp),
+         C (T, "can_access_nonce", resource' --> nonce --> EProp),
+
+         (* If we have an access permission, we can stamp it with a nonce. *)
+         P ("use_access",
+            PForall ("r", resource',
+             PForall ("n", nonce,
+              PLolli (PAtom (c_app "can_access" [r]),
+                      PAtom (c_app "can_access_nonce" [r, n])))))
+        ]
+  (* This transaction just establishes the rules. No useful outputs. *)
+  val outputs = [Output {dest = charlie_hash, prop = POne, needs_receipt = false}]
+  val proof_term = MLam ("z", POne, z)
+
+
+  in
+  val initial_auth_txnid = "auth" (* bogus! *)
+
+  val resource = c_app' initial_auth_txnid "resource" []
+  fun resource_named x = c_app' initial_auth_txnid "resource_named" [x]
+  fun can_access x = c_app' initial_auth_txnid "can_access" [x]
+  fun can_access_nonce x n = c_app' initial_auth_txnid "can_access_nonce" [x, n]
+  val use_access = MRule (Const.LId initial_auth_txnid, "use_access")
+
+  val initial_auth_txn = TxnBody
+      {inputs = inputs,
+       persistent_sg = auth_sg,
+       linear_sg = [],
+       outputs = outputs,
+       proof_term = proof_term}
+
+
+  val test_resource = resource_named (TB.bytestringToLFBytestring (Bytestring.fromString "foo"))
+
+  end
+
+  (* OK, now Charlie is gonna publish some things:
+   * saying that if Alice says somebody can access foo,
+   * then Charlie says that.
+   * He also gives himself a persistent token giving himself
+   * access. He doesn't *really* need this, but it means less
+   * signing. *)
+  local
+    val input_txid = "bogus_tx2"
+    val inputs = [Input {source = (input_txid, 0), prop = POne}]
+    val input_ident = TypeCoinCrypto.buildTxnIdentifier inputs
+    val delegate_to_alice =
+        TypeCoinCrypto.makeAffirmation charlie_keypair input_ident
+        (PLolli (PAffirms (alice, PAtom (can_access test_resource)),
+                 PAffirms (charlie, PAtom (can_access test_resource))))
+    val self_persistent_access =
+        TypeCoinCrypto.makeAffirmation charlie_keypair input_ident
+        (PBang (PAtom (can_access test_resource)))
+    val self_persistent_access_prop =
+        LogicCheck.affirmationToProp self_persistent_access
+
+    val outputs = [Output {dest = charlie_hash, prop = self_persistent_access_prop,
+                           needs_receipt = false}]
+    val sg = [
+        SSignedAffirmation ("charlie_delegates_to_alice", delegate_to_alice)
+    ]
+    val linear_sg = [
+        LSSignedAffirmation self_persistent_access
+    ]
+    val proof_term =
+        MLam ("z", PTensor (POne, self_persistent_access_prop),
+         MTensorLet (z, "z1", "z2",
+          MOneLet (z1,
+            z2)))
+
+  in
+  val charlie_auth_txnid = "charlie" (* bogus! *)
+  val charlie_auth_txn = TxnBody
+      {inputs = inputs,
+       persistent_sg = sg,
+       linear_sg = linear_sg,
+       outputs = outputs,
+       proof_term = proof_term}
+
+
+  end
+
+  val auth_test_chain =
+      [(initial_auth_txnid, initial_auth_txn),
+       (charlie_auth_txnid, charlie_auth_txn)]
+
+  (*******************************************************************************************)
+
+
+  (*****************************************************************)
 
   fun println s = print (s ^ "\n")
 
@@ -272,5 +415,9 @@ struct
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 
+  fun checkChain chain =
+      ((TypeCoinCheck.checkChain LogicCheck.basis_sg TxnDict.empty chain)
+       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
+            | (e as LogicCheck.ProofError s) => (println s; raise e))
 
 end

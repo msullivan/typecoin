@@ -67,6 +67,8 @@ struct
       in () end
 
 
+  val debug_prop_pair = ref (POne, POne)
+
   fun checkTransaction sg tr
                        (txnid, TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term}) =
       let (* Check the inputs and the outputs and the signatures and build up
@@ -84,6 +86,7 @@ struct
 
           (* Moment of truth: check the proof term. *)
           val actual_prop = LogicCheck.inferProofOuter sg' proof_term
+          val () = debug_prop_pair := (actual_prop, expected_prop)
           val () = LogicCheck.propEquality actual_prop expected_prop
 
           (* Ok. Everything checks out! Now we just need to update the
