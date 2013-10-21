@@ -9,11 +9,12 @@ struct
   (**** "The Basis" ****)
   val byte' = c_app "byte" []
   val hash160' = c_app "hash160" []
+  val hash256' = c_app "hash256" []
   val principal' = c_app "principal" []
   val address' = c_app "address" []
 
-  fun makeArrow 0 = hash160'
-    | makeArrow n = byte' --> makeArrow (n-1)
+  fun makeHashArrow t 0 = t
+    | makeHashArrow t n = byte' --> makeHashArrow t (n-1)
 
   val bytestring' = c_app "bytestring" []
 
@@ -21,7 +22,9 @@ struct
       [(T, "byte", EType)] @
       List.tabulate (256, fn i => (O, "b"^Int.fmt StringCvt.HEX i, byte')) @
       [(T, "hash160", EType),
-       (O, "hash160_", makeArrow 40),
+       (O, "mk_hash160", makeHashArrow hash160' 20),
+       (T, "hash256", EType),
+       (O, "mk_hash256", makeHashArrow hash256' 32),
        (T, "principal", EType),
        (O, "principal_hash", hash160' --> principal'),
        (T, "address", EType),
@@ -38,6 +41,7 @@ struct
 
   val byte = c_app' "$" "byte" []
   val hash160 = c_app' "$" "hash160" []
+  val hash256 = c_app' "$" "hash256" []
   val principal = c_app' "$" "principal" []
   fun principal_hash k = c_app' "$" "principal_hash" [k]
   val address = c_app' "$" "address" []
@@ -50,14 +54,16 @@ struct
 
   fun byteToLFByte b = c_app' "$" ("b" ^ Word8.fmt StringCvt.HEX b) []
 
-  (* convert a string containing a hash to an LF object of type hash160 *)
+  (* convert a string containing a hash to an LF object of type hashN,
+   * where N is the number of bits. If hashN isn't one of our types, then
+   * this will not be very useful. *)
   fun hashBytestringToHashObj bs =
-      c_app' "$" "hash160_"
+      c_app' "$" ("mk_hash" ^ Int.toString (8 * BS.size bs))
       (map byteToLFByte (BS.explode bs))
 
   fun hashStringToHashObj s = hashBytestringToHashObj (valOf (BS.fromStringHex s))
 
-  fun byteStringToLFByteString bs =
+  fun bytestringToLFBytestring bs =
       foldr (fn (x, xs) => bs_cons (byteToLFByte x) xs) bs_nil (BS.explode bs)
 
   val test_hash_str = "1badd00ddeadbeefcafef00d0123456789abcdef"
