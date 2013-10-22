@@ -263,6 +263,12 @@ struct
   val param = EllipticCurveParams.secp256k1
   fun hashPubKey key = TypeCoinCrypto.hashKey (Encoding.encodePubkey (param, key))
 
+  fun affirmationProp pubkey prop =
+      LogicCheck.affirmationToProp
+          {principal = Encoding.encodePubkey (param, pubkey),
+           prop = prop,
+           crypto_sig = Bytestring.null}
+
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
   val (test_keypair1 : keypair as (test_pubkey1, test_privkey1)) =
       (SOME
@@ -355,19 +361,21 @@ struct
   local
     val input_txid = "bogus_tx2"
     val inputs = [Input {source = (input_txid, 0), prop = POne}]
-    val input_ident = TypeCoinCrypto.buildTxnIdentifier inputs
+    val self_persistent_access_prop =
+        affirmationProp charlie_pubkey (PBang (PAtom (can_access test_resource)))
+    val outputs = [Output {dest = charlie_hash, prop = self_persistent_access_prop,
+                           needs_receipt = false}]
+    val txn_ident = TypeCoinCrypto.buildTxnIdentifier inputs outputs
+
+
     val delegate_to_alice =
-        TypeCoinCrypto.makeAffirmation charlie_keypair input_ident
+        TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
         (PLolli (PAffirms (alice, PAtom (can_access test_resource)),
                  PAffirms (charlie, PAtom (can_access test_resource))))
     val self_persistent_access =
-        TypeCoinCrypto.makeAffirmation charlie_keypair input_ident
+        TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
         (PBang (PAtom (can_access test_resource)))
-    val self_persistent_access_prop =
-        LogicCheck.affirmationToProp self_persistent_access
 
-    val outputs = [Output {dest = charlie_hash, prop = self_persistent_access_prop,
-                           needs_receipt = false}]
     val sg = [
         SSignedAffirmation ("charlie_delegates_to_alice", delegate_to_alice)
     ]

@@ -21,7 +21,9 @@ struct
    * The set of inputs of a transaction will be unique, so we sign this
    * information along with the prop that is being affirmed.
    *
-   * In particular, we sign: hash( hash(inputs) || prop)
+   * In particular, we sign: hash( hash(inputs || outputs) || prop)
+   *
+   * OLD NOTE:
    * We use this instead of hash(inputs || prop) because there could
    * concivably exist inputs, inputs', prop, prop' such that
    * inputs || prop == inputs' || prop' but prop != prop'.
@@ -35,10 +37,13 @@ struct
    * I really hope this is right. Should we include the principal in the data?
    *)
 
-  (* From the inputs of a transaction, produce some identifying data
+  (* From the inputs/outputs of a transaction, produce some identifying data
    * that we sign alongside a prop. *)
-  fun buildTxnIdentifier inputs =
-      hash (IOTypes.writeToVector TypeCoinTxn.writeInputs inputs)
+  fun buildTxnIdentifier inputs outputs =
+      hash (Bytestring.concat [
+            IOTypes.writeToVector TypeCoinTxn.writeInputs inputs,
+            IOTypes.writeToVector TypeCoinTxn.writeOutputs outputs
+      ])
 
   fun buildAffirmationData txnId prop =
       let val propData = IOTypes.writeToVector Logic.writeProp prop

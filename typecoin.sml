@@ -50,8 +50,8 @@ struct
   fun checkLinearSig sg linear_sg = map (checkLinearSigEntry sg) linear_sg
 
 
-  fun checkCrypto (TxnBody {inputs, persistent_sg, linear_sg, ...}) =
-      let val txnId = TypeCoinCrypto.buildTxnIdentifier inputs
+  fun checkCrypto (TxnBody {inputs, persistent_sg, linear_sg, outputs, ...}) =
+      let val txnId = TypeCoinCrypto.buildTxnIdentifier inputs outputs
           fun checkAffirmation affirmation =
               if TypeCoinCrypto.checkAffirmation txnId affirmation then ()
               else raise TypeCoinError "affirmation signature failure"
