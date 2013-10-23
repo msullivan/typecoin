@@ -198,6 +198,10 @@ struct
          | ps => (mismatched_props_debug := ps; raise ProofError "props don't match")
       )
 
+  val mismatched_props_debug2 = ref (POne, POne)
+  fun propEquality' A A' = (mismatched_props_debug2 := (A, A'); propEquality A A')
+  val propEquality = propEquality'
+
   fun addResource (ctx, res) x A =
       (Ctx.insert ctx x A false, VarSet.insert res x)
 

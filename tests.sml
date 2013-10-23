@@ -330,7 +330,6 @@ struct
   val outputs = [Output {dest = charlie_hash, prop = POne, needs_receipt = false}]
   val proof_term = MLam ("z", POne, z)
 
-
   in
   val initial_auth_txnid = "auth" (* bogus! *)
 
@@ -371,7 +370,7 @@ struct
     val delegate_to_alice =
         TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
         (PLolli (PAffirms (alice, PAtom (can_access test_resource)),
-                 PAffirms (charlie, PAtom (can_access test_resource))))
+                 PAtom (can_access test_resource)))
     val self_persistent_access =
         TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
         (PBang (PAtom (can_access test_resource)))
@@ -396,13 +395,94 @@ struct
        linear_sg = linear_sg,
        outputs = outputs,
        proof_term = proof_term}
-
-
+  val charlie_delegates_to_alice =
+      MRule (Const.LId charlie_auth_txnid, "charlie_delegates_to_alice")
   end
+
+  (* Now Alice sends a proof to Bob saying he can access a resource. *)
+  local
+    val input_txid = "bogus_tx3"
+    val inputs = [Input {source = (input_txid, 0), prop = POne}]
+    val alice_says_can_access_prop =
+        affirmationProp alice_pubkey (PAtom (can_access test_resource))
+    val outputs = [Output {dest = bob_hash, prop = alice_says_can_access_prop,
+                           needs_receipt = false}]
+    val txn_ident = TypeCoinCrypto.buildTxnIdentifier inputs outputs
+
+
+    val alice_says_can_access =
+        TypeCoinCrypto.makeAffirmation alice_keypair txn_ident
+        (PAtom (can_access test_resource))
+
+    val sg = []
+    val linear_sg = [
+        LSSignedAffirmation alice_says_can_access
+    ]
+    val proof_term =
+        MLam ("z", PTensor (POne, alice_says_can_access_prop),
+         MTensorLet (z, "z1", "z2",
+          MOneLet (z1,
+            z2)))
+
+  in
+  val alice_says_can_access_prop = alice_says_can_access_prop
+  val alice_auth_txnid = "alice" (* bogus! *)
+  val alice_auth_txn = TxnBody
+      {inputs = inputs,
+       persistent_sg = sg,
+       linear_sg = linear_sg,
+       outputs = outputs,
+       proof_term = proof_term}
+  end
+
+  (* Now Bob proves he can access it. *)
+  local
+    val nonce_s = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
+    val nonce = TypeCoinBasis.hashStringToHashObj nonce_s
+
+    val can_access_nonce =
+        (PAtom (can_access_nonce test_resource nonce))
+    val charlie_says_can_access_nonce =
+        affirmationProp charlie_pubkey can_access_nonce
+
+    val input_txid = alice_auth_txnid
+    val inputs = [Input {source = (input_txid, 0),
+                         prop = alice_says_can_access_prop}]
+
+    val outputs = [Output {dest = bob_hash, prop = charlie_says_can_access_nonce,
+                           needs_receipt = false}]
+    val sg = []
+    val linear_sg = []
+    val proof_term =
+        MLam ("z", alice_says_can_access_prop,
+         MBind (charlie_delegates_to_alice, "y",
+          MReturn (
+           charlie,
+           MApp (
+            MForallApp (
+             MForallApp (
+              use_access,
+              test_resource),
+             nonce),
+            MApp (y, z)))))
+
+  in
+  val bob_auth_txnid = "bob" (* bogus! *)
+  val bob_auth_txn = TxnBody
+      {inputs = inputs,
+       persistent_sg = sg,
+       linear_sg = linear_sg,
+       outputs = outputs,
+       proof_term = proof_term}
+  end
+
+
 
   val auth_test_chain =
       [(initial_auth_txnid, initial_auth_txn),
-       (charlie_auth_txnid, charlie_auth_txn)]
+       (charlie_auth_txnid, charlie_auth_txn),
+       (alice_auth_txnid, alice_auth_txn),
+       (bob_auth_txnid, bob_auth_txn)]
 
   (*******************************************************************************************)
 
