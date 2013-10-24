@@ -283,6 +283,12 @@ structure Blockchain :> BLOCKCHAIN =
 
 
 
+      fun utxoFromLineage lin =
+         (case lin of
+             Nil (_, utxo) => utxo
+           | Cons (_, _, _, _, _, utxo) => utxo)
+
+
       (* The operation "rewind num" shunts every block on the primary fork back to (but not including)
          num onto a secondary fork.
       *)
@@ -332,13 +338,7 @@ structure Blockchain :> BLOCKCHAIN =
 
                      val hash = inputHash pos
                      val lineager = T.lookup theTable hash
-                     val utxo =
-                        (case !lineager of
-                            Nil (_, utxo) => utxo
-                          | Cons _ =>
-                               (* This can't happen; this block is on the primary fork. *)
-                               raise (Fail "invariant"))
-
+                     val utxo = utxoFromLineage (!lineager)
                   in
                      lineager := Cons (pos, num, cumdiff, predlinr, verstat, utxo);
                      lineager
@@ -450,7 +450,10 @@ structure Blockchain :> BLOCKCHAIN =
                                 if
                                    !verification
                                    andalso
-                                   not (Verify.verifyBlock (EBlock.fromBytes blockstr))
+                                   not (Verify.verifyStoredBlock
+                                           (Utxo.branch (utxoFromLineage (!predlin)))
+                                           pos
+                                           (EBlock.fromBytes blockstr))
                                 then
                                    setDubious num
                                 else
@@ -491,10 +494,23 @@ structure Blockchain :> BLOCKCHAIN =
                         loop (num-1) (cumdiff-diff) diff'
                   end
 
+            (* precondition i > 0 *)
             fun loopVerify i =
                if i > blocks then
                   ()
-               else if Verify.verifyBlock (EBlock.fromBytes (inputData (A.sub (thePrimaryFork, i)))) then
+               else if 
+                  let
+                     val prevpos = A.sub (thePrimaryFork, i-1)
+                     val pos = A.sub (thePrimaryFork, i)
+
+                     (* This could be done more nicely by passing the utxo around the loop. *)
+                     val utxo = Utxo.branch (utxoFromLineage (! (T.lookup theTable (inputHash prevpos))))
+
+                     val eblock = EBlock.fromBytes (inputData pos)
+                  in
+                     Verify.verifyStoredBlock utxo pos eblock
+                  end
+               then
                   loopVerify (i+1)
                else
                   let in
@@ -506,7 +522,7 @@ structure Blockchain :> BLOCKCHAIN =
             val start =
                loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks))))
          in
-            loopVerify start;
+            loopVerify (Int.max (1, start));  (* Never need to verify genesis block *)
             verification := true
          end
 
@@ -567,16 +583,23 @@ structure Blockchain :> BLOCKCHAIN =
                          val diff =
                             prevDiff + Verify.decodeDifficulty (#bits (#1 (EBlock.toBlock eblock)))
 
+                         val utxo = Utxo.branch prevUtxo
+
                          val (dubious, verstat) =
                             if !verification then
-                               if Verify.verifyBlock eblock then
+                               if
+                                  Verify.verifyStoredBlock 
+                                     utxo
+                                     (pos+blockOffsetInRecord)
+                                     eblock
+                               then
                                   (false, OK)
                                else
                                   (true, DUBIOUS)
                             else
                                (false, UNKNOWN)
 
-                         val utxo = Utxo.branch prevUtxo
+                         (* XXXX Won't need this once verifyStoredBlock works properly! *)
                          val () = Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock)
                       in
                          if

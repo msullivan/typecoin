@@ -406,13 +406,9 @@ structure Process :> PROCESS =
                        let
                           val tx = Reader.readfull Transaction.reader txstr
                        in
-                          if (* XX *) true (* Verify.verifyTx tx *) then
-                             let in
-                                T.insert txpool hash txstr;
-                                relayList := (M.TX, hash) :: !relayList
-                             end
-                          else
-                             ()
+                          (* XX do this only if the transaction verifies *)
+                          T.insert txpool hash txstr;
+                          relayList := (M.TX, hash) :: !relayList
                        end)
                    handle Reader.SyntaxError => ()
                 end

@@ -32,13 +32,16 @@ signature VERIFY =
 
 
 
-      (* verifyStoredBlock pos eblock
+      (* verifyStoredBlock table pos eblock
 
          If    eblock has passed verifyBlockGross
                eblock is stored at position pos
-         then  returns true iff eblock passes verification
+         then  if    block passes verification
+               then  processes the block into table
+                     returns true
+               else  may process some or all of the block into table
+                     returns false
       *)
-(* XX *)
-      val verifyBlock : EBlock.eblock -> bool
+      val verifyStoredBlock : Utxo.table -> Int64.int -> EBlock.eblock -> bool
 
    end

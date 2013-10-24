@@ -163,6 +163,25 @@ structure Utxo :> UTXO =
       val branch = T.branch
       
 
+      fun unspent table (hash, n) =
+         ((case T.find table hash of
+              NONE =>
+                 false
+            | SOME entry =>
+                 let
+                    val i = n div 8
+                    val j = n mod 8
+                    val i' = i + 40
+        
+                    val b = B.sub (entry, i')
+                    val mask = Word8.<< (0w1, Word.fromInt j)
+                    val b' = Word8.andb (b, Word8.notb mask)
+                 in
+                     b' <> 0w0
+                 end)
+          handle Subscript => false)
+
+
       fun insert table hash pos outputCount =
          let
             val posstr =
@@ -208,7 +227,7 @@ structure Utxo :> UTXO =
                     else
                        T.insert table (BS.concat [BS.substring (entry, 0, 40), BS.full spendmap]) ;
  
-                     b <> 0w0
+                     b' <> 0w0
                  end)
           handle Subscript => false)
 

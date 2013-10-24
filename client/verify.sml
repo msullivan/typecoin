@@ -240,6 +240,6 @@ structure Verify :> VERIFY =
 
 
       (* XXX *)
-      fun verifyBlock eblock = true
+      fun verifyStoredBlock utxo pos eblock = true
 
    end

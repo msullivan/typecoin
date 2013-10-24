@@ -16,7 +16,14 @@ signature UTXO =
       val null : table
 
 
-      (* spend table coord bool
+      (* unspent table coord
+
+         Returns false if the txout at coord is invalid or already spent.
+      *)
+      val unspent : table -> Transaction.coord -> bool
+
+
+      (* spend table coord
 
          Marks the txout at coord as spent (if it's valid).
          Returns false if it is invalid or already spent.
