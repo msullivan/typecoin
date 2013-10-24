@@ -406,7 +406,7 @@ structure Process :> PROCESS =
                        let
                           val tx = Reader.readfull Transaction.reader txstr
                        in
-                          if Verify.verifyTx tx then
+                          if (* XX *) true (* Verify.verifyTx tx *) then
                              let in
                                 T.insert txpool hash txstr;
                                 relayList := (M.TX, hash) :: !relayList
@@ -574,14 +574,14 @@ structure Process :> PROCESS =
            | M.Unsupported command =>
                 let in
                    Log.short "?";
-                   Log.long (fn () => "Received unsupported message "^ B.toString command)
+                   Log.long (fn () => "Received unsupported message "^ B.toStringHex command)
                 end
 
 
-           | M.Illformed _ =>
+           | M.Illformed str =>
                 let in
                    Log.short "@";
-                   Log.long (fn () => "Received illformed message")
+                   Log.long (fn () => "Received illformed message "^ B.toStringHex str)
                 end
 
 

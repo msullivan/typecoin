@@ -4,6 +4,7 @@ structure Verify :> VERIFY =
 
       structure B = Bytestring
       structure BS = Bytesubstring
+      structure T = Transaction
 
 
       (* Constants *)
@@ -162,12 +163,80 @@ structure Verify :> VERIFY =
             end
 
 
-(* 
-script should be no larger than 10000 bytes
-*)
+      exception Reject = Interpret.Reject
 
-      (* XXX *)
-      fun verifyTx tx = true
+      val scriptLimit = 10000
+
+      (* Verify a txin, and return its amount if it passes. *)
+      fun verifyTxin (getTx : T.coord -> T.tx option) tx i ({from=(from as (_, fromIndex)), script=inScript, ...}:T.txin) =
+         let
+            val () =
+               if B.size inScript > scriptLimit then
+                  raise Reject
+               else
+                  ()
+
+            val {outputs, ...} =
+               (case getTx from of
+                   NONE =>
+                      raise Reject
+                 | SOME tx => tx)
+
+            val {amount, script=outScript} =
+               (* fromIndex must be within bounds, or getTx would have failed. *)
+               List.nth (outputs, fromIndex)
+
+            val () =
+               if B.size outScript > scriptLimit then
+                  raise Reject
+               else
+                  ()
+
+            val () =
+               if Interpret.passes (Interpret.exec tx i outScript (Interpret.exec tx i inScript [])) then
+                  ()
+               else
+                  raise Reject
+
+            (* XX Need to handle @#$%&! pay-to-script-hash *)
+         in
+            amount
+         end
+
+
+      fun verifyTx getTx (tx as { version, inputs, outputs, lockTime }) =
+         let
+            val (amountIn, _) = 
+               List.foldl
+               (fn (txin, (amountAcc, i)) =>
+                   let
+                      val amount = verifyTxin getTx tx i txin
+                   in
+                      (amountAcc + Word64.toLargeInt amount, i+1)
+                   end)
+               (0, 0)
+               inputs
+
+            val amountOut =
+               List.foldl
+               (fn ({amount, script=_}, amountAcc) =>
+                   (amountAcc + Word64.toLargeInt amount))
+               0
+               outputs
+
+            val fee = amountIn - amountOut
+
+            val () =
+               if fee < 0 then
+                  raise Reject
+               else
+                  ()
+
+            (* XX check more *)
+         in
+            true
+         end
+         handle Reject => false
 
 
       (* XXX *)

@@ -1,5 +1,5 @@
 
-functor UtxoFun () :> UTXO =
+structure Utxo :> UTXO =
    struct
 
       structure B = Bytestring
@@ -22,6 +22,7 @@ functor UtxoFun () :> UTXO =
          else
             (f (); repeat (n-1) f)
 
+
       fun repeatlist n f =
          let
             fun loop n acc =
@@ -32,6 +33,7 @@ functor UtxoFun () :> UTXO =
          in
             loop n []
          end
+
 
       fun replicate x n l =
          if n = 0 then
@@ -54,6 +56,43 @@ functor UtxoFun () :> UTXO =
          in
             loop 0
          end
+
+
+      fun idequeExtract q =
+         let
+            fun loop acc =
+               if IDeque.isEmpty q then
+                  acc
+               else
+                  let
+                     val x = IDeque.removeBack q
+                  in
+                     loop (x :: acc)
+                  end
+
+            val l = loop []
+         in
+            (* put elements back in *)
+            List.app (IDeque.insertBack q) l;
+            l
+         end
+
+
+
+      (* Conversions *)
+
+      (* Should find a way to do 64-bit conversions this better. *)
+
+      fun int64ToBytesL x = 
+         ConvertIntInf.toFixedBytesL (8, Int64.toLarge x)
+
+      fun bytesToInt64L str =
+         Int64.fromLarge (ConvertIntInf.fromBytesL str)
+
+      fun bytesToWord16L str =
+         Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 1)), 0w8),
+                   ConvertWord.word8ToWord (B.sub (str, 0)))
+
 
 
       fun dhash str =
@@ -85,7 +124,12 @@ functor UtxoFun () :> UTXO =
                end
          end
 
-      structure T = DatalessHashTable (structure Key = Key)
+      structure T =
+         DatalessBranchingTable
+         (structure Base = DatalessHashTable (structure Key = Key)
+          structure Nursery = HashTable (structure Key = Key)
+          val history = Constants.maxUtxoHistory
+          val nurseryInit = 2000)
 
       (* Entries in the UTXO table look like:
 
@@ -106,65 +150,20 @@ functor UtxoFun () :> UTXO =
          is unspent.
       *)
 
-      (* A TrailValid trail contains each of the utxo entries that were gc'ed.  The rest of
-         the work to undo can be determined from the block being undone.
-
-         A TrailGeneral trail contains a script to undo the entire block.  This is general
-         (and simple) but ties up more space.
-
-         (Is it really worth having TrailValid?  It saves some space, but it is worth the
-         complexity?)
-      *)
-
-      datatype trail_elem =
-         TrailRemove of B.string
-       | TrailInsert of B.string
-
-      datatype trail =
-         TrailValid of B.string list
-       | TrailGeneral of trail_elem list
-
-      (* Trails appear in the undoQueue with the most recent at the front. *)
-
-      val theTable = T.table Constants.utxoTableSize
-      val undoCount = ref 0
-      val undoQueue : trail IDeque.ideque = IDeque.ideque ()
+      type table = T.table
+      exception Expired = T.Expired
       
       
-      fun reset () =
-         (
-         T.reset theTable Constants.utxoTableSize;
-         undoCount := 0;
-         IDeque.reset undoQueue
-         )
+      fun new () = T.table Constants.utxoTableSize
 
 
-      fun pushQueue entry =
-         (
-         IDeque.insertFront undoQueue entry;
-         if !undoCount < Constants.maxUndoRecords then
-            undoCount := !undoCount + 1
-         else
-            (
-            IDeque.removeBack undoQueue;
-            ()
-            )
-         )
+      val null = T.null
 
 
-      exception Undo
+      val branch = T.branch
+      
 
-      fun popQueue () =
-         if !undoCount <= 0 then
-            raise Undo
-         else
-            (
-            undoCount := !undoCount - 1;
-            IDeque.removeFront undoQueue
-            )
-            
-
-      fun freshEntry hash pos outputCount =
+      fun insert table hash pos outputCount =
          let
             val posstr =
                ConvertWord.word64ToBytesL (Word64.fromLargeInt (Int64.toLarge pos))
@@ -178,283 +177,67 @@ functor UtxoFun () :> UTXO =
             val spendmap =
                replicate (B.str 0wxff) (outputCount div 8) spendMapByteTail
          in
-            B.concat (hash :: posstr :: spendmap)
-         end
-         
-
-      fun updateEntry entry n =
-         let
-            val i = n div 8
-            val j = n mod 8
-            val i' = i + 40
-
-            (* clear bit j of byte i *)
-
-            val b = B.sub (entry, i')
-            val mask = Word8.<< (0w1, Word.fromInt j)
-            val b' = Word8.andb (b, Word8.notb mask)
-
-            val spendmap =
-               BS.concat
-               [ BS.substring (entry, 40, i),
-                 BS.full (B.str b'),
-                 BS.extract (entry, i'+1, NONE) ]
-         in
-            (BS.concat [BS.substring (entry, 0, 40), BS.full spendmap],
-             isAllzero spendmap)
-         end
-
-      
-      fun traverseBlock f accInitial blockstr =
-         let
-            val (_, blockstr') = Reader.readS Block.headerReader (BS.full blockstr)
-            val (count, txsstr) = Reader.readS Reader.varint blockstr'
-
-            val pos = B.size blockstr - BS.size txsstr
-
-            fun loop i pos str acc =
-               if i >= count then
-                  acc
-               else
-                  let
-                     val (tx, str') = Reader.readS Transaction.reader str
-                     val txsz = BS.size str - BS.size str'
-                     val txstr = BS.slice (str, 0, SOME txsz)
-
-                     val acc' = f (i, pos, tx, txstr, acc)
-                  in
-                     loop (i+1) (pos + txsz) str' acc'
-                  end
-         in
-            loop 0 0 txsstr accInitial
+            T.insert table (B.concat (hash :: posstr :: spendmap))
          end
 
 
-      fun processTxValid isCoinbase pos ({inputs, outputs, ...}:Transaction.tx) hash trail =
-         let
-            val trail =
-               if isCoinbase then
-                  (* Don't process the inputs for coinbase transactions. *)
-                  trail
-               else
-                  foldl
-                  (fn ({ from=(inhash, n), ... }, trail) =>
-                      (case T.find theTable inhash of
-                          NONE => raise (Fail "invalid txout")
-                        | SOME entry =>
-                             let
-                                val (entry', allspent) = updateEntry entry n
-                             in
-                                if allspent then
-                                   (
-                                   T.remove theTable inhash;
-                                   entry' :: trail
-                                   )
-                                else
-                                   (
-                                   T.insert theTable entry';
-                                   trail
-                                   )
-                             end))
-                  trail
-                  inputs
-
-            val () = T.insert theTable (freshEntry hash pos (length outputs))
-         in
-            trail
-         end
+      fun spend table (hash, n) =
+         ((case T.find table hash of
+              NONE =>
+                 false
+            | SOME entry =>
+                 let
+                    val i = n div 8
+                    val j = n mod 8
+                    val i' = i + 40
+        
+                    (* clear bit j of byte i *)
+        
+                    val b = B.sub (entry, i')
+                    val mask = Word8.<< (0w1, Word.fromInt j)
+                    val b' = Word8.andb (b, Word8.notb mask)
+        
+                    val spendmap =
+                       BS.concat
+                       [ BS.substring (entry, 40, i),
+                         BS.full (B.str b'),
+                         BS.extract (entry, i'+1, NONE) ]
+                 in
+                    if isAllzero spendmap then
+                       T.remove table hash
+                    else
+                       T.insert table (BS.concat [BS.substring (entry, 0, 40), BS.full spendmap]) ;
+ 
+                     b <> 0w0
+                 end)
+          handle Subscript => false)
 
 
-      fun processTxGeneral isCoinbase pos ({inputs, outputs, ...}:Transaction.tx) hash trail =
-         let
-            val trail =
-               if isCoinbase then
-                  (* Don't process the inputs for coinbase transactions. *)
-                  trail
-               else
-                  foldl
-                  (fn ({ from=(inhash, n), ... }, trail) =>
-                      (case T.find theTable inhash of
-                          NONE =>
-                             (* This is invalid, but we allow it. *)
-                             trail
-                        | SOME entry =>
-                             let
-                                val (entry', allspent) = updateEntry entry n
-                             in
-                                if allspent then
-                                   T.remove theTable inhash
-                                else
-                                   T.insert theTable entry';
+      fun processBlock table blockpos blockstr =
+         Block.traverseBlock
+            (fn (i, pos, {inputs, outputs, ...}, txstr, trail) =>
+                let in
+                   if i = 0 then
+                      (* Don't process the inputs for coinbase transactions. *)
+                      ()
+                   else
+                      app (fn {from, ...} => (spend table from; ())) inputs ;
 
-                                TrailInsert entry :: trail
-                             end))
-                  trail
-                  inputs
-
-            val newentry = freshEntry hash pos (length outputs)
-            val oldentryo = T.swap theTable newentry
-
-            val trail =
-               (case oldentryo of
-                   NONE =>
-                      TrailRemove newentry
-                 | SOME oldentry =>
-                      TrailInsert oldentry) :: trail
-         in
-            trail
-         end
-
-
-      fun process isValid blockpos blockstr =
-         if isValid then
-            let
-               val trail =
-                  traverseBlock
-                     (fn (i, pos, tx, txstr, trail) =>
-                         processTxValid (i=0) (blockpos + Int64.fromInt pos) tx (dhash txstr) trail)
-                     []
-                     blockstr
-            in
-               pushQueue (TrailValid trail)
-            end
-         else
-            let
-               val trail =
-                  traverseBlock
-                     (fn (i, pos, tx, txstr, trail) =>
-                         processTxGeneral (i=0) (blockpos + Int64.fromInt pos) tx (dhash txstr) trail)
-                     []
-                     blockstr
-            in
-               pushQueue (TrailGeneral trail)
-            end
-
-
-      fun undoTxValid isCoinbase ({inputs, ...}:Transaction.tx) hash =
-         let
-            val () =
-               (* Don't process the inputs for coinbase transactions. *)
-               if isCoinbase then
-                  ()
-               else
-                  app
-                  (fn { from=(inhash, n), ... } =>
-                      (case T.find theTable inhash of
-                          NONE =>
-                             (* We should have put all the gc'ed transactions back in the utxo before this. *)
-                             raise (Fail "transaction absent")
-                        | SOME entry =>
-                             let
-                                val i = n div 8
-                                val j = n mod 8
-                                val i' = i + 40
-
-                                (* bit j of byte i must be 0 (although we don't check this), set it *)
-                                val b = B.sub (entry, i')
-                                val b' = Word8.orb (b, Word8.<< (0w1, Word.fromInt j))
-
-                                val entry' =
-                                   BS.concat [BS.substring (entry, 0, i'),
-                                              BS.full (B.str b'),
-                                              BS.extract (entry, i'+1, NONE) ]
-                             in
-                                T.insert theTable entry'
-                             end))
-                  inputs
-
-            val () = T.remove theTable hash
-         in
-            ()
-         end
-
-
-      fun undo blockstr =
-         (case popQueue () of
-             TrailValid trail =>
-                let
-                   (* Reinsert gc'ed entries. *)
-                   val () =
-                      app (fn entry => T.insert theTable entry) trail
-                      
-                   (* Need to undo the transactions in reverse order (since a later tx might
-                      depend on an earlier one), so we assemble a list rather that doing it inline.
-                   *)
-                   val undos =
-                      traverseBlock
-                         (fn (i, pos, tx, txstr, l) => (i=0, tx, dhash txstr) :: l)
-                         []
-                         blockstr
-                in
-                   app (fn (isCoinbase, tx, hash) => undoTxValid isCoinbase tx hash) undos
-                end
-           | TrailGeneral trail =>
-                app
-                   (fn (TrailRemove entry) => T.remove theTable entry
-                     | (TrailInsert entry) => T.insert theTable entry)
-                   trail)
-
-      
-      exception TxoInvalid
-
-      fun lookup (hash, n) =
-         (case T.find theTable hash of
-             NONE => raise TxoInvalid
-           | SOME entry =>
-                let
-                   val i = n div 8 + 40
-                   val j = n mod 8
-
-                   val b = B.sub (entry, i)
-                   val mask = Word8.<< (0w1, Word.fromInt j)
-
-                   val () =
-                      if Word8.andb (b, mask) = 0w0 then
-                         raise TxoInvalid
-                      else
-                         ()
-                in
-                   Int64.fromLarge
-                   (Word64.toLargeInt
-                       (ConvertWord.bytesToWord64SL (BS.substring (entry, 32, 8))))
+                   insert table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs)
                 end)
+            ()
+            blockstr
 
-      fun size () = T.size theTable
 
+      fun lookup table hash =
+         (case T.find table hash of
+             NONE => NONE
+           | SOME entry =>
+                SOME
+                (Int64.fromLarge
+                    (Word64.toLargeInt
+                       (ConvertWord.bytesToWord64SL (BS.substring (entry, 32, 8))))))
 
-
-      (* Conversions *)
-
-      (* Should find a way to do 64-bit conversions this better. *)
-
-      fun int64ToBytesL x = 
-         ConvertIntInf.toFixedBytesL (8, Int64.toLarge x)
-
-      fun bytesToInt64L str =
-         Int64.fromLarge (ConvertIntInf.fromBytesL str)
-
-      fun bytesToWord16L str =
-         Word.orb (Word.<< (ConvertWord.word8ToWord (B.sub (str, 1)), 0w8),
-                   ConvertWord.word8ToWord (B.sub (str, 0)))
-
-      fun idequeExtract q =
-         let
-            fun loop acc =
-               if IDeque.isEmpty q then
-                  acc
-               else
-                  let
-                     val x = IDeque.removeBack q
-                  in
-                     loop (x :: acc)
-                  end
-
-            val l = loop []
-         in
-            (* put elements back in *)
-            List.app (IDeque.insertBack q) l;
-            l
-         end
 
 
       (* I/O *)
@@ -519,183 +302,111 @@ functor UtxoFun () :> UTXO =
             inputN ins sz
          end
 
-      fun inputBranch ins l =
-         let
-            val b = input1 ins
-
-            fun loop l =
-               (case l of
-                   [] =>
-                      raise ReadTable
-                 | (b', f) :: rest =>
-                      if b = b' then
-                         f ()
-                      else
-                         loop rest)
-         in
-            loop l
-         end
-
       fun outputInt32L (outs, x) =
          BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt x))
 
       fun outputBytesVar (outs, str) = Writer.writeOutstream outs (Writer.bytesVar str)
       
 
-      (* The UTXO file has the form:
-         8 bytes: final position, little-endian
-         4 bytes: number of UTXO table entries, little-endian (m)
-         ? bytes: m UTXO table entries
-         1 byte: number of trails (n)
-         ? bytes: n trails, starting with the most recent
+      (* The UTXO file is a sequence of UTXO records.  Each record consists of
+         a 1-byte tag, followed by the record data.  Branches are written starting
+         with the oldest.
 
-         A UTXO table entry looks like:
+         Branch terminator (tag=1)
+         no data
+
+         Table terminator (tag=2)
+         no data
+         replaces the final branch terminator
+
+         Insertion record (tag=3)
          ? bytes: varint specifying the size of the entry (n, which is at least 41)
          n bytes: the entry
-         (This assumes that no entry is ever larger than 255 bytes.  That would be 1720 outputs.)
 
-         A trail looks like:
-         1 byte: trail type (1=TrailValid, 2=TrailGeneral)
-         4 bytes: number of trail elements, little-endian (k)
-         ? bytes: k entries
+         Deletion record (tag=4)
+         32 bytes: the key to delete
 
-         A TrailValid trail entry looks like:
-         ? bytes: varint specifying the size of the entry (l)
-         l bytes: the entry
-
-         A TrailGeneral trail entry looks like:
-         1 byte: trail element type (1=TrailRemove, 2=TrailInsert)
-         ? bytes: varint specifying the size of the entry (l)
-         l bytes: the entry
       *)
 
 
-      fun writeTable finalpos =
+      fun writeTables outs table =
          let
-            val () = Log.long (fn () => "Writing UTXO table")
+            val () = Log.long (fn () => "Writing UTXO data")
 
-            val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile ^ ".new")
-            val path' = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
-            val outs = BinIO.openOut path
-
-            fun writeTrail tr =
-               (case tr of
-                   TrailValid l =>
-                      let in
-                         BinIO.output1 (outs, 0w1);
-                         outputInt32L (outs, length l);
-                         List.app (fn entry => outputBytesVar (outs, entry)) l
-                      end
-                 | TrailGeneral l =>
-                      let in
-                         BinIO.output1 (outs, 0w2);
-                         outputInt32L (outs, length l);
-                         List.app 
-                            (fn TrailRemove str =>
-                                   let in
-                                      BinIO.output1 (outs, 0w1);
-                                      outputBytesVar (outs, str)
-                                   end
-                              | TrailInsert str =>
-                                   let in
-                                      BinIO.output1 (outs, 0w2);
-                                      outputBytesVar (outs, str)
-                                   end)
-                            l
-                      end)
-         in
-            BinIO.output (outs, int64ToBytesL finalpos);
-            outputInt32L (outs, T.size theTable);
-            T.app (fn entry => outputBytesVar (outs, entry)) theTable;
-            BinIO.output1 (outs, Word8.fromInt (!undoCount));
-            List.app writeTrail (idequeExtract undoQueue);
-            BinIO.closeOut outs;
-            OS.FileSys.rename {old=path, new=path'};
-            Log.long (fn () => "UTXO table written, " ^ Int.toString (T.size theTable) ^ " entries")
-         end
-         handle OS.SysErr _ => Log.long (fn () => "Error writing index")
-
-
-      fun readTable finalpos =
-         let
-            val path = OS.Path.concat (Constants.dataDirectory, Chain.utxoFile)
-         in
-            if fileExists path then
-               let
-                  val () = Log.long (fn () => "Loading UTXO table")
-                  val () = reset ()
-                  val ins = BinIO.openIn path
-
-               in
-                  let
-                     val finalpos' = bytesToInt64L (inputN ins 8)
-                     val () =
-                        if finalpos = finalpos' then
-                           ()
-                        else
-                           (
-                           Log.long (fn () => "UTXO table is inconsistent with index");
-                           raise ReadTable
-                           )
-
-                     val entries = inputInt32L ins
-
-                     val () =
-                        repeat entries
-                        (fn () => T.insert theTable (inputEntry ins))
-
-                     val undoEntries =
-                        Int.min (Word8.toInt (input1 ins),
-                                 Constants.maxUndoRecords)
-
-                     val () =
-                        repeat undoEntries
-                        (fn () =>
-                            IDeque.insertBack undoQueue
-                            (inputBranch ins
-                             [(0w1, (fn () =>
-                                        (* read TrailValid *)
-                                        let
-                                           val k = inputInt32L ins
-                                        in
-                                           TrailValid
-                                           (rev (repeatlist k (fn () => inputEntry ins)))
-                                        end)),
-                              (0w2, (fn () =>
-                                        (* read TrailGeneral *)
-                                        let
-                                           val k = inputInt32L ins
-                                        in
-                                           TrailGeneral
-                                           (rev (repeatlist k
-                                                 (fn () =>
-                                                     inputBranch ins
-                                                     [(0w1, (fn () => TrailRemove (inputEntry ins))),
-                                                      (0w2, (fn () => TrailInsert (inputEntry ins)))])))
-                                        end))]))
-
-                     val () = undoCount := undoEntries
-                  in
-                     BinIO.closeIn ins;
-                     Log.long (fn () => "Finished loading UTXO table, " ^ Int.toString (T.size theTable) ^ " entries");
-                     true
-                  end
-                  handle ReadTable =>
-                     let in
-                        BinIO.closeIn ins;
-                        Log.long (fn () => "Failed to load UTXO table");
-                        reset ();
-                        false
-                      end
-               end
-            else
+            fun loop t =
                let in
-                  Log.long (fn () => "No UTXO table");
-                  false
+                  (case T.parent t of
+                      NONE =>
+                         ()
+                    | SOME t' =>
+                         (
+                         loop t';
+                         BinIO.output1 (outs, 0w1)
+                         ));
+
+                  T.foldDiff
+                     (fn (key, ()) =>
+                         let in
+                            BinIO.output1 (outs, 0w3);
+                            outputBytesVar (outs, key)
+                         end)
+                     (fn (key, ()) =>
+                         let in
+                            BinIO.output1 (outs, 0w4);
+                            BinIO.output (outs, B.substring (key, 0, 32))
+                         end)
+                     ()
+                     t
                end
+         in
+            loop table;
+            BinIO.output1 (outs, 0w2);
+            Log.long (fn () => "UTXO data written")
          end
+         handle OS.SysErr _ => Log.long (fn () => "Error writing UTXO data")
+
+
+      fun readTables ins =
+         let
+            val () = Log.long (fn () => "Reading UTXO data")
+
+            fun loop cur acc =
+               (case input1 ins of
+                   0w1 =>
+                      (* end of branch *)
+                      loop (T.branch cur) (cur :: acc)
+
+                 | 0w2 =>
+                      (* end of table *)
+                      cur :: acc
+
+                 | 0w3 =>
+                      (* insertion record *)
+                      (
+                      T.insert cur (inputEntry ins);
+                      loop cur acc
+                      )
+
+                 | 0w4 =>
+                      (* deletion record *)
+                      (
+                      T.remove cur (inputN ins 32);
+                      loop cur acc
+                      )
+
+                 | _ =>
+                      raise ReadTable)
+
+            val tables =
+               loop (T.table Constants.utxoTableSize) []
+         in
+            Log.long (fn () => "Finished reading UTXO data");
+            SOME tables
+         end
+         handle ReadTable =>
+            let in
+               Log.long (fn () => "Failed to read UTXO data");
+               NONE
+             end
 
    end
-
-
-structure Utxo = UtxoFun ()

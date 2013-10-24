@@ -82,4 +82,29 @@ structure Block :> BLOCK =
 
       fun readBlock bytes = Reader.readfull reader bytes
 
+
+      fun traverseBlock f accInitial blockstr =
+         let
+            val (_, blockstr') = Reader.readS headerReader (BS.full blockstr)
+            val (count, txsstr) = Reader.readS Reader.varint blockstr'
+
+            val pos = B.size blockstr - BS.size txsstr
+
+            fun loop i pos str acc =
+               if i >= count then
+                  acc
+               else
+                  let
+                     val (tx, str') = Reader.readS Transaction.reader str
+                     val txsz = BS.size str - BS.size str'
+                     val txstr = BS.slice (str, 0, SOME txsz)
+
+                     val acc' = f (i, pos, tx, txstr, acc)
+                  in
+                     loop (i+1) (pos + txsz) str' acc'
+                  end
+         in
+            loop 0 0 txsstr accInitial
+         end
+
    end

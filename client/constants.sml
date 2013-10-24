@@ -118,10 +118,8 @@ structure Constants =
       (* Allocate a UTXO table of this size. *)
       val utxoTableSize = 1024 * 1024                             (* 1 meg XXX *)
 
-      (* Record UTXO undo data for this many blocks.
-         UTXO table writing assumes that this is less than 256.
-      *)
-      val maxUndoRecords = chainTrustConfirmations
+      (* Record UTXO undo data for this many blocks. *)
+      val maxUtxoHistory = chainTrustConfirmations
       
      
 

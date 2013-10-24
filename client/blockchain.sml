@@ -255,13 +255,21 @@ structure Blockchain :> BLOCKCHAIN =
       datatype verification = OK | DUBIOUS | UNKNOWN
 
       datatype lineage =
-         (* block is on the primary fork: block number *)
-         Nil of int
+         (* block is on the primary fork:
+            - block number
+            - UTXO table
+         *)
+         Nil of int * Utxo.table
 
          (* block is on a secondary fork:
-            position, block number, cumulative difficulty, predecessor's lineage, verification status
+            - position
+            - block number
+            - cumulative difficulty
+            - predecessor's lineage
+            - verification status
+            - UTXO table
          *)
-       | Cons of pos * int * IntInf.int * lineage ref * verification
+       | Cons of pos * int * IntInf.int * lineage ref * verification * Utxo.table
 
 
       val lastblock = ref 0
@@ -300,7 +308,6 @@ structure Blockchain :> BLOCKCHAIN =
                      val diff = Verify.decodeDifficulty (inputDiffBits pos)
 
                      (* Undo everything but the table entry, which we can't do until the recursion returns. *)
-                     val () = Utxo.undo (inputData pos)
                      val () = lastblock := num - 1
                      val () = totaldiff := cumdiff - diff
                      (* Reducing the total difficulty could mean that things that we've removed from
@@ -325,8 +332,15 @@ structure Blockchain :> BLOCKCHAIN =
 
                      val hash = inputHash pos
                      val lineager = T.lookup theTable hash
+                     val utxo =
+                        (case !lineager of
+                            Nil (_, utxo) => utxo
+                          | Cons _ =>
+                               (* This can't happen; this block is on the primary fork. *)
+                               raise (Fail "invariant"))
+
                   in
-                     lineager := Cons (pos, num, cumdiff, predlinr, verstat);
+                     lineager := Cons (pos, num, cumdiff, predlinr, verstat, utxo);
                      lineager
                   end
          in
@@ -412,9 +426,9 @@ structure Blockchain :> BLOCKCHAIN =
          let
             fun loop lineage =
                (case lineage of
-                   Nil num =>
+                   Nil (num, _) =>
                       rewind num
-                 | Cons (pos, num, cumdiff, predlin, verstat) =>
+                 | Cons (pos, num, cumdiff, predlin, verstat, utxo) =>
                       let 
                          val () = loop (!predlin)
 
@@ -422,17 +436,10 @@ structure Blockchain :> BLOCKCHAIN =
                          val lineager = T.lookup theTable hash
                          val blockstr = inputData pos
                       in
-                         lineager := Nil num;
+                         lineager := Nil (num, utxo);
                          Array.update (thePrimaryFork, num, pos);
                          lastblock := num;
                          totaldiff := cumdiff;
-
-                         (* It's tempting to say that the block passes verification if verstat=OK.
-                            That's not right, because a block that fails verification (ie, a dubious
-                            block) but is later accepted is marked OK.
-                         *)
-                         Utxo.process false (pos+blockOffsetInRecord) blockstr;
-
                          checkDubiousFront ();
                          
                          (case verstat of
@@ -548,19 +555,17 @@ structure Blockchain :> BLOCKCHAIN =
                               | _ =>
                                    outputBlock hash (EBlock.toBytes eblock))
 
-                         val num =
-                            1 + (case predlin of
-                                    Nil n => n
-                                  | Cons (_, n, _, _, _) => n)
+                         val (prevnum, prevUtxo, prevDiff) =
+                            (case predlin of
+                                Nil (n, utxo) =>
+                                   (n, utxo, cumulativeDifficulty n)
+                              | Cons (_, n, prevDiff, _, _, utxo) =>
+                                   (n, utxo, prevDiff))
+
+                         val num = prevnum + 1
     
                          val diff =
-                            Verify.decodeDifficulty (#bits (#1 (EBlock.toBlock eblock)))
-                            +
-                            (case predlin of
-                                Nil n =>
-                                   cumulativeDifficulty n
-                              | Cons (_, _, preddiff, _, _) =>
-                                   preddiff)
+                            prevDiff + Verify.decodeDifficulty (#bits (#1 (EBlock.toBlock eblock)))
 
                          val (dubious, verstat) =
                             if !verification then
@@ -570,6 +575,9 @@ structure Blockchain :> BLOCKCHAIN =
                                   (true, DUBIOUS)
                             else
                                (false, UNKNOWN)
+
+                         val utxo = Utxo.branch prevUtxo
+                         val () = Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock)
                       in
                          if
                             diff > !totaldiff
@@ -583,15 +591,13 @@ structure Blockchain :> BLOCKCHAIN =
                                if num > !lastblock then
                                   ()
                                else
-                                  (* XX only print this for fresh forks *)
                                   Log.long (fn () => "Fork detected at "^ B.toStringHex (B.rev hash));
 
                                setPrimary predlin;
                                Array.update (thePrimaryFork, num, pos);
-                               T.insert theTable hash (ref (Nil num));
+                               T.insert theTable hash (ref (Nil (num, utxo)));
                                lastblock := num;
                                totaldiff := diff;
-                               Utxo.process (verstat = OK) (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
                                checkDubiousFront ();
    
                                if dubious then
@@ -607,11 +613,10 @@ structure Blockchain :> BLOCKCHAIN =
                          else
                             (* On a secondary fork. *)
                             let 
-                               val lineage = Cons (pos, num, diff, predlinr, verstat)
+                               val lineage = Cons (pos, num, diff, predlinr, verstat, utxo)
                             in
                                T.insert theTable hash (ref lineage);
                                
-                               (* XX only print this for fresh forks *)
                                Log.long (fn () => "Fork detected at " ^ B.toStringHex (B.rev hash));
 
                                if dubious then
@@ -662,11 +667,13 @@ structure Blockchain :> BLOCKCHAIN =
             lastblock := 0;
             totaldiff := 0;
             T.reset theTable Constants.blockTableSize;
-            T.insert theTable Chain.genesisHash (ref (Nil 0));
+
+            (* We don't put in a working UTXO table, so we'll have to retrofit one later if one is needed. *)
+            T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.null)));
+
             A.update (thePrimaryFork, 0, 0);
             Q.reset theDubiousQueue;
-            verification := false;
-            Utxo.reset ()
+            verification := false
          end
 
       
@@ -678,11 +685,7 @@ structure Blockchain :> BLOCKCHAIN =
             pos
          else
             let
-               fun esc () =
-                  let in
-                     Log.long (fn () => "File ends with incomplete record");
-                     raise (LoadFile pos)
-                  end
+               fun esc () = raise (LoadFile pos)
 
                val code = must esc MIO.inputN (instream, 4)
                val hash = must esc MIO.inputN (instream, 32)
@@ -717,7 +720,8 @@ structure Blockchain :> BLOCKCHAIN =
          8   bytes: final position, little-endian
          4   bytes: number of blocks, little-endian (n)
          8n  bytes: thePrimaryFork contents
-         36m bytes: theTable contents  (m=number of Nil entries in theTable)
+         ?   bytes: UTXO table
+         36m bytes: theTable contents  (m=number of Nil entries in theTable, terminated by EOF)
 
          Hash entry format:
          32  bytes: block hash
@@ -735,6 +739,14 @@ structure Blockchain :> BLOCKCHAIN =
                val outs = BinIO.openOut path
    
                val blocks = !lastblock
+               
+               val lasthash = inputHash (A.sub (thePrimaryFork, blocks)) 
+               val lastUtxo =
+                  (case !(T.lookup theTable lasthash) of
+                      Nil (_, utxo) => utxo
+                    | Cons _ =>
+                         (* Must be on the primary fork, since we looked this up from thePrimaryFork. *)
+                         raise (Fail "invariant"))
    
                fun writePrimaryFork num =
                   if num > blocks then
@@ -747,14 +759,14 @@ structure Blockchain :> BLOCKCHAIN =
    
                fun writeHashEntry (hash, lineager) =
                   (case !lineager of
-                      Nil num =>
+                      Nil (num, _) =>
                          let in
                             BinIO.output (outs, hash);
                             BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt num))
                          end
                     | _ =>
-                         (* Leave these out of the index.  Most likely they're forgotten.  If we
-                            turn out to need them, we can get them again.
+                         (* Leave these out of the index.  Most likely they're forgotten.
+                            If we turn out to need them, we can get them again.
                          *)
                          ())
                       
@@ -762,12 +774,12 @@ structure Blockchain :> BLOCKCHAIN =
                BinIO.output (outs, int64ToBytesL (!theOutPos));
                BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt blocks));
                writePrimaryFork 0;
+               Utxo.writeTables outs lastUtxo;
                T.app writeHashEntry theTable;
                BinIO.closeOut outs;
                OS.FileSys.rename {old=path, new=path'};
                lastIndexPos := !theOutPos;
-               Log.long (fn () => "Index written");
-               Utxo.writeTable (!theOutPos)
+               Log.long (fn () => "Index written")
             end
             handle OS.SysErr _ => Log.long (fn () => "Error writing index")
          else
@@ -791,6 +803,12 @@ structure Blockchain :> BLOCKCHAIN =
                      val finalpos = bytesToInt64L (must esc BinIO.inputN (ins, 8))
                      val blocks = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
    
+                     (* We don't bother setting totaldiff. It's only the relative amounts that ever matter,
+                        so we can just start it at zero.
+                     *)
+
+                     val () = lastblock := blocks;
+
                      fun readPrimaryFork num =
                         if num > blocks then
                            ()
@@ -800,34 +818,58 @@ structure Blockchain :> BLOCKCHAIN =
                               readPrimaryFork (num+1)
                            end
    
+                     val () = readPrimaryFork 0
+
+                     val utxos =
+                        (case Utxo.readTables ins of
+                            NONE =>
+                               raise ReadIndex
+                          | SOME utxos =>
+                               utxos)
+
                      fun readTable () =
                         if BinIO.endOfStream ins then
                            ()
                         else
                            let
                               val hash = must esc BinIO.inputN (ins, 32)
-                              val num = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
+                              val num =
+                                 Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
+                                 handle Overflow => raise ReadIndex
                            in
-                              T.insert theTable hash (ref (Nil num));
+                              T.insert theTable hash (ref (Nil (num, Utxo.null)));
                               readTable ()
                            end
+
+                     val () = readTable ()
+
+                     fun emplaceUtxos n l =
+                        (case l of
+                            [] =>
+                               ()
+                          | utxo :: rest =>
+                               let
+                                  val hash = inputHash (A.sub (thePrimaryFork, n))
+                                  val lineager = T.lookup theTable hash
+                               in
+                                  (case !lineager of
+                                      Nil (num, _) =>
+                                         lineager := Nil (num, utxo)
+                                    | Cons _ =>
+                                         (* Must be on the primary fork, since we looked this up from thePrimaryFork.
+                                            Moreover, we've only loaded the primary fork anyway.
+                                         *)
+                                         raise (Fail "invariant")) ;
+
+                                  emplaceUtxos (n-1) rest
+                               end)
+
+                     val () = emplaceUtxos blocks utxos
                   in
-                     (* We don't bother setting totaldiff. It's only the relative amounts that ever matter,
-                        so we can just start it at zero.
-                     *)
-                     lastblock := blocks;
-                     readPrimaryFork 0;
-                     readTable ();
                      BinIO.closeIn ins;
                      Log.long (fn () => "Index load complete at block "^ Int.toString blocks);
 
-                     if Utxo.readTable finalpos then
-                        SOME finalpos
-                     else
-                        let in
-                           reset ();
-                           NONE
-                        end
+                     SOME finalpos
                   end
                   handle ReadIndex =>
                      let in
@@ -875,12 +917,16 @@ structure Blockchain :> BLOCKCHAIN =
 
                                (* Verify that the first record looks right. *)
                                if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
+                                  (
+                                  (* Retrofit a UTXO table for block 0.  See below. *)
+                                  T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
                                   Pos.fromInt (B.size genesisRecord)
+                                  )
                                else
-                                  let in
-                                     MIO.closeIn instream;
-                                     raise BlockchainIO
-                                  end
+                                  (
+                                  MIO.closeIn instream;
+                                  raise BlockchainIO
+                                  )
                             end)
 
                   val () = lastIndexPos := startpos
@@ -888,7 +934,11 @@ structure Blockchain :> BLOCKCHAIN =
                   val () = Log.long (fn () => "Loading blockchain file");
                   val endpos =
                      loadFile startpos instream
-                     handle LoadFile pos => pos
+                     handle LoadFile pos =>
+                        (
+                        Log.long (fn () => "File ends with incomplete record");
+                        pos
+                        )
                in
                   theOutPos := endpos;
                   MIO.closeIn instream;
@@ -917,6 +967,14 @@ structure Blockchain :> BLOCKCHAIN =
                   MIO.flushOut outstream;
                   theOutPos := Pos.fromInt (B.size genesisRecord);
                   lastIndexPos := Pos.fromInt (B.size genesisRecord);
+
+                  (* Retrofit a UTXO table for block 0.
+
+                     Note that the table does *not* contain the genesis block's transaction.
+                     This is Bitcoin's behavior; whether it is intentional or a bug, no one knows.
+                  *)
+                  T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
+
                   Log.long (fn () => "Created new blockchain file");
                   verification := true  (* don't need to verify any blocks, it's empty *)
                end
@@ -936,14 +994,14 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun blockPosition hash =
          (case !(T.lookup theTable hash) of
-             Nil num =>
+             Nil (num, _) =>
                 A.sub (thePrimaryFork, num)
-           | Cons (pos, _, _, _, _) => pos)
+           | Cons (pos, _, _, _, _, _) => pos)
 
       fun blockNumber hash =
          (case !(T.lookup theTable hash) of
-             Nil num => num
-           | Cons (_, num, _, _, _) => num)
+             Nil (num, _) => num
+           | Cons (_, num, _, _, _, _) => num)
 
       fun blockData hash = inputData (blockPosition hash)
 

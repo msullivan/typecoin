@@ -23,8 +23,7 @@ Records the blockchain, tracks which blocks are on the primary fork,
 and searches for hashes.  Global state: initialized in Main.
 
 Utxo (utxo.sml)
-Maintains the UTXO (unspent transaction output) table.  Global state:
-initialized in Blockchain.
+Maintains the UTXO (unspent transaction output) table.  Per-table state.
 
 Process (process.sml)
 Processes incoming messages and periodically polls the network.

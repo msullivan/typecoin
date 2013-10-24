@@ -18,9 +18,27 @@ signature VERIFY =
       *)
       val verifyBlockGross : EBlock.eblock -> bool
 
-      (* Assumes that the block has already passed verifyBlockGross. *)
-      val verifyBlock : EBlock.eblock -> bool
 
-      val verifyTx : Transaction.tx -> bool
+      (* verifyTx getTx tx
+         
+            getTx coord
+            -----------
+            If coord is valid and unspent, marks it as spent (if appropriate), and returns SOME of transaction.
+            Otherwise, returns NONE.
+
+         Returns true iff tx passes verification.  Calls getTx on all tx's inputs.
+      *)
+      val verifyTx : (Transaction.coord -> Transaction.tx option) -> Transaction.tx -> bool
+
+
+
+      (* verifyStoredBlock pos eblock
+
+         If    eblock has passed verifyBlockGross
+               eblock is stored at position pos
+         then  returns true iff eblock passes verification
+      *)
+(* XX *)
+      val verifyBlock : EBlock.eblock -> bool
 
    end

@@ -24,4 +24,13 @@ signature BLOCK =
 
       val readBlock : Bytestring.string -> block
 
+      (* Argument function takes:
+         - transaction index
+         - transaction offset (bytes into the block)
+         - the transaction
+         - the serialized transaction
+         - accumulator
+      *)
+      val traverseBlock : (int * int * Transaction.tx * Bytesubstring.substring * 'a -> 'a) -> 'a -> Bytestring.string -> 'a
+
    end
