@@ -467,7 +467,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    not (Verify.verifyStoredBlock
                                            inputCostring
                                            (Utxo.branch (utxoFromLineage (!predlin)))
-                                           pos
+                                           (pos+blockOffsetInRecord)
                                            (EBlock.fromBytes blockstr))
                                 then
                                    setDubious num
@@ -479,6 +479,12 @@ structure Blockchain :> BLOCKCHAIN =
          end
 
 
+      (* XXX
+         There's no guarantee we have enough UTXO history to go back enough blocks to
+         gain the required difficulty.  If the recent blocks contain some easy ones,
+         this will fail, we might need to go back more than maxUtxoHistory blocks, and
+         we'll fail.
+      *)
       fun resumeVerification () =
          let
             val blocks = !lastblock
@@ -523,10 +529,13 @@ structure Blockchain :> BLOCKCHAIN =
 
                      val eblock = EBlock.fromBytes (inputData pos)
                   in
-                     Verify.verifyStoredBlock inputCostring utxo pos eblock
+                     Verify.verifyStoredBlock inputCostring utxo (pos+blockOffsetInRecord) eblock
                   end
                then
-                  loopVerify (i+1)
+                  let in
+                     Log.long (fn () => "Block "^ Int.toString i ^" verified");
+                     loopVerify (i+1)
+                  end
                else
                   let in
                      Log.long (fn () => "Dubious block detected at " ^ Int.toString i);
@@ -535,10 +544,10 @@ structure Blockchain :> BLOCKCHAIN =
                   end
 
             val start =
-               Int.max (1, loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks)))))
+               loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks)))) + 1
          in
             Log.long (fn () => "Resuming verification at block "^ Int.toString start);
-            loopVerify start;  (* Never need to verify genesis block *)
+            loopVerify start;
             verification := true
          end
 
@@ -1004,10 +1013,10 @@ structure Blockchain :> BLOCKCHAIN =
                   theOutstream := SOME (MIO.openAppend path);
                   MIO.SeekIO.seekOut (valOf (!theOutstream), endpos);
 
-                  resumeVerification ();
+                  writeIndex ();
                   Log.long (fn () => "Blockchain load complete at block " ^ Int.toString (!lastblock));
 
-                  writeIndex ()
+                  resumeVerification ()
                end
             else
                (* Start a new blockchain record. *)
@@ -1098,5 +1107,9 @@ structure Blockchain :> BLOCKCHAIN =
       fun orphanageMember (orphanTable, _) hash = T.member orphanTable hash
 
       fun orphanageSize (orphanTable, _) = T.size orphanTable
+
+
+      fun utxoByHash hash =
+         utxoFromLineage (! (T.lookup theTable hash))
 
    end

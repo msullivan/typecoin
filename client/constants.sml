@@ -100,7 +100,7 @@ structure Constants =
          (Also, consequently, only verify this many blocks at
          the end of the blockchain.)
       *)
-      val chainTrustConfirmations = (* XX 10 *) 9
+      val chainTrustConfirmations = 10
 
 
 
@@ -118,8 +118,8 @@ structure Constants =
       (* Allocate a UTXO table of this size. *)
       val utxoTableSize = 1024 * 1024                             (* 1 meg XXX *)
 
-      (* Record UTXO undo data for this many blocks.  Must be greater than chainTrustConfirmations. *)
-      val maxUtxoHistory = chainTrustConfirmations+1
+      (* Record UTXO undo data for this many blocks.  Must be at least chainTrustConfirmations. *)
+      val maxUtxoHistory = chainTrustConfirmations
       
      
 

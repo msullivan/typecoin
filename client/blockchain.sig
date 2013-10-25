@@ -39,5 +39,6 @@ signature BLOCKCHAIN =
 
       (* XX *)
       val inputCostring : Int64.int -> BytesubstringCostring.costring
+      val utxoByHash : hash -> Utxo.table
 
    end

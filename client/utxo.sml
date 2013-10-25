@@ -1,5 +1,5 @@
 
-structure Utxo (* :> UTXO *) =
+structure Utxo :> UTXO =
    struct
 
       structure B = Bytestring
@@ -175,9 +175,8 @@ structure Utxo (* :> UTXO *) =
         
                     val b = B.sub (entry, i')
                     val mask = Word8.<< (0w1, Word.fromInt j)
-                    val b' = Word8.andb (b, Word8.notb mask)
                  in
-                     b' <> 0w0
+                     Word8.andb (b, mask) <> 0w0
                  end)
           handle Subscript => false)
 
@@ -227,14 +226,14 @@ structure Utxo (* :> UTXO *) =
                     else
                        T.insert table (BS.concat [BS.substring (entry, 0, 40), BS.full spendmap]) ;
  
-                     b' <> 0w0
+                    Word8.andb (b, mask) <> 0w0
                  end)
           handle Subscript => false)
 
 
       fun processBlock table blockpos blockstr =
          Block.traverseBlock
-            (fn (i, pos, {inputs, outputs, ...}, txstr, trail) =>
+            (fn (i, pos, {inputs, outputs, ...}, txstr, ()) =>
                 let in
                    if i = 0 then
                       (* Don't process the inputs for coinbase transactions. *)

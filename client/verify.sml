@@ -257,7 +257,7 @@ structure Verify :> VERIFY =
                else
                   ()
          in
-            fee
+            fee : IntInf.int
          end
 
 
@@ -289,6 +289,8 @@ structure Verify :> VERIFY =
                          in
                             SOME tx
                          end
+                         handle Overflow => raise (Fail "txin fetch overflow")
+                              | Reader.SyntaxError => raise (Fail "txin fetch failure")
                       else
                          NONE)
 
@@ -297,6 +299,7 @@ structure Verify :> VERIFY =
                (fn (i, pos, tx, txstr, fees) =>
                    let
                       (* Verify the transaction, unless it's coinbase. *)
+                      
                       val fee =
                          if i = 0 then
                             0
