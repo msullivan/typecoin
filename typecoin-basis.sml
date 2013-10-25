@@ -4,7 +4,8 @@ struct
   local
       structure BS = Bytestring
       open LF Logic TestUtil
-      infixr -->
+      infixr --> infix <--
+
 
   (**** "The Basis" ****)
   val byte' = c_app "byte" []
@@ -18,9 +19,32 @@ struct
 
   val bytestring' = c_app "bytestring" []
 
-  val basis_lf = FromNamed.convertSg
+  val bit' = c_app "bit" []
+  val b0' = c_app "b0" []
+  val b1' = c_app "b1" []
+  val number' = c_app "number" []
+  val pos' = c_app "pos" []
+  val leading_one' = c_app "leading-one" []
+  fun bsnoc' bs b = c_app "::" [bs, b]
+  val zero' = c_app "zero" []
+  fun pos_num' n = c_app "pos-num" [n]
+
+  fun plus' n1 n2 n3 = c_app "plus" [n1, n2, n3]
+  fun plusp' n1 n2 n3 = c_app "plusp" [n1, n2, n3]
+  fun inc' n1 n2 = c_app "inc" [n1, n2]
+
+
+  fun byteFmt b = StringCvt.padLeft #"0" 2 (Word8.fmt StringCvt.HEX b)
+
+  fun v s = HVar (~1, s)
+  fun var s = EApp (v s, SNil)
+  val [N, M, P, Q] =
+      map var ["N", "M", "P", "Q"]
+
+
+  val basis_lf = FromNamed.convertSg (
       [(T, "byte", EType)] @
-      List.tabulate (256, fn i => (O, "b"^Int.fmt StringCvt.HEX i, byte')) @
+      List.tabulate (256, fn i => (O, "b"^ byteFmt (Word8.fromInt i), byte')) @
       [(T, "hash160", EType),
        (O, "mk_hash160", makeHashArrow hash160' 20),
        (T, "hash256", EType),
@@ -32,13 +56,78 @@ struct
 
        (T, "bytestring", EType),
        (O, "bs_nil", bytestring'),
-       (O, "bs_cons", byte' --> bytestring' --> bytestring')
+       (O, "bs_cons", byte' --> bytestring' --> bytestring'),
 
-      ]
+       (* Need to have regular binary *)
+       (* Represented in this sort of funny way with an leading one
+        * so we have adequecy. *)
+       (T, "bit", EType),
+       (O, "b0", bit'),
+       (O, "b1", bit'),
+
+       (T, "pos", EType),
+       (O, "leading-one", pos'),
+       (O, "::", pos' --> bit' --> pos'),
+
+       (T, "number", EType),
+       (O, "zero", number'),
+       (O, "pos-num", pos' --> number'),
+
+       (* Binary arithmetic! *)
+       (T, "inc", pos' --> pos' --> EType),
+       (O, "inc/end", inc' leading_one' (bsnoc' leading_one' b0')),
+       (O, "inc/0",
+        EPi ("N", pos',
+             inc' (bsnoc' N b0') (bsnoc' N b1'))),
+       (O, "inc/1",
+        EPi ("N", pos', EPi ("M", pos',
+             inc' (bsnoc' N b1') (bsnoc' M b0') <-- inc' N M))),
+
+       (* Do we care that the proofs be unique? *)
+       (T, "plusp", pos' --> pos' --> pos' --> EType),
+       (O, "plusp/1/n",
+        EPi ("N", pos', EPi ("M", pos',
+             plusp' leading_one' N M <-- inc' N M))),
+       (O, "plusp/n/1",
+        EPi ("N", pos', EPi ("M", pos',
+             plusp' N leading_one' M <-- inc' N M))),
+       (O, "plusp/0/0",
+        EPi ("N", pos', EPi ("M", pos', EPi ("P", pos',
+             plusp' (bsnoc' N b0') (bsnoc' M b0') (bsnoc' P b0')
+             <-- plusp' N M P)))),
+       (O, "plusp/1/0",
+        EPi ("N", pos', EPi ("M", pos', EPi ("P", pos',
+             plusp' (bsnoc' N b1') (bsnoc' M b0') (bsnoc' P b1')
+             <-- plusp' N M P)))),
+       (O, "plusp/0/1",
+        EPi ("N", pos', EPi ("M", pos', EPi ("P", pos',
+             plusp' (bsnoc' N b0') (bsnoc' M b1') (bsnoc' P b1')
+             <-- plusp' N M P)))),
+       (O, "plusp/1/1",
+        EPi ("N", pos', EPi ("M", pos', EPi ("P", pos', EPi ("Q", pos',
+             plusp' (bsnoc' N b1') (bsnoc' M b1') (bsnoc' Q b0')
+             <-- plusp' N M P
+             <-- inc' P Q))))),
+
+
+       (T, "plus", number' --> number' --> number' --> EType),
+       (O, "plus/0/n",
+        EPi ("N", number', plus' zero' N N)),
+       (O, "plus/n/0",
+        EPi ("N", number', plus' N zero' N)),
+       (O, "plus/n/n",
+        EPi ("N", pos', EPi ("M", pos', EPi ("P", pos',
+             plus' (pos_num' N) (pos_num' M) (pos_num' P)
+             <-- plusp' N M P)))),
+
+
+       (T, "void", EType)
+      ])
   val basis = map SConst basis_lf
 
   in
 
+  (* Some crap *)
   val byte = c_app' "$" "byte" []
   val hash160 = c_app' "$" "hash160" []
   val hash256 = c_app' "$" "hash256" []
@@ -51,8 +140,28 @@ struct
   val bs_nil = c_app' "$" "bs_nil" []
   fun bs_cons x xs = c_app' "$" "bs_cons" [x, xs]
 
+  val bit = c_app' "$" "bit" []
+  val b0 = c_app' "$" "b0" []
+  val b1 = c_app' "$" "b1" []
+  val number = c_app' "$" "number" []
+  val pos = c_app' "$" "pos" []
+  val leading_one = c_app' "$" "leading-one" []
+  fun bsnoc bs b = c_app' "$" "::" [bs, b]
+  val zero = c_app' "$" "zero" []
+  fun pos_num n = c_app' "$" "pos_num" [n]
 
-  fun byteToLFByte b = c_app' "$" ("b" ^ Word8.fmt StringCvt.HEX b) []
+
+  (* Utility stuff *)
+  fun intToLFPos 1 = leading_one
+    | intToLFPos n =
+      if n <= 0 then raise Fail "not a positive number" else
+      let val low_bit = if n mod 2 = 0 then b0 else b1
+          val other_bits = intToLFPos (n div 2)
+      in bsnoc other_bits low_bit end
+  fun intToLFNumber 0 = zero
+    | intToLFNumber n = pos_num (intToLFPos n)
+
+  fun byteToLFByte b = c_app' "$" ("b" ^ byteFmt b) []
 
   (* convert a string containing a hash to an LF object of type hashN,
    * where N is the number of bits. If hashN isn't one of our types, then
@@ -69,6 +178,7 @@ struct
   val test_hash_str = "1badd00ddeadbeefcafef00d0123456789abcdef"
   val test_hash = hashStringToHashObj test_hash_str
 
+  val basis_lf = basis_lf
   val basis = basis
 
   end

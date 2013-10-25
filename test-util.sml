@@ -12,6 +12,8 @@ struct
   fun arrow' (t1, t2) = arrow t1 t2
   infixr -->
   val (op -->) = arrow'
+  infix <--
+  fun t1 <-- t2 = t2 --> t1
 
 
   fun c_app c ls = EApp (HConst (Const.LThis, c), listToSpine ls)
