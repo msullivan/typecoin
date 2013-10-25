@@ -31,17 +31,19 @@ signature VERIFY =
       val verifyTx : (Transaction.coord -> Transaction.tx option) -> Transaction.tx -> bool
 
 
+      type pos = Int64.int
 
-      (* verifyStoredBlock table pos eblock
+      (* verifyStoredBlock read table pos eblock
 
          If    eblock has passed verifyBlockGross
                eblock is stored at position pos
+               (read pos') returns a costring containing the blockchain starting at pos'
          then  if    block passes verification
                then  processes the block into table
                      returns true
                else  may process some or all of the block into table
                      returns false
       *)
-      val verifyStoredBlock : Utxo.table -> Int64.int -> EBlock.eblock -> bool
+      val verifyStoredBlock : (pos -> BytesubstringCostring.costring) -> Utxo.table -> pos -> EBlock.eblock -> bool
 
    end

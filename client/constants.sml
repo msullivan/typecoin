@@ -100,7 +100,7 @@ structure Constants =
          (Also, consequently, only verify this many blocks at
          the end of the blockchain.)
       *)
-      val chainTrustConfirmations = 10
+      val chainTrustConfirmations = (* XX 10 *) 9
 
 
 
@@ -118,8 +118,8 @@ structure Constants =
       (* Allocate a UTXO table of this size. *)
       val utxoTableSize = 1024 * 1024                             (* 1 meg XXX *)
 
-      (* Record UTXO undo data for this many blocks. *)
-      val maxUtxoHistory = chainTrustConfirmations
+      (* Record UTXO undo data for this many blocks.  Must be greater than chainTrustConfirmations. *)
+      val maxUtxoHistory = chainTrustConfirmations+1
       
      
 
@@ -134,6 +134,24 @@ structure Constants =
       (* Keep relayed transactions in the pool this long. *)
       val poolRetentionTime = Time.fromSeconds (10 * 60)          (* 10 minutes *)
 
+
+
+      (*** Verification constants ***)
+
+      (* No blocks larger than this. *)
+      val maxBlockSize = 1000000                                  (* 1 million *)
+
+      (* No scripts larger than this. *)
+      val maxScriptSize = 10000
+
+      (* No script constants larger than this. *)
+      val maxConstantSize = 520
+
+      (* Stacks (regular and alternate combined) must not grow larger than this. *)
+      val maxStackSize = 1000
+
+      (* Scripts may not execute more instructions than this. *)
+      val maxScriptOperations = 201
 
 
       (* File constants *)

@@ -9,6 +9,7 @@ structure Verify :> VERIFY =
 
       (* Constants *)
       val maximumBits : Word32.word = 0wx1d00ffff
+      val maximumAmount : IntInf.int = Word64.toLargeInt (~ 0w1)
 
       (* Precomputed data *)
       val zeros = valOf (B.fromStringHex "0000000000000000000000000000000000000000000000000000000000000000")
@@ -163,15 +164,26 @@ structure Verify :> VERIFY =
             end
 
 
-      exception Reject = Interpret.Reject
+      (* XXXX Things that still need to be verified:
 
-      val scriptLimit = 10000
+         - timestamp
+         - allowable difficulty
+         - maximum signature operations (20,000)
+         - pay to script hash (@#$%&!)
+         - coinbase maturity
+         - coinbase amount!
+         - the first transaction (and only the first transaction) has zero for its txin "hash"
+         - no repeat transaction unless legacy
+      *) 
+
+
+      exception Reject = Interpret.Reject
 
       (* Verify a txin, and return its amount if it passes. *)
       fun verifyTxin (getTx : T.coord -> T.tx option) tx i ({from=(from as (_, fromIndex)), script=inScript, ...}:T.txin) =
          let
             val () =
-               if B.size inScript > scriptLimit then
+               if B.size inScript > Constants.maxScriptSize then
                   raise Reject
                else
                   ()
@@ -187,7 +199,7 @@ structure Verify :> VERIFY =
                List.nth (outputs, fromIndex)
 
             val () =
-               if B.size outScript > scriptLimit then
+               if B.size outScript > Constants.maxScriptSize then
                   raise Reject
                else
                   ()
@@ -204,7 +216,8 @@ structure Verify :> VERIFY =
          end
 
 
-      fun verifyTx getTx (tx as { version, inputs, outputs, lockTime }) =
+      (* Verifies the transaction, returns its fee. *)
+      fun verifyTxMain getTx (tx as { version, inputs, outputs, lockTime }) =
          let
             val (amountIn, _) = 
                List.foldl
@@ -217,12 +230,24 @@ structure Verify :> VERIFY =
                (0, 0)
                inputs
 
+            val () =
+               if amountIn > maximumAmount then
+                  raise Reject
+               else
+                  ()
+
             val amountOut =
                List.foldl
                (fn ({amount, script=_}, amountAcc) =>
                    (amountAcc + Word64.toLargeInt amount))
                0
                outputs
+
+            val () =
+               if amountOut > maximumAmount then
+                  raise Reject
+               else
+                  ()
 
             val fee = amountIn - amountOut
 
@@ -231,15 +256,69 @@ structure Verify :> VERIFY =
                   raise Reject
                else
                   ()
+         in
+            fee
+         end
 
-            (* XX check more *)
+
+      fun verifyTx getTx tx =
+         (verifyTxMain getTx tx; true)
+         handle Reject => false
+
+
+      type pos = Int64.int
+
+
+      fun verifyStoredBlock read utxo blockPos eblock =
+         let
+            (* eblock has already passed verifyBlockGross *)
+
+            val () =
+               if B.size (EBlock.toBytes eblock) > Constants.maxBlockSize then
+                  raise Reject
+               else
+                  ()
+
+            fun getTx (coord as (hash, n)) =
+               (case Utxo.lookup utxo hash of
+                   NONE => NONE
+                 | SOME pos' =>
+                      if Utxo.spend utxo coord then
+                         let
+                            val (tx, _) = Transaction.reader (read pos')
+                         in
+                            SOME tx
+                         end
+                      else
+                         NONE)
+
+            val fees =
+               Block.traverseBlock 
+               (fn (i, pos, tx, txstr, fees) =>
+                   let
+                      (* Verify the transaction, unless it's coinbase. *)
+                      val fee =
+                         if i = 0 then
+                            0
+                         else
+                            verifyTxMain getTx tx
+
+                      val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
+                   in
+                      Utxo.insert utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx));
+                      fees + fee
+                   end)
+               0
+               (EBlock.toBytes eblock)
+
+            val () =
+               if fees > maximumAmount then
+                  raise Reject
+               else
+                  ()
          in
             true
          end
          handle Reject => false
-
-
-      (* XXX *)
-      fun verifyStoredBlock utxo pos eblock = true
 
    end

@@ -173,19 +173,15 @@ structure Interpret :> INTERPRET =
       type txenv = Transaction.tx * int * BS.substring
 
 
-      val constantLimit = 520
-      val stkszLimit = 1000
-      val opsLimit = 201
-
-      (* stksz = |stack| + |altstack|, which may not exceed 1000
-         ops is the current number of (non-constant) operations, which may not exceed 201
+      (* stksz = |stack| + |altstack|, which may not exceed Constants.maxStackSize
+         ops is the current number of (non-constant) operations, which may not exceed Constants.maxScriptOperations
          txenv is the current transaction environment
 
       *)
       fun run code stack altstack stksz ops ifstack (txenv : txenv) =
          let
             fun run' code stack altstack stksz ops =
-               if stksz > stkszLimit orelse ops > opsLimit then
+               if stksz > Constants.maxStackSize orelse ops > Constants.maxScriptOperations then
                   raise Reject
                else if BS.isEmpty code then
                   (case ifstack of
@@ -200,8 +196,7 @@ structure Interpret :> INTERPRET =
                   in
                      (case inst of
                          S.Const str =>
-                            if B.size str > constantLimit then
-                               (* reject any string larger than 520 *)
+                            if B.size str > Constants.maxConstantSize then
                                raise Reject
                             else
                                run' cont (str :: stack) altstack (stksz+1) ops
@@ -692,7 +687,7 @@ structure Interpret :> INTERPRET =
 
                                val ops' = ops+1+numPubkeys
                                val () =
-                                  if ops' > opsLimit then
+                                  if ops' > Constants.maxScriptOperations then
                                      raise Reject
                                   else
                                      ()
@@ -708,7 +703,7 @@ structure Interpret :> INTERPRET =
 
                                val ops' = ops+1+numPubkeys
                                val () =
-                                  if ops' > opsLimit then
+                                  if ops' > Constants.maxScriptOperations then
                                      raise Reject
                                   else
                                      ()
@@ -732,7 +727,7 @@ structure Interpret :> INTERPRET =
                   end
 
             fun skip code ops =
-               if ops > opsLimit then
+               if ops > Constants.maxScriptOperations then
                   raise Reject
                else if BS.isEmpty code then
                   (* Fail if the script ends with a nonempty if stack, which we must have
@@ -743,7 +738,7 @@ structure Interpret :> INTERPRET =
                   let
                      val (inst, cont) = decode code
                   in
-                     if ops > opsLimit then
+                     if ops > Constants.maxScriptOperations then
                         raise Reject
                      else
                         (case inst of
@@ -779,7 +774,7 @@ structure Interpret :> INTERPRET =
             (* It shouldn't be necessary to check stksz here, since no operation that increases the stack size
                calls run, but it seems more robust just to do it.
             *)
-            if stksz > stkszLimit orelse ops > opsLimit  then
+            if stksz > Constants.maxStackSize orelse ops > Constants.maxScriptOperations  then
                raise Reject
             else if List.all (fn b => b) ifstack then
                run' code stack altstack stksz ops

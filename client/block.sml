@@ -104,7 +104,7 @@ structure Block :> BLOCK =
                      loop (i+1) (pos + txsz) str' acc'
                   end
          in
-            loop 0 0 txsstr accInitial
+            loop 0 pos txsstr accInitial
          end
 
    end

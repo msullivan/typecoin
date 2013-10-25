@@ -108,6 +108,20 @@ structure Blockchain :> BLOCKCHAIN =
             ConvertWord.bytesToWord32L (MIO.inputN (ins, 4))
          end
 
+      (* We'd want this to be the chunkSize for reads from the io stream underlying !theInstream.
+         There's no good way to find out what it is, since BinIO.StreamIO.getReader closes
+         the stream, but 4096 seems to be a typical number.
+      *)
+      val chunkSize = 4096  
+
+      (* NB! this is only good as long as no one else meddles with !theInstream. *)
+      fun inputCostring pos =
+         let
+            val ins = valOf (!theInstream)
+         in
+            MIO.SeekIO.seekIn (ins, pos);
+            BytesubstringCostring.fromProcess (fn () => BS.full (MIO.inputN (ins, chunkSize)))
+         end
 
 
       type hash = Bytestring.string
@@ -451,6 +465,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    !verification
                                    andalso
                                    not (Verify.verifyStoredBlock
+                                           inputCostring
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            pos
                                            (EBlock.fromBytes blockstr))
@@ -508,7 +523,7 @@ structure Blockchain :> BLOCKCHAIN =
 
                      val eblock = EBlock.fromBytes (inputData pos)
                   in
-                     Verify.verifyStoredBlock utxo pos eblock
+                     Verify.verifyStoredBlock inputCostring utxo pos eblock
                   end
                then
                   loopVerify (i+1)
@@ -520,9 +535,10 @@ structure Blockchain :> BLOCKCHAIN =
                   end
 
             val start =
-               loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks))))
+               Int.max (1, loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks)))))
          in
-            loopVerify (Int.max (1, start));  (* Never need to verify genesis block *)
+            Log.long (fn () => "Resuming verification at block "^ Int.toString start);
+            loopVerify start;  (* Never need to verify genesis block *)
             verification := true
          end
 
@@ -583,24 +599,35 @@ structure Blockchain :> BLOCKCHAIN =
                          val diff =
                             prevDiff + Verify.decodeDifficulty (#bits (#1 (EBlock.toBlock eblock)))
 
-                         val utxo = Utxo.branch prevUtxo
-
-                         val (dubious, verstat) =
+                         val (dubious, verstat, utxo) =
                             if !verification then
-                               if
-                                  Verify.verifyStoredBlock 
-                                     utxo
-                                     (pos+blockOffsetInRecord)
-                                     eblock
-                               then
-                                  (false, OK)
-                               else
-                                  (true, DUBIOUS)
+                               let
+                                  val utxo = Utxo.branch prevUtxo
+                               in
+                                  if
+                                     Verify.verifyStoredBlock 
+                                        inputCostring
+                                        utxo
+                                        (pos+blockOffsetInRecord)
+                                        eblock
+                                  then
+                                     (false, OK, utxo)
+                                  else
+                                     (* We may not have processed the whole block into utxo, so do it again. *)
+                                     let
+                                        val utxo = Utxo.branch prevUtxo
+                                     in
+                                        Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
+                                        (true, DUBIOUS, utxo)
+                                     end
+                               end
                             else
-                               (false, UNKNOWN)
-
-                         (* XXXX Won't need this once verifyStoredBlock works properly! *)
-                         val () = Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock)
+                               let
+                                  val utxo = Utxo.branch prevUtxo
+                               in
+                                  Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
+                                  (false, UNKNOWN, utxo)
+                               end
                       in
                          if
                             diff > !totaldiff
@@ -703,6 +730,8 @@ structure Blockchain :> BLOCKCHAIN =
       val dummyOrphanage : orphanage = (T.table 1, T.table 1)
 
       exception LoadFile of pos
+
+      (* Verification must be off, so that verification isn't using !theInstream while we use it. *)
       fun loadFile pos instream =
          if MIO.endOfStream instream then
             pos
@@ -955,6 +984,8 @@ structure Blockchain :> BLOCKCHAIN =
                   val () = lastIndexPos := startpos
 
                   val () = Log.long (fn () => "Loading blockchain file");
+
+                  (* Note that verification is off, as required by loadFile. *)
                   val endpos =
                      loadFile startpos instream
                      handle LoadFile pos =>

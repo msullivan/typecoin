@@ -35,4 +35,9 @@ signature BLOCKCHAIN =
       val writeIndex : unit -> unit
       val close : unit -> unit
 
+
+
+      (* XX *)
+      val inputCostring : Int64.int -> BytesubstringCostring.costring
+
    end

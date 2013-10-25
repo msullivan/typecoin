@@ -1,5 +1,5 @@
 
-structure Utxo :> UTXO =
+structure Utxo (* :> UTXO *) =
    struct
 
       structure B = Bytestring
