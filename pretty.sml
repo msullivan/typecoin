@@ -56,19 +56,20 @@ struct
   and piPartLayout b e1 = &[$"pi ", $b, $" : ", toLayoutExp e1, $"."]
 
   (* A nicer layout for "toplevel" pis *)
-  fun toLayoutTop e =
-      let fun loop l (e as EPi ("_", _, _)) = %[% (rev l), toLayoutExp e]
-            | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
-            | loop l e = %[% (rev l), toLayoutExp e]
-      in loop [] e end
-
   (* Another try that doesn't screw over ->s ?? *)
-  fun toLayoutTop e =
+  fun toLayoutTop2 e =
       let fun loop l (e as EPi ("_", e1, e2)) = loop (&[toLayoutTyParen e1, $" ->"] :: l) e2
             | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
             | loop l e = %[%% (rev l), toLayoutExp e]
       in loop [] e end
+  (* Actually, let's combine them. *)
+  fun toLayoutTop1 e =
+      let fun loop l (e as EPi ("_", _, _)) = %[% (rev l), toLayoutTop2 e]
+            | loop l (EPi (b, e1, e2)) = loop (piPartLayout b e1 :: l) e2
+            | loop l e = %[% (rev l), toLayoutTop2 e]
+      in loop [] e end
 
+  val toLayoutTop = toLayoutTop1
 
   fun prettyExp e = L.tostringex WIDTH (toLayoutExp e)
 
