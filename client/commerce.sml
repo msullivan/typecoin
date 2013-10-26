@@ -11,49 +11,34 @@ structure Commerce :> COMMERCE =
       infixr 3 >>>
       
 
-      structure BytestringHashable =
+      val maxAmount = Word64.toLargeInt (Word64.~ 0w1)
+
+
+      structure BytestringOrdered =
          struct
             type t = B.string
             val eq = B.eq
-
-            fun hash str =
-               (* The front bytes are pretty much random, so just use those. *)
-               ConvertWord.wordLgToWord (PackWord32Big.subVec (str, 0))
+            val compare = B.compare
          end
-      structure T = HashTable (structure Key = BytestringHashable)
-
-
-
-      val bfh = valOf o Bytestring.fromStringHex
-
-      (* XX Need to implement a good way to find transactions by hash.  For now, just hardcode a table. *)
-      val txTable : (int * int) T.table = T.table 20
-      val () =
-         app (fn (hash, blocknum, i) => T.insert txTable (B.rev hash) (blocknum, i))
-         [
-         (bfh "8f822a04c5f9f30a129acfef44749565666390bd3f4d571db428fd318ce6eeef", 228648, 115)
-         ]
-      fun findInput hash = T.find txTable hash
-
-
-      (* XX Need to implement a good way to find keys.  For now, just hardcode a table. *)
-      val keyTable : (ECDSAp.privkey * bool) T.table = T.table 20
-      val () =
-         app (fn (addr, privkey, compressed) => T.insert keyTable addr (privkey, compressed))
-         [
-         (bfh "3a6dbfaacb91dad6ae8c645c8947d0efe5034b19",
-          74546373234046248893384993299922516061981751989874750013347752163560598582354,
-          true)
-         ]
-
-      fun findKey addr = T.find keyTable addr
+      structure D = ListDict (structure Key = BytestringOrdered)
 
 
 
       val dhash = SHA256.hashBytes o SHA256.hashBytes
       val secp256k1 = EllipticCurveParams.secp256k1
 
-      val maxAmount = Word64.toLargeInt (Word64.~ 0w1)
+      fun addressFromPrivkey privkey compress =
+         let
+            val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (secp256k1, privkey)
+
+            val pubkeystr =
+               if compress then
+                  ECDERp.encodePubkeyCompressed (secp256k1, pubkey)
+               else
+                  ECDERp.encodePubkey (secp256k1, pubkey)
+         in
+            RIPEMD160.hashBytes (SHA256.hashBytes pubkeystr)
+         end
 
 
 
@@ -65,36 +50,6 @@ structure Commerce :> COMMERCE =
       exception Invalid
       exception NoKey
 
-
-      fun resolveInput (txhash, n) =
-         (case findInput txhash of
-             NONE =>
-                (* Input not found *)
-                raise Invalid
-           | SOME (blocknum, i) =>
-                let
-                   val blstr = Blockchain.dataByNumber blocknum
-                   val (_, txs) = Block.readBlock blstr
-                   val tx = List.nth (txs, i)
-
-                   val () =
-                      (* This shouldn't be necessary, but let's double-check that we've got
-                         the right transaction.
-                      *)
-                      if B.eq (txhash, dhash (Transaction.writeTx tx)) then
-                         ()
-                      else
-                         raise (Fail "wrong transaction")
-
-                   val {amount, script} =
-                      List.nth (#outputs tx, n)
-                      handle Subscript =>
-                         (* Input transaction doesn't have this many outputs *)
-                         raise Invalid
-                in
-                   (txhash, n, Word64.toLargeInt amount, script)
-                end)
-         
 
       fun synthesize output =
          (case output of
@@ -111,7 +66,7 @@ structure Commerce :> COMMERCE =
                 raise Invalid)
 
 
-      fun createTx { inputs, outputs, fee } =
+      fun createTx { inputs, outputs, fee, keys } =
          let
             val () =
                (* Check that the amounts are in range. *)
@@ -121,7 +76,25 @@ structure Commerce :> COMMERCE =
                           else
                              ()) outputs
 
-            val inputs' = map resolveInput inputs
+            val utxo = Blockchain.currentUtxo ()
+
+            val inputs' =
+               map 
+               (fn (txhash, n) =>
+                   (case Blockchain.getTransaction utxo txhash of
+                       NONE =>
+                          raise Invalid
+                     | SOME tx =>
+                          let
+                             val {amount, script} =
+                                List.nth (#outputs tx, n)
+                                handle Subscript =>
+                                   (* Input transaction doesn't have this many outputs *)
+                                   raise Invalid
+                          in
+                             (txhash, n, Word64.toLargeInt amount, script)
+                          end))
+               inputs
 
             val () =
                (* Check that input amount = output amount. *)
@@ -148,6 +121,15 @@ structure Commerce :> COMMERCE =
             val pretx : Transaction.tx =
                Transaction.mkTx { inputs=pretxins, outputs=txouts, lockTime=0w0 }
 
+            val keydict =
+               List.foldl
+               (fn (privkey, dict) =>
+                   D.insert
+                      (D.insert dict (addressFromPrivkey privkey false) (privkey, false))
+                      (addressFromPrivkey privkey true) (privkey, true))
+               D.empty
+               keys
+
             fun signloop j acc l =
                (case l of
                    [] => rev acc
@@ -157,7 +139,7 @@ structure Commerce :> COMMERCE =
                             (* Figure out what ioscript is looking for. *)
                             (case analyze (Script.readScript ioscript) of
                                 Standard addr =>
-                                   (case findKey addr of
+                                   (case D.find keydict addr of
                                        NONE =>
                                           (* Don't have the key. *)
                                           raise NoKey

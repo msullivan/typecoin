@@ -1148,6 +1148,7 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun utxoByNumber num = blockUtxo (hashByNumber num)
 
+      fun currentUtxo () = utxoByNumber (!lastblock)
          
 
 

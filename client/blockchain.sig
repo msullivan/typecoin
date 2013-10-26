@@ -35,6 +35,7 @@ signature BLOCKCHAIN =
       val positionByNumber : int -> pos
       val utxoByNumber : int -> Utxo.table
 
+      val currentUtxo : unit -> Utxo.table
       val getTransaction : Utxo.table -> hash -> Transaction.tx option
 
       val initialize : unit -> unit
