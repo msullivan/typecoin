@@ -38,7 +38,9 @@ signature BLOCKCHAIN =
       val currentUtxo : unit -> Utxo.table
       val getTransaction : Utxo.table -> hash -> Transaction.tx option
 
+      (* Starts with verification suspended. *)
       val initialize : unit -> unit
+
       val writeIndex : unit -> unit
       val close : unit -> unit
 

@@ -138,6 +138,7 @@ structure Process :> PROCESS =
            | SOME conn' => Commo.eq (conn, conn'))
 
 
+      (* Delay starting verification, in case a sync (or more sync) turns out to be necessary. *)
       fun resumeVerificationSoon () =
          Scheduler.once Constants.syncVerificationDelay
             (fn () =>
@@ -631,6 +632,8 @@ structure Process :> PROCESS =
          Commo.initialize processConn processMessage;
 
          Scheduler.repeating Constants.relayInterval relay;
+         resumeVerificationSoon ();
+
          ()
          )
 

@@ -1055,9 +1055,7 @@ structure Blockchain :> BLOCKCHAIN =
                   MIO.SeekIO.seekOut (valOf (!theOutstream), endpos);
 
                   writeIndex ();
-                  Log.long (fn () => "Blockchain load complete at block " ^ Int.toString (!lastblock));
-
-                  resumeVerification ()
+                  Log.long (fn () => "Blockchain load complete at block " ^ Int.toString (!lastblock))
                end
             else
                (* Start a new blockchain record. *)
@@ -1079,12 +1077,7 @@ structure Blockchain :> BLOCKCHAIN =
                   *)
                   T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
 
-                  Log.long (fn () => "Created new blockchain file");
-
-                  if neverDoVerification then
-                      ()
-                   else
-                      verification := true  (* don't need to verify any blocks, it's empty *)
+                  Log.long (fn () => "Created new blockchain file")
                end
          end
 
