@@ -81,7 +81,10 @@ structure Constants =
       (*** Block download constants ***)
 
       (* Check sync throughput this often. *)
-      val throughputInterval = Time.fromSeconds 30                (* 30 seconds *)    
+      val throughputInterval = Time.fromSeconds 30                (* 30 seconds *)
+
+      (* Delay resuming verification for this long after a sync (to allow another sync to start, if necessary). *)
+      val syncVerificationDelay = Time.fromSeconds 30             (* 30 seconds *)
 
       (* Want to receive at least this many bytes per throughputInterval. *)
       val syncThroughput = 3 * 1024 * 1024                        (* 3 MB *)
@@ -116,7 +119,7 @@ structure Constants =
       val indexThreshold = 1024 * 1024                            (* 1 meg *)
 
       (* Allocate a UTXO table of this size. *)
-      val utxoTableSize = 1024 * 1024                             (* 1 meg XXX *)
+      val utxoTableSize = 256 * 1024 * 1024                       (* 256 meg *)
 
       (* Record UTXO undo data for this many blocks.  Must be at least chainTrustConfirmations. *)
       val maxUtxoHistory = chainTrustConfirmations

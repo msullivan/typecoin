@@ -138,6 +138,15 @@ structure Process :> PROCESS =
            | SOME conn' => Commo.eq (conn, conn'))
 
 
+      fun resumeVerificationSoon () =
+         Scheduler.once Constants.syncVerificationDelay
+            (fn () =>
+                (case !syncing of
+                    NONE =>
+                       Blockchain.resumeVerification ()
+                  | SOME _ =>
+                       ()))
+
       fun monitorSync conn remoteblocks =
          if Blockchain.lastBlock () >= remoteblocks orelse not (isSome (!syncing)) then
             (* Done or aborted. *)
@@ -153,7 +162,7 @@ structure Process :> PROCESS =
             (* Unsatisfactory sync throughput.  Try other peers, starting one immediately. *)
             (
             Log.long (fn () => "Unsatisfactory sync throughput: " ^ Int.toString (!syncData div 1024));
-            Blockchain.resumeVerification ();
+            resumeVerificationSoon ();
             Commo.closeConn conn false;
             Commo.resumePolling ();
             syncing := NONE
@@ -163,7 +172,7 @@ structure Process :> PROCESS =
       (* complete=true if sync complete, complete=false if sync aborted. *)
       fun doneSync complete =
          let in
-            Blockchain.resumeVerification ();
+            resumeVerificationSoon ();
    
             Log.long (fn () => if complete then
                                   "Sync complete at block " ^ Int.toString (Blockchain.lastBlock ())
@@ -628,5 +637,3 @@ structure Process :> PROCESS =
       fun cleanup () = Commo.cleanup ()
 
    end
-
-

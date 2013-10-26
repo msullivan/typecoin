@@ -228,7 +228,7 @@ structure Blockchain :> BLOCKCHAIN =
          accepted with very few confirmations.)
 
          We store the dubiousness information in two ways, depending on whether a blog is on the
-         primary fork.  On a secondary fork, a block's lineage records it's verification status,
+         primary fork.  On a secondary fork, a block's lineage records its verification status,
          which is OK (if it passed verification, or it is dubious but accepted), DUBIOUS, or
          UNKNOWN (if it was never verified).
 
@@ -512,7 +512,7 @@ structure Blockchain :> BLOCKCHAIN =
          we'll fail.
       *)
       fun resumeVerification () =
-         if neverDoVerification then
+         if neverDoVerification orelse !verification then
             ()
          else
             let
