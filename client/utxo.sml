@@ -247,7 +247,7 @@ structure Utxo :> UTXO =
             blockstr
 
 
-      fun lookup table hash =
+      fun find table hash =
          (case T.find table hash of
              NONE => NONE
            | SOME entry =>

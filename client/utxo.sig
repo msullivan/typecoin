@@ -48,7 +48,7 @@ signature UTXO =
       val processBlock : table -> pos -> Bytestring.string -> unit
 
 
-      val lookup : table -> hash -> pos option
+      val find : table -> hash -> pos option
 
       val writeTables : BinIO.outstream -> table -> unit
 

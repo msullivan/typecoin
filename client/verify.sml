@@ -269,7 +269,8 @@ structure Verify :> VERIFY =
       type pos = Int64.int
 
 
-      fun verifyStoredBlock read utxo blockPos eblock =
+
+      fun verifyStoredBlock getTx utxo blockPos eblock =
          let
             (* eblock has already passed verifyBlockGross *)
 
@@ -279,18 +280,12 @@ structure Verify :> VERIFY =
                else
                   ()
 
-            fun getTx (coord as (hash, n)) =
-               (case Utxo.lookup utxo hash of
+            fun spendTx (coord as (hash, _)) =
+               (case getTx utxo hash of
                    NONE => NONE
-                 | SOME pos' =>
+                 | SOME tx =>
                       if Utxo.spend utxo coord then
-                         let
-                            val (tx, _) = Transaction.reader (read pos')
-                         in
-                            SOME tx
-                         end
-                         handle Overflow => raise (Fail "txin fetch overflow")
-                              | Reader.SyntaxError => raise (Fail "txin fetch failure")
+                         SOME tx
                       else
                          NONE)
 
@@ -304,7 +299,7 @@ structure Verify :> VERIFY =
                          if i = 0 then
                             0
                          else
-                            verifyTxMain getTx tx
+                            verifyTxMain spendTx tx
 
                       val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
                    in

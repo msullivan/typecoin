@@ -19,31 +19,32 @@ signature VERIFY =
       val verifyBlockGross : EBlock.eblock -> bool
 
 
-      (* verifyTx getTx tx
+      (* verifyTx spendTx tx
          
-            getTx coord
-            -----------
-            If coord is valid and unspent, marks it as spent (if appropriate), and returns SOME of transaction.
+            spendTx coord
+            -------------
+            If coord is valid and unspent, marks it as spent (if appropriate), and returns SOME of its transaction.
             Otherwise, returns NONE.
 
-         Returns true iff tx passes verification.  Calls getTx on all tx's inputs.
+         Returns true iff tx passes verification.  Calls spendTx on all tx's inputs.
       *)
       val verifyTx : (Transaction.coord -> Transaction.tx option) -> Transaction.tx -> bool
 
 
       type pos = Int64.int
 
-      (* verifyStoredBlock read table pos eblock
+      (* verifyStoredBlock getTx table pos eblock
 
          If    eblock has passed verifyBlockGross
                eblock is stored at position pos
-               (read pos') returns a costring containing the blockchain starting at pos'
+               (getTx table txhash) reads the transaction with hash txhash, if it appears in the table
          then  if    block passes verification
                then  processes the block into table
                      returns true
                else  may process some or all of the block into table
                      returns false
       *)
-      val verifyStoredBlock : (pos -> BytesubstringCostring.costring) -> Utxo.table -> pos -> EBlock.eblock -> bool
+      val verifyStoredBlock :
+         (Utxo.table -> Bytestring.string -> Transaction.tx option) -> Utxo.table -> pos -> EBlock.eblock -> bool
 
    end

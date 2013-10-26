@@ -5,6 +5,8 @@ signature BLOCKCHAIN =
       type hash = Bytestring.string
       type pos = Int64.int
 
+      val blockOffsetInRecord : pos
+
       type orphanage
       val newOrphanage : unit -> orphanage
       val orphanageMember : orphanage -> hash -> bool
@@ -23,6 +25,7 @@ signature BLOCKCHAIN =
       val blockNumber : hash -> int                (* block number in the chain *)
       val blockData : hash -> Bytestring.string    (* the block itself *)
       val blockPrimary : hash -> bool              (* is the block on the primary chain *)
+      val blockUtxo : hash -> Utxo.table           (* UTXO table incorporating the block *)
 
       val lastBlock : unit -> int
       val totalDifficulty : unit -> IntInf.int
@@ -30,15 +33,12 @@ signature BLOCKCHAIN =
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
       val positionByNumber : int -> pos
+      val utxoByNumber : int -> Utxo.table
+
+      val getTransaction : Utxo.table -> hash -> Transaction.tx option
 
       val initialize : unit -> unit
       val writeIndex : unit -> unit
       val close : unit -> unit
-
-
-
-      (* XX *)
-      val inputCostring : Int64.int -> BytesubstringCostring.costring
-      val utxoByHash : hash -> Utxo.table
 
    end

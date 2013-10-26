@@ -26,6 +26,9 @@ structure Blockchain :> BLOCKCHAIN =
                    Chain.genesisBlock]
 
 
+      (* For testing purposes only. *)
+      val neverDoVerification = false
+
 
       (* I/O *)
 
@@ -114,7 +117,7 @@ structure Blockchain :> BLOCKCHAIN =
       *)
       val chunkSize = 4096  
 
-      (* NB! this is only good as long as no one else meddles with !theInstream. *)
+      (* NB! this costring is only good as long as no one else meddles with !theInstream. *)
       fun inputCostring pos =
          let
             val ins = valOf (!theInstream)
@@ -240,6 +243,9 @@ structure Blockchain :> BLOCKCHAIN =
          onto the primary fork, it will be re-verified.  This wasteful, but it will happen very
          rarely.)
 
+         When verification is turned off, we record the current last block in verifiedUpTo, so that
+         when we resume verfication, we don't re-verify blocks.
+
          We maintain a deque of all dubious and unaccepted blocks on the primary fork in
          theDubiousQueue.  Each entry gives the block's number and the total difficulty necessary
          for it to become accepted.
@@ -292,6 +298,7 @@ structure Blockchain :> BLOCKCHAIN =
       val thePrimaryFork : pos A.array = A.array (Constants.primaryForkSize, 0)
       val theDubiousQueue : (int * IntInf.int) Q.ideque = Q.ideque ()
       val verification = ref false
+      val verifiedUpTo = ref 0  (* meaningful only when not !verification *)
 
       type orphanage = EBlock.eblock T.table * hash T.table  (* orphans, orphans' predecessors *)
 
@@ -301,6 +308,25 @@ structure Blockchain :> BLOCKCHAIN =
          (case lin of
              Nil (_, utxo) => utxo
            | Cons (_, _, _, _, _, utxo) => utxo)
+
+
+      fun getTransaction utxo hash =
+         (case Utxo.find utxo hash of
+             NONE => NONE
+           | SOME pos' =>
+                let
+                   val (tx, _) =
+                      Transaction.reader (inputCostring pos')
+                      handle Overflow => raise Reader.SyntaxError
+                in
+                   SOME tx
+                end
+                handle
+                Reader.SyntaxError =>
+                   (
+                   Log.long (fn () => "Bad index or corrupted block chain record at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString pos');
+                   raise (Fail "getTransaction")
+                   ))
 
 
       (* The operation "rewind num" shunts every block on the primary fork back to (but not including)
@@ -465,7 +491,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    !verification
                                    andalso
                                    not (Verify.verifyStoredBlock
-                                           inputCostring
+                                           getTransaction
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            (pos+blockOffsetInRecord)
                                            (EBlock.fromBytes blockstr))
@@ -486,72 +512,86 @@ structure Blockchain :> BLOCKCHAIN =
          we'll fail.
       *)
       fun resumeVerification () =
-         let
-            val blocks = !lastblock
-            val alldiff = !totaldiff
-
-            (* Work backward to find a block we don't need to check.  That is, a block num that has
-               chainTrustConfirmations confirmations and (chainTrustConfirmations * diff') subsequent
-               difficulty, where diff' is the difficulty of block num-1.
-
-               invariants:
-               - cumdiff = cumulative difficulty to num
-               - diff is the difficulty of block num
-            *)
-            fun loop num cumdiff diff =
-               if num <= 0 then
-                  0
+         if neverDoVerification then
+            ()
+         else
+            let
+               val blocks = !lastblock
+               val alldiff = !totaldiff
+   
+               (* Work backward to find a block we don't need to check.  That is, a block num that has
+                  chainTrustConfirmations confirmations and (chainTrustConfirmations * diff') subsequent
+                  difficulty, where diff' is the difficulty of block num-1.
+   
+                  invariants:
+                  - cumdiff = cumulative difficulty to num
+                  - diff is the difficulty of block num
+               *)
+               fun loop num cumdiff diff =
+                  if num <= 0 then
+                     0
+                  else
+                     let
+                        val diff' = Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, num-1)))
+                     in
+                        if
+                           blocks >= num + Constants.chainTrustConfirmations
+                           andalso
+                           alldiff >= cumdiff + (IntInf.fromInt Constants.chainTrustConfirmations) * diff'
+                        then
+                           num
+                        else
+                           loop (num-1) (cumdiff-diff) diff'
+                     end
+   
+               (* precondition i > 0 *)
+               fun loopVerify i =
+                  if i > blocks then
+                     ()
+                  else if 
+                     let
+                        val prevpos = A.sub (thePrimaryFork, i-1)
+                        val pos = A.sub (thePrimaryFork, i)
+   
+                        (* This could be done more nicely by passing the utxo around the loop. *)
+                        val utxo = Utxo.branch (utxoFromLineage (! (T.lookup theTable (inputHash prevpos))))
+   
+                        val eblock = EBlock.fromBytes (inputData pos)
+                     in
+                        Verify.verifyStoredBlock getTransaction utxo (pos+blockOffsetInRecord) eblock
+                     end
+                  then
+                     let in
+                        Log.long (fn () => "Block "^ Int.toString i ^" verified");
+                        loopVerify (i+1)
+                     end
+                  else
+                     let in
+                        Log.long (fn () => "Dubious block detected at " ^ Int.toString i);
+                        setDubious i;
+                        loopVerify (i+1)
+                     end
+   
+               val start =
+                  1 + Int.max (!verifiedUpTo,
+                               loop
+                                  blocks
+                                  alldiff
+                                  (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks)))))
+            in
+               if start <= blocks then
+                  Log.long (fn () => "Resuming verification at block "^ Int.toString start)
                else
-                  let
-                     val diff' = Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, num-1)))
-                  in
-                     if
-                        blocks >= num + Constants.chainTrustConfirmations
-                        andalso
-                        alldiff >= cumdiff + (IntInf.fromInt Constants.chainTrustConfirmations) * diff'
-                     then
-                        num
-                     else
-                        loop (num-1) (cumdiff-diff) diff'
-                  end
-
-            (* precondition i > 0 *)
-            fun loopVerify i =
-               if i > blocks then
-                  ()
-               else if 
-                  let
-                     val prevpos = A.sub (thePrimaryFork, i-1)
-                     val pos = A.sub (thePrimaryFork, i)
-
-                     (* This could be done more nicely by passing the utxo around the loop. *)
-                     val utxo = Utxo.branch (utxoFromLineage (! (T.lookup theTable (inputHash prevpos))))
-
-                     val eblock = EBlock.fromBytes (inputData pos)
-                  in
-                     Verify.verifyStoredBlock inputCostring utxo (pos+blockOffsetInRecord) eblock
-                  end
-               then
-                  let in
-                     Log.long (fn () => "Block "^ Int.toString i ^" verified");
-                     loopVerify (i+1)
-                  end
-               else
-                  let in
-                     Log.long (fn () => "Dubious block detected at " ^ Int.toString i);
-                     setDubious i;
-                     loopVerify (i+1)
-                  end
-
-            val start =
-               loop blocks alldiff (Verify.decodeDifficulty (inputDiffBits (A.sub (thePrimaryFork, blocks)))) + 1
-         in
-            Log.long (fn () => "Resuming verification at block "^ Int.toString start);
-            loopVerify start;
-            verification := true
-         end
-
-      fun suspendVerification () = verification := false
+                  () ;
+               loopVerify start;
+               verification := true
+            end
+   
+      fun suspendVerification () =
+         (
+         verifiedUpTo := !lastblock;
+         verification := false
+         )
                    
 
 
@@ -615,7 +655,7 @@ structure Blockchain :> BLOCKCHAIN =
                                in
                                   if
                                      Verify.verifyStoredBlock 
-                                        inputCostring
+                                        getTransaction
                                         utxo
                                         (pos+blockOffsetInRecord)
                                         eblock
@@ -732,7 +772,8 @@ structure Blockchain :> BLOCKCHAIN =
 
             A.update (thePrimaryFork, 0, 0);
             Q.reset theDubiousQueue;
-            verification := false
+            verification := false;
+            verifiedUpTo := 0
          end
 
       
@@ -1039,7 +1080,11 @@ structure Blockchain :> BLOCKCHAIN =
                   T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
 
                   Log.long (fn () => "Created new blockchain file");
-                  verification := true  (* don't need to verify any blocks, it's empty *)
+
+                  if neverDoVerification then
+                      ()
+                   else
+                      verification := true  (* don't need to verify any blocks, it's empty *)
                end
          end
 
@@ -1076,6 +1121,9 @@ structure Blockchain :> BLOCKCHAIN =
                     Nil _ => true
                   | Cons _ => false))
 
+      fun blockUtxo hash =
+         utxoFromLineage (!(T.lookup theTable hash))
+
       fun lastBlock () = !lastblock
 
       fun totalDifficulty () = !totaldiff
@@ -1097,6 +1145,9 @@ structure Blockchain :> BLOCKCHAIN =
             raise Absent
          else
             A.sub (thePrimaryFork, num)
+
+      fun utxoByNumber num = blockUtxo (hashByNumber num)
+
          
 
 
@@ -1107,9 +1158,5 @@ structure Blockchain :> BLOCKCHAIN =
       fun orphanageMember (orphanTable, _) hash = T.member orphanTable hash
 
       fun orphanageSize (orphanTable, _) = T.size orphanTable
-
-
-      fun utxoByHash hash =
-         utxoFromLineage (! (T.lookup theTable hash))
 
    end
