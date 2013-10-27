@@ -589,7 +589,11 @@ structure Blockchain :> BLOCKCHAIN =
    
       fun suspendVerification () =
          (
-         verifiedUpTo := !lastblock;
+         if !verification then
+            verifiedUpTo := !lastblock
+         else
+            () ;
+
          verification := false
          )
                    
