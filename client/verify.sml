@@ -170,7 +170,6 @@ structure Verify :> VERIFY =
          - allowable difficulty
          - maximum signature operations (20,000)
          - pay to script hash (@#$%&!)
-         - coinbase amount!
          - no repeat transaction unless legacy
       *) 
 
