@@ -9,7 +9,7 @@ structure Verify :> VERIFY =
 
       (* Constants *)
       val maximumBits : Word32.word = 0wx1d00ffff
-      val maximumAmount : IntInf.int = Word64.toLargeInt (~ 0w1)
+      val maximumAmount : IntInf.int = 21000000 * 100000000  (* 21 MBTC, which is slightly more than there will ever be. *)
 
       (* Precomputed data *)
       val zeros = valOf (B.fromStringHex "0000000000000000000000000000000000000000000000000000000000000000")
@@ -362,10 +362,10 @@ structure Verify :> VERIFY =
                (EBlock.toBytes eblock)
 
             val () =
-               if balance = coinbaseReward blockNumber then
-                  ()
-               else
+               if balance > coinbaseReward blockNumber then
                   raise (Reject "block out of balance")
+               else
+                  ()
          in
             true
          end
