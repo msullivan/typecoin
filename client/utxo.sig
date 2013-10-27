@@ -16,19 +16,19 @@ signature UTXO =
       val null : table
 
 
-      (* unspent table coord
+      (* unspent table blockNumber coord
 
-         Returns false if the txout at coord is invalid or already spent.
+         Returns false if the txout at coord is invalid, already spent, or too recent to spend in the indicated blockNumber.
       *)
-      val unspent : table -> Transaction.coord -> bool
+      val unspent : table -> int -> Transaction.coord -> bool
 
 
-      (* spend table coord
+      (* spend table blockNumber coord
 
          Marks the txout at coord as spent (if it's valid).
-         Returns false if it is invalid or already spent.
+         Returns false if the txout at coord is invalid, already spent, or too recent to spend in the indicated blockNumber.
       *)
-      val spend : table -> Transaction.coord -> bool
+      val spend : table -> int -> Transaction.coord -> bool
 
 
       (* insert table hash pos numOutputs
@@ -38,14 +38,22 @@ signature UTXO =
       val insert : table -> hash -> pos -> int -> unit
 
 
-      (* processBlock table pos blockstr
+      (* insertCoinbase table hash pos numOutputs blockNumber
+
+         Insert a coinbase entry with position pos, numOutputs outputs, and block number
+         blockNumber into the table.
+      *)
+      val insertCoinbase : table -> hash -> pos -> int -> int -> unit
+
+
+      (* processBlock table pos blockNumber blockstr
        
          1. blockstr must parse as a block.
          2. blockstr appears in the record at position pos
 
          Processes all of blockstr's txins, ignoring errors.
       *)
-      val processBlock : table -> pos -> Bytestring.string -> unit
+      val processBlock : table -> pos -> int -> Bytestring.string -> unit
 
 
       val find : table -> hash -> pos option

@@ -33,10 +33,11 @@ signature VERIFY =
 
       type pos = Int64.int
 
-      (* verifyStoredBlock getTx table pos eblock
+      (* verifyStoredBlock getTx table pos blockNumber eblock
 
          If    eblock has passed verifyBlockGross
                eblock is stored at position pos
+               eblock is block number blockNumber
                (getTx table txhash) reads the transaction with hash txhash, if it appears in the table
          then  if    block passes verification
                then  processes the block into table
@@ -45,6 +46,6 @@ signature VERIFY =
                      returns false
       *)
       val verifyStoredBlock :
-         (Utxo.table -> Bytestring.string -> Transaction.tx option) -> Utxo.table -> pos -> EBlock.eblock -> bool
+         (Utxo.table -> Bytestring.string -> Transaction.tx option) -> Utxo.table -> pos -> int -> EBlock.eblock -> bool
 
    end

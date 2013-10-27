@@ -123,7 +123,10 @@ structure Constants =
 
       (* Record UTXO undo data for this many blocks.  Must be at least chainTrustConfirmations. *)
       val maxUtxoHistory = chainTrustConfirmations
-      
+
+      (* Put this number at the beginning of the index, when written to disk. *)
+      val indexMagicNumber : Word32.word = 0wx02030405
+
      
 
       (*** Pool and relay constants ***)
@@ -155,6 +158,8 @@ structure Constants =
 
       (* Scripts may not execute more instructions than this. *)
       val maxScriptOperations = 201
+
+      val coinbaseMaturity = 100
 
 
       (* File constants *)

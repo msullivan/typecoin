@@ -15,6 +15,8 @@ structure Utxo :> UTXO =
                 else
                    ())
 
+      val maxint = valOf Int.maxInt
+
 
       fun repeat n (f : unit -> unit) =
          if n <= 0 then
@@ -42,20 +44,13 @@ structure Utxo :> UTXO =
             replicate x (n-1) (x :: l)
 
 
-      fun isAllzero str =
-         let
-            val sz = B.size str
-            
-            fun loop i =
-               if i >= sz then
-                  true
-               else
-                  B.sub (str, i) = 0w0
-                  andalso
-                  loop (i+1)
-         in
-            loop 0
-         end
+      fun isAllzero str i j =
+         if i >= j then
+            true
+         else
+            B.sub (str, i) = 0w0
+            andalso
+            isAllzero str (i+1) j
 
 
       fun idequeExtract q =
@@ -139,13 +134,24 @@ structure Utxo :> UTXO =
          |      tx hash      |  tx pos  | spend map |
          +-------------------+----------+-----------+
 
+         or, for coinbase entries:
+
+          byte
+          0                31 32      39 40     39+n 40+n 43+n
+         +-------------------+----------+-----------+---------+
+         |      tx hash      |  tx pos  | spend map | block # |
+         +-------------------+----------+-----------+---------+
+
          where m = number of transaction outputs
                n = ceil(m/8)
 
-         Position is little-endian.
+         Position and block number are little-endian.
 
-         The first transaction output is the least significant bit of the
-         first byte of the spend map.  The second output is the least-but-one
+         The least significant bit of the first byte of the spend map indicates
+         if it is a coinbase transaction (1 if so, 0 if not).
+
+         The first transaction output is the least-but-one significant bit of the
+         first byte of the spend map.  The second output is the least-but-two
          significant bit of the first byte, etc.  The bit is 1 if the output
          is unspent.
       *)
@@ -163,86 +169,160 @@ structure Utxo :> UTXO =
       val branch = T.branch
       
 
-      fun unspent table (hash, n) =
-         ((case T.find table hash of
-              NONE =>
-                 false
-            | SOME entry =>
-                 let
-                    val i = n div 8
-                    val j = n mod 8
-                    val i' = i + 40
-        
-                    val b = B.sub (entry, i')
-                    val mask = Word8.<< (0w1, Word.fromInt j)
-                 in
-                     Word8.andb (b, mask) <> 0w0
-                 end)
-          handle Subscript => false)
-
-
       fun insert table hash pos outputCount =
          let
+            val bits = outputCount+1
+
             val posstr =
                ConvertWord.word64ToBytesL (Word64.fromLargeInt (Int64.toLarge pos))
 
-            val spendMapByteTail =
-               if outputCount mod 8 = 0 then
-                  []
-               else
-                  [B.str (Word8.>> (0wxff, Word.fromInt (8 - outputCount mod 8)))]
-
             val spendmap =
-               replicate (B.str 0wxff) (outputCount div 8) spendMapByteTail
+               if bits div 8 = 0 then
+                  [B.str (Word8.andb (Word8.>> (0wxff, Word.fromInt (8 - bits mod 8)), 0wxfe))]
+               else
+                  B.str 0wxfe
+                  ::
+                  replicate
+                     (B.str 0wxff) 
+                     (bits div 8 - 1)
+                     (if bits mod 8 = 0 then
+                         []
+                      else
+                         [B.str (Word8.>> (0wxff, Word.fromInt (8 - bits mod 8)))])
          in
             T.insert table (B.concat (hash :: posstr :: spendmap))
          end
 
 
-      fun spend table (hash, n) =
+      fun insertCoinbase table hash pos outputCount blockNumber =
+         let
+            val bits = outputCount+1
+
+            val posstr =
+               ConvertWord.word64ToBytesL (Word64.fromLargeInt (Int64.toLarge pos))
+
+            val blockstr = ConvertWord.word32ToBytesL (Word32.fromInt blockNumber)
+
+            val spendmap =
+               replicate 
+                  (B.str 0wxff)
+                  (bits div 8)
+                  (if bits mod 8 = 0 then
+                      []
+                   else
+                      [B.str (Word8.>> (0wxff, Word.fromInt (8 - bits mod 8)))])
+         in
+            T.insert table (B.concat (hash :: posstr :: spendmap @ [blockstr]))
+         end
+
+
+      fun unspent table blockNumber (hash, n) =
          ((case T.find table hash of
               NONE =>
                  false
             | SOME entry =>
                  let
-                    val i = n div 8
-                    val j = n mod 8
-                    val i' = i + 40
+                    val i = (n+1) div 8 + 40
+                    val j = (n+1) mod 8
         
-                    (* clear bit j of byte i *)
-        
-                    val b = B.sub (entry, i')
+                    val regular = Word8.andb (B.sub (entry, 40), 0w1) = 0w0  (* regular = not coinbase *)
+
+                    (* If regular, this will fail when n is too large.
+                       If coinbase, we need to bound-check explicitly, which we do below.
+                    *)
+                    val b = B.sub (entry, i)
+
                     val mask = Word8.<< (0w1, Word.fromInt j)
-                    val b' = Word8.andb (b, Word8.notb mask)
-        
-                    val spendmap =
-                       BS.concat
-                       [ BS.substring (entry, 40, i),
-                         BS.full (B.str b'),
-                         BS.extract (entry, i'+1, NONE) ]
                  in
-                    if isAllzero spendmap then
-                       T.remove table hash
+                    if regular then
+                       Word8.andb (b, mask) <> 0w0
                     else
-                       T.insert table (BS.concat [BS.substring (entry, 0, 40), BS.full spendmap]) ;
- 
-                    Word8.andb (b, mask) <> 0w0
+                       let
+                          val sz = B.size entry
+                       in
+                          i < sz-4
+                          andalso
+                          Word8.andb (b, mask) <> 0w0
+                          andalso
+                          blockNumber > Word32.toInt (ConvertWord.bytesToWord32L (B.extract (entry, sz-4, NONE))) + Constants.coinbaseMaturity
+                       end
                  end)
           handle Subscript => false)
 
 
-      fun processBlock table blockpos blockstr =
+      fun spend table blockNumber (hash, n) =
+         ((case T.find table hash of
+              NONE =>
+                 false
+            | SOME entry =>
+                 let
+                    val i = (n+1) div 8 + 40
+                    val j = (n+1) mod 8
+
+                    val regular = Word8.andb (B.sub (entry, 40), 0w1) = 0w0  (* regular = not coinbase *)
+                    
+                    val sz = B.size entry
+
+                    (* If regular, this will fail when n is too large.
+                       If coinbase, we need to bound-check explicitly, which we do below.
+                    *)
+                    val b = B.sub (entry, i)
+
+                    val mask = Word8.<< (0w1, Word.fromInt j)
+                    val b' = Word8.andb (b, Word8.notb mask)
+        
+                    val entry' =
+                       BS.concat [BS.substring (entry, 0, i),
+                                  BS.full (B.str b'),
+                                  BS.extract (entry, i+1, NONE)]
+                 in
+                    if regular then
+                       let in
+                          (* GC the entry if all inputs are spent. *)
+                          if isAllzero entry' 40 sz then
+                             T.remove table hash
+                          else
+                             T.insert table entry' ;
+                       
+                          Word8.andb (b, mask) <> 0w0
+                       end
+                    else
+                       let in
+                          if i < sz-4 then
+                             ()
+                          else
+                             raise Subscript ;
+
+                          (* GC the entry if all inputs are spent. *)
+                          if
+                             (* Mask out first bit, and skip the last 4 bytes. *)
+                             Word8.andb (B.sub (entry', 40), 0wxfe) = 0w0
+                             andalso
+                             isAllzero entry' 41 (sz-4)
+                          then
+                             T.remove table hash
+                          else
+                             T.insert table entry' ;
+
+                          Word8.andb (b, mask) <> 0w0
+                          andalso
+                          blockNumber >= Word32.toInt (ConvertWord.bytesToWord32L (B.extract (entry, sz-4, NONE))) + Constants.coinbaseMaturity
+                       end
+                 end)
+          handle Subscript => false)
+
+
+      fun processBlock table blockpos blocknumber blockstr =
          Block.traverseBlock
             (fn (i, pos, {inputs, outputs, ...}, txstr, ()) =>
-                let in
-                   if i = 0 then
-                      (* Don't process the inputs for coinbase transactions. *)
-                      ()
-                   else
-                      app (fn {from, ...} => (spend table from; ())) inputs ;
-
-                   insert table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs)
-                end)
+                if i = 0 then
+                   (* Don't process the inputs for coinbase transactions. *)
+                   insertCoinbase table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs) blocknumber
+                else
+                   let in
+                      app (fn {from, ...} => (spend table maxint from; ())) inputs;
+                      insert table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs)
+                   end)
             ()
             blockstr
 

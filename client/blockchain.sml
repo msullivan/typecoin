@@ -498,6 +498,7 @@ structure Blockchain :> BLOCKCHAIN =
                                            getTransactionByHash
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            (pos+blockOffsetInRecord)
+                                           num
                                            (EBlock.fromBytes blockstr))
                                 then
                                    setDubious num
@@ -562,7 +563,7 @@ structure Blockchain :> BLOCKCHAIN =
    
                         val eblock = EBlock.fromBytes (inputData pos)
                      in
-                        Verify.verifyStoredBlock getTransactionByHash utxo (pos+blockOffsetInRecord) eblock
+                        Verify.verifyStoredBlock getTransactionByHash utxo (pos+blockOffsetInRecord) i eblock
                      end
                   then
                      let in
@@ -666,6 +667,7 @@ structure Blockchain :> BLOCKCHAIN =
                                         getTransactionByHash
                                         utxo
                                         (pos+blockOffsetInRecord)
+                                        num
                                         eblock
                                   then
                                      (false, OK, utxo)
@@ -674,7 +676,7 @@ structure Blockchain :> BLOCKCHAIN =
                                      let
                                         val utxo = Utxo.branch prevUtxo
                                      in
-                                        Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
+                                        Utxo.processBlock utxo (pos+blockOffsetInRecord) num (EBlock.toBytes eblock);
                                         (true, DUBIOUS, utxo)
                                      end
                                end
@@ -682,7 +684,7 @@ structure Blockchain :> BLOCKCHAIN =
                                let
                                   val utxo = Utxo.branch prevUtxo
                                in
-                                  Utxo.processBlock utxo (pos+blockOffsetInRecord) (EBlock.toBytes eblock);
+                                  Utxo.processBlock utxo (pos+blockOffsetInRecord) num (EBlock.toBytes eblock);
                                   (false, UNKNOWN, utxo)
                                end
                       in
@@ -827,6 +829,7 @@ structure Blockchain :> BLOCKCHAIN =
 
       (* Index format:
 
+         4   bytes: magic number, little-endian
          8   bytes: final position, little-endian
          4   bytes: number of blocks, little-endian (n)
          8n  bytes: thePrimaryFork contents
@@ -881,6 +884,7 @@ structure Blockchain :> BLOCKCHAIN =
                          ())
                       
             in
+               BinIO.output (outs, ConvertWord.word32ToBytesL Constants.indexMagicNumber);
                BinIO.output (outs, int64ToBytesL (!theOutPos));
                BinIO.output (outs, ConvertWord.word32ToBytesL (Word32.fromInt blocks));
                writePrimaryFork 0;
@@ -910,6 +914,12 @@ structure Blockchain :> BLOCKCHAIN =
                   val ins = BinIO.openIn path
                in
                   let
+                     val () =
+                        if ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)) = Constants.indexMagicNumber then
+                           ()
+                        else
+                           raise ReadIndex
+
                      val finalpos = bytesToInt64L (must esc BinIO.inputN (ins, 8))
                      val blocks = Word32.toInt (ConvertWord.bytesToWord32L (must esc BinIO.inputN (ins, 4)))
    

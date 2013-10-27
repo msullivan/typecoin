@@ -1,5 +1,5 @@
 
-structure Verify (* :> VERIFY *) =
+structure Verify :> VERIFY =
    struct
 
       structure B = Bytestring
@@ -270,7 +270,7 @@ structure Verify (* :> VERIFY *) =
 
 
 
-      fun verifyStoredBlock getTx utxo blockPos eblock =
+      fun verifyStoredBlock getTx utxo blockPos blockNumber eblock =
          let
             (* eblock has already passed verifyBlockGross *)
 
@@ -284,7 +284,7 @@ structure Verify (* :> VERIFY *) =
                (case getTx utxo hash of
                    NONE => NONE
                  | SOME tx =>
-                      if Utxo.spend utxo coord then
+                      if Utxo.spend utxo blockNumber coord then
                          SOME tx
                       else
                          NONE)
@@ -294,22 +294,26 @@ structure Verify (* :> VERIFY *) =
                (fn (i, pos, tx, txstr, fees) =>
                    let
                       val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
-
-                      (* Verify the transaction, unless it's coinbase. *)
-                      
-                      val fee =
-                         if i = 0 then
-                            0
-                         else
-                            verifyTxMain spendTx tx
-                            handle Reject =>
-                               (
-                               Log.long (fn () => "Verification failure at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString (blockPos + Int64.fromInt pos));
-                               raise Reject
-                               )
                    in
-                      Utxo.insert utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx));
-                      fees + fee
+                      if i = 0 then
+                         (* Coinbase *)
+                         let in
+                            Utxo.insertCoinbase utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx)) blockNumber;
+                            fees
+                         end
+                      else
+                         let
+                            val fee =
+                               verifyTxMain spendTx tx
+                               handle Reject =>
+                                  (
+                                  Log.long (fn () => "Verification failure at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString (blockPos + Int64.fromInt pos));
+                                  raise Reject
+                                  )
+                         in
+                            Utxo.insert utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx));
+                            fees + fee
+                         end
                    end)
                0
                (EBlock.toBytes eblock)
