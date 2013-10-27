@@ -2,6 +2,9 @@
 signature TRANSACTION =
    sig
 
+      (* We take transaction hashes in their actual order.  For some reason
+         Bitcoin always reverses them when interacting with humans.
+      *)
       type hash = Bytestring.string
       type coord = hash * int
 
