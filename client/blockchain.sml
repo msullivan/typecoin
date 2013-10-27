@@ -27,7 +27,7 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       (* For testing purposes only. *)
-      val neverDoVerification = false
+      val neverDoVerification = true (* XXXXX *)
 
 
       (* I/O *)

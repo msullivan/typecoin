@@ -2,16 +2,24 @@
 signature COMMERCE =
    sig
 
-      type btcaddr = Bytestring.string  (* A bitcoin address *)
-
       datatype output =
-         Standard of btcaddr
+         (* Standard address :
+            Spender must provide a public key that hashes to address, and a signature for that public key.
+         *)
+         Standard of Bytestring.string
 
-      exception Invalid
-      exception NoKey
+         (* Multisig m pubkeys :
+            Spender must provide signatures for m of the public keys in pubkeys.
+         *)
+       | Multisig of int * Bytestring.string list
+
+      exception Analyze
+      exception Invalid of string
       
       val synthesize : output -> Script.inst list
       val analyze : Script.inst list -> output
+
+      exception NoKey
 
       val createTx :
          { inputs : Transaction.coord list,

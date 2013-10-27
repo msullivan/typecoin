@@ -1,5 +1,5 @@
 
-structure Verify :> VERIFY =
+structure Verify (* :> VERIFY *) =
    struct
 
       structure B = Bytestring
@@ -293,6 +293,8 @@ structure Verify :> VERIFY =
                Block.traverseBlock 
                (fn (i, pos, tx, txstr, fees) =>
                    let
+                      val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
+
                       (* Verify the transaction, unless it's coinbase. *)
                       
                       val fee =
@@ -300,8 +302,11 @@ structure Verify :> VERIFY =
                             0
                          else
                             verifyTxMain spendTx tx
-
-                      val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
+                            handle Reject =>
+                               (
+                               Log.long (fn () => "Verification failure at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString (blockPos + Int64.fromInt pos));
+                               raise Reject
+                               )
                    in
                       Utxo.insert utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx));
                       fees + fee

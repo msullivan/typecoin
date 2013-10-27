@@ -4,5 +4,6 @@ signature PROCESS =
    
       val initialize : unit -> unit
       val cleanup : unit -> unit
+      val inject : Transaction.tx -> unit
 
    end

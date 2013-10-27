@@ -232,6 +232,7 @@ structure Process :> PROCESS =
             val txstr = Transaction.writeTx tx
             val hash = dhash txstr
          in
+            Log.long (fn () => "Injecting transaction "^ Bytestring.toStringHex txstr);
             T.insert txpool hash txstr;
             relayList := (M.TX, hash) :: !relayList
          end

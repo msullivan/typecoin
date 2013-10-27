@@ -12,6 +12,37 @@ structure Main =
          end
 
 
+(*
+      fun doInject () =
+         if Blockchain.lastBlock () < 266276 then
+            (Scheduler.once (Time.fromSeconds 10) doInject; ())
+         else
+            let
+               val bfh = valOf o Bytestring.fromStringHex
+               val privkey : ECDSAp.privkey = 95245469629093752575860103020816037419470265044454156296322257695355402909823
+               val tx =
+                  Commerce.createTx
+                  { inputs = [(Bytestring.rev (bfh "8752bcc9896c50eb441ba81511ffeb1d94a30f0804ce28de6c7ba43e5e45a88f"), 1)],
+                    outputs = [(Commerce.Standard (Textcode.decodeAddress "17CRAXF26sRxmTp9nuC8pQzumt7stCKuhe"), 40000)],
+                    fee = 10000,
+                    keys = [privkey] }
+                  handle (exn as Commerce.Invalid error) =>
+                     (
+                     Log.long (fn () => "Invalid transaction composed: " ^ error);
+                     raise exn
+                     )
+   
+               fun wait () = 
+                  if Commo.numberOfConnections () >= 2 then
+                     Process.inject tx
+                  else
+                     (Scheduler.once (Time.fromSeconds 10) wait; ())
+            in
+               wait ()
+            end
+*)
+
+
       fun main' () =
          (
          Seed.initialSeed ();
@@ -33,6 +64,9 @@ structure Main =
          Scheduler.repeating (Time.fromSeconds (60 * 60)) Blockchain.writeIndex;
 
          Process.initialize ();
+(*
+         doInject ();
+*)
 
          ()
          )

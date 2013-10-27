@@ -350,8 +350,7 @@ structure Script :> SCRIPT =
               | 0wxb8 => R.return Nop
               | 0wxb9 => R.return Nop
    
-              | _ =>
-                   raise R.SyntaxError)
+              | _ => R.return Reserved)
             )
 
 

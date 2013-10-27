@@ -25,45 +25,69 @@ structure Commerce :> COMMERCE =
 
 
       val dhash = SHA256.hashBytes o SHA256.hashBytes
+      val dhash20 = RIPEMD160.hashBytes o SHA256.hashBytes
       val secp256k1 = EllipticCurveParams.secp256k1
 
-      fun addressFromPrivkey privkey compress =
-         let
-            val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (secp256k1, privkey)
 
-            val pubkeystr =
-               if compress then
-                  ECDERp.encodePubkeyCompressed (secp256k1, pubkey)
-               else
-                  ECDERp.encodePubkey (secp256k1, pubkey)
-         in
-            RIPEMD160.hashBytes (SHA256.hashBytes pubkeystr)
-         end
-
-
-
-      type btcaddr = Bytestring.string  (* A bitcoin address *)
 
       datatype output =
-         Standard of btcaddr
+         Standard of B.string
+       | Multisig of int * B.string list
 
-      exception Invalid
+
+      exception Analyze
+      exception Invalid of string
       exception NoKey
 
 
       fun synthesize output =
          (case output of
              Standard addr =>
-                [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig])
+                [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig]
+
+           | Multisig (m, pubkeys) =>
+                S.Constn (IntInf.fromInt m)
+                :: map
+                      (fn pubkey =>
+                          if B.size pubkey < 33 then
+                             raise (Invalid "multisig public key too small")
+                          else
+                             S.Const pubkey)
+                      pubkeys 
+                @ [S.Constn (IntInf.fromInt (length pubkeys)), S.Checkmultisig])
 
 
-      fun analyze l =
-         (case l of
+      fun analyze script =
+         (case script of
              [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig] =>
                 Standard addr
+
+           | S.Constn m :: rest =>
+                (* might be Multisig *)
+                let
+                   fun loop l acc n =
+                      (case l of
+                          S.Const pubkey :: rest =>
+                             if B.size pubkey < 33 then
+                                raise Analyze
+                             else
+                                loop rest (pubkey :: acc) (n+1)
+
+                        | [S.Constn n', S.Checkmultisig] =>
+                             if n = IntInf.toInt n' then
+                                Multisig (IntInf.toInt m, rev acc)
+                             else
+                                raise Analyze
+
+                        | _ =>
+                             raise Analyze)
+                in
+                   loop rest [] 0
+                   handle Overflow => raise Analyze
+                end
+
            | _ =>
-                (* Don't understand this script. *)
-                raise Invalid)
+                raise Analyze)
 
 
       fun createTx { inputs, outputs, fee, keys } =
@@ -72,7 +96,7 @@ structure Commerce :> COMMERCE =
                (* Check that the amounts are in range. *)
                app (fn (_, amount) => 
                           if amount <= 0 orelse amount > maxAmount then
-                             raise Invalid
+                             raise (Invalid "output amount out of range")
                           else
                              ()) outputs
 
@@ -83,14 +107,13 @@ structure Commerce :> COMMERCE =
                (fn (txhash, n) =>
                    (case Blockchain.getTransaction utxo txhash of
                        NONE =>
-                          raise Invalid
+                          raise (Invalid "input transaction not found")
                      | SOME tx =>
                           let
                              val {amount, script} =
                                 List.nth (#outputs tx, n)
                                 handle Subscript =>
-                                   (* Input transaction doesn't have this many outputs *)
-                                   raise Invalid
+                                   raise (Invalid "input transaction doesn't have this many outputs")
                           in
                              (txhash, n, Word64.toLargeInt amount, script)
                           end))
@@ -105,7 +128,7 @@ structure Commerce :> COMMERCE =
                then
                   ()
                else
-                  raise Invalid
+                  raise (Invalid "inputs amounts don't match output amounts")
 
             val pretxins =
                map
@@ -121,13 +144,28 @@ structure Commerce :> COMMERCE =
             val pretx : Transaction.tx =
                Transaction.mkTx { inputs=pretxins, outputs=txouts, lockTime=0w0 }
 
-            val keydict =
+            val (addrDict, pubkeyDict) =
                List.foldl
-               (fn (privkey, dict) =>
-                   D.insert
-                      (D.insert dict (addressFromPrivkey privkey false) (privkey, false))
-                      (addressFromPrivkey privkey true) (privkey, true))
-               D.empty
+               (fn (privkey, (addrDict, pubkeyDict)) =>
+                   let
+                      val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (secp256k1, privkey)
+
+                      val pubkeystr = ECDERp.encodePubkey (secp256k1, pubkey)
+                      val pubkeystrComp = ECDERp.encodePubkeyCompressed (secp256k1, pubkey)
+
+                      val addrDict' =
+                         D.insert
+                            (D.insert addrDict (dhash20 pubkeystr) (pubkeystr, privkey))
+                            (dhash20 pubkeystrComp) (pubkeystrComp, privkey)
+
+                      val pubkeyDict' =
+                         D.insert
+                            (D.insert pubkeyDict pubkeystr privkey)
+                            pubkeystrComp privkey
+                   in
+                      (addrDict', pubkeyDict')
+                   end)
+               (D.empty, D.empty)
                keys
 
             fun signloop j acc l =
@@ -139,24 +177,44 @@ structure Commerce :> COMMERCE =
                             (* Figure out what ioscript is looking for. *)
                             (case analyze (Script.readScript ioscript) of
                                 Standard addr =>
-                                   (case D.find keydict addr of
+                                   (case D.find addrDict addr of
                                        NONE =>
                                           (* Don't have the key. *)
                                           raise NoKey
-                                     | SOME (privkey, compress) =>
+                                     | SOME (pubkeystr, privkey) =>
                                           let
                                              val sg = Signature.sign pretx j ioscript (Signature.HashAll, false) privkey
-
-                                             val pubkey = ECDSAp.privkeyToPubkey (secp256k1, privkey)
-                                             val pubkeystr =
-                                                if compress then
-                                                   ECDERp.encodePubkeyCompressed (secp256k1, pubkey)
-                                                else
-                                                   ECDERp.encodePubkey (secp256k1, pubkey)
                                           in
-                                             S.writeScript
-                                             [S.Const sg, S.Const pubkeystr]
-                                          end))
+                                             S.writeScript [S.Const sg, S.Const pubkeystr]
+                                          end)
+
+                              | Multisig (m, pubkeys) =>
+                                   let
+                                      (* m >= 0, n = |pubkeys| *)
+                                      fun loop m n pubkeys acc =
+                                         if m = 0 then
+                                            rev acc
+                                         else if m > n then
+                                            (* Don't have enough keys. *)
+                                            raise NoKey
+                                         else
+                                            (case pubkeys of
+                                                [] =>
+                                                   raise (Fail "precondition")
+                                              | pubkey :: rest =>
+                                                   (case D.find pubkeyDict pubkey of
+                                                       NONE =>
+                                                          (* Don't have the key. *)
+                                                          loop m (n-1) rest acc
+                                                     | SOME privkey =>
+                                                          let
+                                                             val sg = Signature.sign pretx j ioscript (Signature.HashAll, false) privkey
+                                                          in
+                                                             S.Const sg :: acc
+                                                          end))
+                                   in
+                                      S.writeScript (S.Const B.null :: loop m (length pubkeys) pubkeys [])
+                                   end)
 
                          val txin = { from=(txinhash, n), script=script, sequence=0wxffffffff }
                       in

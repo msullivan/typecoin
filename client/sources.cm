@@ -46,6 +46,8 @@ is
         signature.sml
         sink.sig
         sink.sml
+        textcode.sig
+        textcode.sml
         transaction.sig
         transaction.sml
         utxo.sig

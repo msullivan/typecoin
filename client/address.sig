@@ -1,4 +1,5 @@
 
+(* Network addresses *)
 signature ADDRESS =
    sig
 

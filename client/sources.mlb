@@ -10,6 +10,8 @@
         log.sml
         base58.sig
         base58.sml
+        textcode.sig
+        textcode.sml
         reader.sig
         reader.sml
         writer.sig
@@ -46,6 +48,8 @@
         verify.sml
         blockchain.sig
         blockchain.sml
+        commerce.sig
+        commerce.sml
         commo.sig
         commo.sml
         process.sig
