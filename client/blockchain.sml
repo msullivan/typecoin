@@ -310,23 +310,27 @@ structure Blockchain :> BLOCKCHAIN =
            | Cons (_, _, _, _, _, utxo) => utxo)
 
 
-      fun getTransaction utxo hash =
+      fun getTransaction pos =
+         let
+            val (tx, _) =
+               Transaction.reader (inputCostring pos)
+               handle Overflow => raise Reader.SyntaxError
+         in
+            tx
+         end
+         
+
+      fun getTransactionByHash utxo hash =
          (case Utxo.find utxo hash of
              NONE => NONE
-           | SOME pos' =>
-                let
-                   val (tx, _) =
-                      Transaction.reader (inputCostring pos')
-                      handle Overflow => raise Reader.SyntaxError
-                in
-                   SOME tx
-                end
-                handle
-                Reader.SyntaxError =>
-                   (
-                   Log.long (fn () => "Bad index or corrupted block chain record at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString pos');
-                   raise (Fail "getTransaction")
-                   ))
+           | SOME pos =>
+                SOME (getTransaction pos
+                      handle
+                      Reader.SyntaxError =>
+                         (
+                         Log.long (fn () => "Bad index or corrupted block chain record at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString pos);
+                         raise (Fail "getTransactionByHash")
+                         )))
 
 
       (* The operation "rewind num" shunts every block on the primary fork back to (but not including)
@@ -491,7 +495,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    !verification
                                    andalso
                                    not (Verify.verifyStoredBlock
-                                           getTransaction
+                                           getTransactionByHash
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            (pos+blockOffsetInRecord)
                                            (EBlock.fromBytes blockstr))
@@ -558,7 +562,7 @@ structure Blockchain :> BLOCKCHAIN =
    
                         val eblock = EBlock.fromBytes (inputData pos)
                      in
-                        Verify.verifyStoredBlock getTransaction utxo (pos+blockOffsetInRecord) eblock
+                        Verify.verifyStoredBlock getTransactionByHash utxo (pos+blockOffsetInRecord) eblock
                      end
                   then
                      let in
@@ -659,7 +663,7 @@ structure Blockchain :> BLOCKCHAIN =
                                in
                                   if
                                      Verify.verifyStoredBlock 
-                                        getTransaction
+                                        getTransactionByHash
                                         utxo
                                         (pos+blockOffsetInRecord)
                                         eblock

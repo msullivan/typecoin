@@ -105,7 +105,7 @@ structure Commerce :> COMMERCE =
             val inputs' =
                map 
                (fn (txhash, n) =>
-                   (case Blockchain.getTransaction utxo txhash of
+                   (case Blockchain.getTransactionByHash utxo txhash of
                        NONE =>
                           raise (Invalid "input transaction not found")
                      | SOME tx =>

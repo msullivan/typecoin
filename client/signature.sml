@@ -1,5 +1,5 @@
 
-structure Signature :> SIGNATURE =
+structure Signature (* :> SIGNATURE *) =
    struct
 
       structure B = Bytestring
