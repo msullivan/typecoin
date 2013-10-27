@@ -170,28 +170,26 @@ structure Verify :> VERIFY =
          - allowable difficulty
          - maximum signature operations (20,000)
          - pay to script hash (@#$%&!)
-         - coinbase maturity
          - coinbase amount!
-         - the first transaction (and only the first transaction) has zero for its txin "hash"
          - no repeat transaction unless legacy
       *) 
 
 
-      exception Reject = Interpret.Reject
+      exception Reject of string
 
       (* Verify a txin, and return its amount if it passes. *)
       fun verifyTxin (getTx : T.coord -> T.tx option) tx i ({from=(from as (_, fromIndex)), script=inScript, ...}:T.txin) =
          let
             val () =
                if B.size inScript > Constants.maxScriptSize then
-                  raise Reject
+                  raise (Reject "input script too large")
                else
                   ()
 
             val {outputs, ...} =
                (case getTx from of
                    NONE =>
-                      raise Reject
+                      raise (Reject "txin invalid or unavailable")
                  | SOME tx => tx)
 
             val {amount, script=outScript} =
@@ -200,15 +198,18 @@ structure Verify :> VERIFY =
 
             val () =
                if B.size outScript > Constants.maxScriptSize then
-                  raise Reject
+                  raise (Reject "output script too large")
                else
                   ()
 
             val () =
-               if Interpret.passes (Interpret.exec tx i outScript (Interpret.exec tx i inScript [])) then
+               if
+                  Interpret.passes (Interpret.exec tx i outScript (Interpret.exec tx i inScript []))
+                  handle Interpret.Reject => raise (Reject "script fails")
+               then
                   ()
                else
-                  raise Reject
+                  raise (Reject "script fails")
 
             (* XX Need to handle @#$%&! pay-to-script-hash *)
          in
@@ -219,6 +220,12 @@ structure Verify :> VERIFY =
       (* Verifies the transaction, returns its fee. *)
       fun verifyTxMain getTx (tx as { version, inputs, outputs, lockTime }) =
          let
+            val () =
+               if List.null inputs orelse List.null outputs then
+                  raise (Reject "empty inputs or outputs")
+               else
+                  ()
+
             val (amountIn, _) = 
                List.foldl
                (fn (txin, (amountAcc, i)) =>
@@ -232,7 +239,7 @@ structure Verify :> VERIFY =
 
             val () =
                if amountIn > maximumAmount then
-                  raise Reject
+                  raise (Reject "amount in too large")
                else
                   ()
 
@@ -245,7 +252,7 @@ structure Verify :> VERIFY =
 
             val () =
                if amountOut > maximumAmount then
-                  raise Reject
+                  raise (Reject "amount out too large")
                else
                   ()
 
@@ -253,7 +260,7 @@ structure Verify :> VERIFY =
 
             val () =
                if fee < 0 then
-                  raise Reject
+                  raise (Reject "transaction out of balance")
                else
                   ()
          in
@@ -263,10 +270,15 @@ structure Verify :> VERIFY =
 
       fun verifyTx getTx tx =
          (verifyTxMain getTx tx; true)
-         handle Reject => false
+         handle Reject _ => false
 
 
       type pos = Int64.int
+
+
+      
+      fun coinbaseReward blockNumber =
+         IntInf.~>> (5000000000, Word.fromInt (blockNumber div 210000))
 
 
 
@@ -276,7 +288,7 @@ structure Verify :> VERIFY =
 
             val () =
                if B.size (EBlock.toBytes eblock) > Constants.maxBlockSize then
-                  raise Reject
+                  raise (Reject "block exceeds maximum size")
                else
                   ()
 
@@ -289,43 +301,75 @@ structure Verify :> VERIFY =
                       else
                          NONE)
 
-            val fees =
+            val balance =
                Block.traverseBlock 
-               (fn (i, pos, tx, txstr, fees) =>
+               (fn (i, pos, tx, txstr, balance) =>
                    let
                       val hash = SHA256.hashBytes (SHA256.hash (Stream.fromTable BS.sub txstr 0))
                    in
                       if i = 0 then
                          (* Coinbase *)
-                         let in
-                            Utxo.insertCoinbase utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx)) blockNumber;
-                            fees
+                         let
+                            val {inputs, outputs, ...} = tx
+
+                            (* Check that it has the proper form for a coinbase transaction.
+                               The reference implementation also checks that none of the other
+                               transactions have this form, but that's not necessary, as they
+                               would fail anyway.
+                            *)
+                            val () =
+                               (case inputs of
+                                   [{from=(hash, n), script, ...}] =>
+                                      if not (B.eq (hash, zeros) andalso n = ~1) then
+                                         raise (Reject "ill-formed coinbase transaction")
+                                      else if B.size script < 2 orelse B.size script > Constants.maxCoinbaseSize then
+                                         raise (Reject "coinbase script too large")
+                                      else
+                                         ()
+                                 | _=>
+                                      raise (Reject "ill-formed coinbase transaction"))
+
+                            val amountOut =
+                               List.foldl
+                               (fn ({amount, script=_}, amountAcc) =>
+                                   (amountAcc + Word64.toLargeInt amount))
+                               0
+                               outputs
+
+                            val () =
+                               if amountOut > maximumAmount then
+                                  raise (Reject "coinbase amount too large")
+                               else
+                                  ()
+                         in
+                            Utxo.insertCoinbase utxo hash (blockPos + Int64.fromInt pos) (length outputs) blockNumber;
+                            balance + amountOut
                          end
                       else
                          let
                             val fee =
                                verifyTxMain spendTx tx
-                               handle Reject =>
+                               handle exn as (Reject _) =>
                                   (
                                   Log.long (fn () => "Verification failure at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString (blockPos + Int64.fromInt pos));
-                                  raise Reject
+                                  raise exn
                                   )
                          in
                             Utxo.insert utxo hash (blockPos + Int64.fromInt pos) (length (#outputs tx));
-                            fees + fee
+                            balance - fee
                          end
                    end)
                0
                (EBlock.toBytes eblock)
 
             val () =
-               if fees > maximumAmount then
-                  raise Reject
-               else
+               if balance = coinbaseReward blockNumber then
                   ()
+               else
+                  raise (Reject "block out of balance")
          in
             true
          end
-         handle Reject => false
+         handle Reject _ => false
 
    end

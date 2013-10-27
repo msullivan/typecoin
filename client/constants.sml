@@ -83,8 +83,10 @@ structure Constants =
       (* Check sync throughput this often. *)
       val throughputInterval = Time.fromSeconds 30                (* 30 seconds *)
 
-      (* Delay resuming verification for this long after a sync (to allow another sync to start, if necessary). *)
-      val syncVerificationDelay = Time.fromSeconds 30             (* 30 seconds *)
+      (* Delay resuming verification for this long after a sync or
+         at startup (to allow another sync to start, if necessary).
+      *)
+      val syncVerificationDelay = Time.fromSeconds 20             (* 20 seconds *)
 
       (* Want to receive at least this many bytes per throughputInterval. *)
       val syncThroughput = 3 * 1024 * 1024                        (* 3 MB *)
@@ -159,7 +161,12 @@ structure Constants =
       (* Scripts may not execute more instructions than this. *)
       val maxScriptOperations = 201
 
+      (* No coinbase scripts larger than this. *)
+      val maxCoinbaseSize = 100
+
+      (* Coinbase transaction may not be spent for this many blocks. *)
       val coinbaseMaturity = 100
+
 
 
       (* File constants *)

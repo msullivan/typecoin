@@ -148,6 +148,7 @@ structure Process :> PROCESS =
                   | SOME _ =>
                        ()))
 
+
       fun monitorSync conn remoteblocks =
          if Blockchain.lastBlock () >= remoteblocks orelse not (isSome (!syncing)) then
             (* Done or aborted. *)

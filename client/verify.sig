@@ -19,6 +19,9 @@ signature VERIFY =
       val verifyBlockGross : EBlock.eblock -> bool
 
 
+      exception Reject of string
+
+
       (* verifyTx spendTx tx
          
             spendTx coord

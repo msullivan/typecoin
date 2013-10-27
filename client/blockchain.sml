@@ -589,7 +589,8 @@ structure Blockchain :> BLOCKCHAIN =
                else
                   () ;
                loopVerify start;
-               verification := true
+               verification := true;
+               Log.long (fn () => "Verification complete")
             end
    
       fun suspendVerification () =
