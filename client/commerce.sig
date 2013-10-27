@@ -25,7 +25,7 @@ signature COMMERCE =
          { inputs : Transaction.coord list,
            outputs : (output * LargeInt.int) list,
            fee : LargeInt.int,
-           keys : ECDSA.privkey list }
+           keys : ECDSAp.privkey list }
          -> Transaction.tx
 
    end
