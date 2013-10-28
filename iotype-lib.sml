@@ -1,4 +1,4 @@
-(* This if from the IOType support lib, hacked up by Michael Sullivan
+(* This is from the IOType support lib, hacked up by Michael Sullivan
  * to have just what I need, in the places I want, and working in SML/NJ. *)
 
 (*
@@ -119,7 +119,7 @@ functor IOWordFun (Word: WORD) = struct
                 update (a, 0, Word.toLarge w)
                 ; BinIO.output (p, Word8Array.vector a)
             end
-                val (readElem, writeElem) = (readWord, writeWord)
+        val (readElem, writeElem) = (readWord, writeWord)
     end
 end
 
@@ -152,6 +152,7 @@ structure IOBool = struct
         SOME 0w0 => SOME false
         | SOME 0w1 => SOME true
         | _ => NONE
+    val (readElem, writeElem) = (readBool, writeBool)
 end
 
 
@@ -228,6 +229,15 @@ structure IOWord8Vector = IOMonoVector (
     structure Element = IOWord8
     structure Vector = Word8Vector
 )
+
+structure IOIntInf =
+struct
+  type elem = IntInf.int
+  fun readInt p =
+      Option.map ConvertIntInf.fromBytesB (IOWord8Vector.readVector p)
+  fun writeInt (p, v) = IOWord8Vector.writeVector (p, ConvertIntInf.toBytesB v)
+
+end
 
 
 structure IOTypes =
