@@ -285,12 +285,19 @@ struct
            (91414779336211869123681701981829070536738525253602829724283724650164868267290,
             45324093941933083857292792809424115783627380967806617052739798377324684734767),
        63864662182596890716986802929790865809740337433382096343017620806541489714467)
+  val (test_keypair4 : keypair as (test_pubkey4, test_privkey4)) =
+      (SOME
+           (85078306604668984981987122722772113896360372037051247591313875911018671009534,
+            82276512876817439049078547073873774935889717301632314030883121023431781113962),
+       9058177031455919178826547575639311957926744239246079304451874958948223778964)
   val (alice_keypair as (alice_pubkey, alice_privkey)) = test_keypair1
   val alice_hash = hashPubKey alice_pubkey
   val (bob_keypair as (bob_pubkey, bob_privkey)) = test_keypair2
   val bob_hash = hashPubKey bob_pubkey
   val (charlie_keypair as (charlie_pubkey, charlie_privkey)) = test_keypair3
   val charlie_hash = hashPubKey charlie_pubkey
+  val (janet_keypair as (janet_pubkey, janet_privkey)) = test_keypair4
+  val janet_hash = hashPubKey janet_pubkey
 
 
   (* Ok, lets test some transaction stuff. *)
@@ -301,6 +308,7 @@ struct
   val alice = TB.principal_hash (TB.hashBytestringToHashObj alice_hash)
   val bob = TB.principal_hash (TB.hashBytestringToHashObj bob_hash)
   val charlie = TB.principal_hash (TB.hashBytestringToHashObj charlie_hash)
+  val janet = TB.principal_hash (TB.hashBytestringToHashObj janet_hash)
 
   (*******************************************************************************************)
   (* First, somebody publishes a transaction with some
