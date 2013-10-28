@@ -4,12 +4,13 @@ signature COMMERCE =
 
       datatype output =
          (* Standard address :
-            Spender must provide a public key that hashes to address, and a signature for that public key.
+            Spender must provide a public key that hashes to the given address,
+            and a signature for that public key.
          *)
-         Standard of Bytestring.string
+         PayToKeyHash of Bytestring.string
 
          (* Multisig m pubkeys :
-            Spender must provide signatures for m of the public keys in pubkeys.
+            Spender must provide signatures for m of the public keys.
          *)
        | Multisig of int * Bytestring.string list
 

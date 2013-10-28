@@ -23,7 +23,7 @@ structure Main =
                val tx =
                   Commerce.createTx
                   { inputs = [(Bytestring.rev (bfh "8752bcc9896c50eb441ba81511ffeb1d94a30f0804ce28de6c7ba43e5e45a88f"), 1)],
-                    outputs = [(Commerce.Standard (Textcode.decodeAddress "17CRAXF26sRxmTp9nuC8pQzumt7stCKuhe"), 40000)],
+                    outputs = [(Commerce.PayToKeyHash (Textcode.decodeAddress "17CRAXF26sRxmTp9nuC8pQzumt7stCKuhe"), 40000)],
                     fee = 10000,
                     keys = [privkey] }
                   handle (exn as Commerce.Invalid error) =>

@@ -31,7 +31,7 @@ structure Commerce :> COMMERCE =
 
 
       datatype output =
-         Standard of B.string
+         PayToKeyHash of B.string
        | Multisig of int * B.string list
 
 
@@ -42,7 +42,7 @@ structure Commerce :> COMMERCE =
 
       fun synthesize output =
          (case output of
-             Standard addr =>
+             PayToKeyHash addr =>
                 [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig]
 
            | Multisig (m, pubkeys) =>
@@ -60,7 +60,7 @@ structure Commerce :> COMMERCE =
       fun analyze script =
          (case script of
              [S.Dup, S.Hash160, S.Const addr, S.EqualVerify, S.Checksig] =>
-                Standard addr
+                PayToKeyHash addr
 
            | S.Constn m :: rest =>
                 (* might be Multisig *)
@@ -176,7 +176,7 @@ structure Commerce :> COMMERCE =
                          val script =
                             (* Figure out what ioscript is looking for. *)
                             (case analyze (Script.readScript ioscript) of
-                                Standard addr =>
+                                PayToKeyHash addr =>
                                    (case D.find addrDict addr of
                                        NONE =>
                                           (* Don't have the key. *)
