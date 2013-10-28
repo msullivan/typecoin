@@ -239,6 +239,25 @@ struct
 
 end
 
+structure IOOption =
+struct
+    fun writeOption w (p, x) =
+        case x of
+            NONE => BinIO.output1 (p, 0w0)
+          | SOME y => (
+            BinIO.output1 (p, 0w1);
+            w (p, y)
+        )
+    fun readOption r p =
+        (case BinIO.input1 p of
+             SOME 0w0 => SOME NONE
+           | SOME 0w1 =>
+             (case r p of
+                  NONE => NONE
+                | x as SOME _ => SOME x
+             )
+           | _ => NONE)
+end
 
 structure IOTypes =
 struct
@@ -252,6 +271,8 @@ struct
   val writeString = IOString.writeString
   val writeList = IOList.writeList
   val readList = IOList.readList
+  val writeOption = IOOption.writeOption
+  val readOption = IOOption.readOption
   val readWord8Vector = IOWord8Vector.readVector
   val writeWord8Vector = IOWord8Vector.writeVector
 
