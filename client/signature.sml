@@ -31,6 +31,12 @@ structure Signature :> SIGNATURE =
                   HashAll
 
             val anyoneCanPay = Word8.andb (b, 0wx80) <> 0w0
+
+            val () =
+               if Word8.andb (b, 0wx7f) < 0w1  orelse  Word8.andb (b, 0wx7f) > 0w3 then
+                  Log.long (fn () => "Unusual: hash byte "^ Word8.toString b)
+               else
+                  ()
          in
             (class, anyoneCanPay)
          end
@@ -97,6 +103,7 @@ structure Signature :> SIGNATURE =
                         List.nth (inputs, i)
                         handle Subscript => raise Munge
                   in
+                     Log.long (fn () => "Unusual: ANYONE_CAN_PAY");
                      [{from=from, script=prevScript, sequence=sequence}]
                   end
                else
@@ -126,7 +133,10 @@ structure Signature :> SIGNATURE =
                       (* For hash class NONE, we delete all the outputs.  This means that anyone
                          can change the transaction's outputs.  (Why would you ever want this?)
                       *)
+                      (
+                      Log.long (fn () => "Unusual: HASH_NONE");
                       []
+                      )
 
                  | HashSingle =>
                       (* For hash class SINGLE, we (in effect) delete all the outputs except the
@@ -138,7 +148,10 @@ structure Signature :> SIGNATURE =
                          simply deleted.  However, the outputs before i are set to "Null", where
                          "Null" is an empty script and amount = -1.
                       *)
-                      mungeOutputsSingle 0 outputs)
+                      (
+                      Log.long (fn () => "Unusual: HASH_SINGLE");
+                      mungeOutputsSingle 0 outputs
+                      ))
          in
             { version=version, inputs=inputs', outputs=outputs', lockTime=lockTime }
          end
@@ -185,7 +198,11 @@ structure Signature :> SIGNATURE =
          *)
          handle
             Munge => raise (Fail "precondition")
-          | MungeSingle => ConvertIntInf.toFixedBytesL (32, 1)
+          | MungeSingle =>
+               (
+               Log.long (fn () => "Unusual: HASH_SINGLE bug");
+               ConvertIntInf.toFixedBytesL (32, 1)
+               )
 
 
 
@@ -270,7 +287,10 @@ structure Signature :> SIGNATURE =
             fun loop lastscript curscript acc found =
                if BS.size curscript < targetsz then
                   if found then
+                     (
+                     Log.long (fn () => "Unusual: search and destroy");
                      BS.full (BS.concat (rev (sliceBetween lastscript curscript :: acc)))
+                     )
                   else
                      (* Optimize this case, which is almost always what happens. *)
                      script

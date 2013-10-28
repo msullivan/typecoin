@@ -96,4 +96,6 @@ signature SCRIPT =
       val writeScript : inst list -> Bytestring.string
       val readScript : Bytestring.string -> inst list
 
+      val instToString : inst -> string
+
    end

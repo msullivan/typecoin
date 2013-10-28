@@ -173,6 +173,20 @@ structure Interpret :> INTERPRET =
       type txenv = Transaction.tx * int * BS.substring
 
 
+      (* Opcodes over 96 are unusual, except DUP, HASH160, EQUALVERIFY, CHECKSIG, CHECKMULTSIG.
+         PUSHDATA4 and RESERVED (80) are also unusual.
+         (Opcodes 96 and below -- other than 80 -- push constants.)
+      *)
+         
+      val unusual = Array.tabulate (256, (fn i => i > 96))
+      val () =
+         List.app (fn i => Array.update (unusual, i, true))
+         [78, 80]
+      val () =
+         List.app (fn i => Array.update (unusual, i, false))
+         [118, 169, 136, 172, 174]
+
+
       (* stksz = |stack| + |altstack|, which may not exceed Constants.maxStackSize
          ops is the current number of (non-constant) operations, which may not exceed Constants.maxScriptOperations
          txenv is the current transaction environment
@@ -193,6 +207,12 @@ structure Interpret :> INTERPRET =
                else
                   let
                      val (inst, cont) = decode code
+
+                     val () =
+                        if Array.sub (unusual, Word8.toInt (BS.sub (code, 0))) then
+                           Log.long (fn () => "Unusual: "^ Script.instToString inst)
+                        else
+                           ()
                   in
                      (case inst of
                          S.Const str =>
@@ -737,6 +757,12 @@ structure Interpret :> INTERPRET =
                else
                   let
                      val (inst, cont) = decode code
+
+                     val () =
+                        if Array.sub (unusual, Word8.toInt (BS.sub (code, 0))) then
+                           Log.long (fn () => "Unusual: "^ Script.instToString inst)
+                        else
+                           ()
                   in
                      if ops > Constants.maxScriptOperations then
                         raise Reject
