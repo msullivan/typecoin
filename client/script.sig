@@ -80,7 +80,8 @@ signature SCRIPT =
        | ChecksigVerify
        | Checkmultisig
        | CheckmultisigVerify
-       | Reserved
+       | Reserved  (* same as Invalid as far as execution is concerned, but has an opcode that is sometimes treated specially *)
+       | Invalid
        | Verif
        | Vernotif
 
@@ -97,5 +98,7 @@ signature SCRIPT =
       val readScript : Bytestring.string -> inst list
 
       val instToString : inst -> string
+
+      val isConstant : inst -> bool
 
    end

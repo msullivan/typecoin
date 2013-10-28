@@ -9,9 +9,10 @@ structure Verify :> VERIFY =
 
       (* Constants *)
       val maximumBits : Word32.word = 0wx1d00ffff
-      val maximumAmount : IntInf.int = 21000000 * 100000000  (* 21 MBTC, which is slightly more than there will ever be. *)
+      val maximumAmount : IntInf.int = 21000000 * 100000000  (* 21 MBTC, which is slightly more Bitcoin than there will ever be. *)
 
       (* Precomputed data *)
+      val minusone : Word32.word = ~ 0w1
       val zeros = valOf (B.fromStringHex "0000000000000000000000000000000000000000000000000000000000000000")
 
 
@@ -166,18 +167,18 @@ structure Verify :> VERIFY =
 
       (* XXXX Things that still need to be verified:
 
-         - timestamp
-         - allowable difficulty
          - maximum signature operations (20,000)
-         - pay to script hash (@#$%&!)
          - no repeat transaction unless legacy
+         - correct difficulty
+         - block version upgrade rule
+         - timestamp not too early (GetMedianTimePast in main.h, called in main.cpp)
       *) 
 
 
       exception Reject of string
 
       (* Verify a txin, and return its amount if it passes. *)
-      fun verifyTxin (getTx : T.coord -> T.tx option) tx i ({from=(from as (_, fromIndex)), script=inScript, ...}:T.txin) =
+      fun verifyTxin enforceP2sh (getTx : T.coord -> T.tx option) tx i ({from=(from as (_, fromIndex)), script=inScript, ...}:T.txin) =
          let
             val () =
                if B.size inScript > Constants.maxScriptSize then
@@ -201,23 +202,90 @@ structure Verify :> VERIFY =
                else
                   ()
 
+            val instack =
+               Interpret.exec tx i inScript []
+               handle Interpret.Reject => raise (Reject "inscript fails")
+
             val () =
                if
-                  Interpret.passes (Interpret.exec tx i outScript (Interpret.exec tx i inScript []))
-                  handle Interpret.Reject => raise (Reject "script fails")
+                  Interpret.passes (Interpret.exec tx i outScript instack)
+                  handle Interpret.Reject => false
                then
                   ()
                else
                   raise (Reject "script fails")
 
-            (* XX Need to handle @#$%&! pay-to-script-hash *)
+
+            (* This little monstrosity is called Pay to Script Hash (https://en.bitcoin.it/wiki/BIP_0016).
+               The aim here is to add a limited eval operation, so that very large output scripts can be
+               compressed to a 20-byte hash.  (So that, for example, they can fit in a QR code.) The spender
+               supplies the actual script, which is first hashed and compared against the given hash, then
+               evaluated.
+
+               So basically they want:
+
+                  DUP HASH160 ..constant.. EQUALVERIFY EVAL
+
+               But there is no EVAL opcode.  Rather than just add one, it was deemed better for the upgrade
+               path to identify a particular output script:
+
+                  HASH160 ..constant.. EQUAL
+
+               and treat it as if it were actually the above EVAL script.  This means you run the script as
+               usual (thus accomplishing the DUP HASH160 ..constant.. EQUALVERIFY part), and then do the eval.
+
+               You also require that the input script contains only constants, for some reason.
+
+               Pay-to-script-hash came into effect at timestamp 1333238400 (April 1, 2012).  Before that time
+               there were (reportedly) transactions that failed the rule.  Thus, we need to be told whether
+               pay-to-script-hash is in effect, which is the purpose of enforceP2sh.
+            *)
+            val () =
+               if
+                  (* recognize pay-to-script-hash *)
+                  B.size outScript = 23
+                  andalso
+                  B.sub (outScript, 0) = 0wxa6   (* HASH160 *)
+                  andalso
+                  B.sub (outScript, 1) = 0wx14   (* 20-byte constant *)
+                  andalso
+                  B.sub (outScript, 22) = 0wx87  (* EQUAL *)
+                  andalso
+                  (* XX I'm curious if there really were any p2sh-resembling transactions before 1333238400 *)
+                  if enforceP2sh then true else (Log.long (fn () => "Unusual: premature pay-to-script-hash"); false)
+               then
+                  let
+                     val () = Log.long (fn () => "Unusual: pay-to-script-hash");
+
+                     (* The input script must contain only constants. *)
+                     val () =
+                        if List.all Script.isConstant (Script.readScript inScript) then
+                           ()
+                        else
+                           raise (Reject "pay-to-script-hash input script contains non-constants")
+                  in
+                     (case instack of
+                         [] =>
+                            (* This should have failed already, but easy enough to do this. *)
+                            raise (Reject "empty instack in pay-to-script-hash")
+                       | outScript' :: instack' =>
+                            if
+                               Interpret.passes (Interpret.exec tx i outScript' instack')
+                               handle Interpret.Reject => false
+                            then
+                               ()
+                            else
+                               raise (Reject "pay-to-script-hash script fails"))
+                  end
+               else
+                  ()
          in
             amount
          end
 
 
       (* Verifies the transaction, returns its fee. *)
-      fun verifyTxMain getTx (tx as { version, inputs, outputs, lockTime }) =
+      fun verifyTxMain enforceP2sh spendTx (tx as { version, inputs, outputs, lockTime }) =
          let
             val () =
                if List.null inputs orelse List.null outputs then
@@ -229,7 +297,7 @@ structure Verify :> VERIFY =
                List.foldl
                (fn (txin, (amountAcc, i)) =>
                    let
-                      val amount = verifyTxin getTx tx i txin
+                      val amount = verifyTxin enforceP2sh spendTx tx i txin
                    in
                       (amountAcc + Word64.toLargeInt amount, i+1)
                    end)
@@ -267,8 +335,8 @@ structure Verify :> VERIFY =
          end
 
 
-      fun verifyTx getTx tx =
-         (verifyTxMain getTx tx; true)
+      fun verifyTx enforceP2sh spendTx tx =
+         (verifyTxMain enforceP2sh spendTx tx; true)
          handle Reject _ => false
 
 
@@ -281,6 +349,24 @@ structure Verify :> VERIFY =
 
 
 
+      fun isFinalTx blockNumber ({ inputs, lockTime, ...}:T.tx) =
+         lockTime = 0w0
+         orelse
+         let
+            val lockTime = Word32.toLargeInt lockTime
+            val () = Log.long (fn () => "Unusual: lockTime = "^ LargeInt.toString lockTime)
+         in
+            (if lockTime < 500000000 then
+                LargeInt.fromInt blockNumber > lockTime
+             else
+                Time.toSeconds (Time.now ()) > lockTime)
+
+            orelse
+
+            List.all (fn {sequence, ...} => sequence = minusone) inputs
+         end
+
+
       fun verifyStoredBlock getTx utxo blockPos blockNumber eblock =
          let
             (* eblock has already passed verifyBlockGross *)
@@ -288,6 +374,20 @@ structure Verify :> VERIFY =
             val () =
                if B.size (EBlock.toBytes eblock) > Constants.maxBlockSize then
                   raise (Reject "block exceeds maximum size")
+               else
+                  ()
+
+            val ({timestamp, ...}, _) = EBlock.toBlock eblock
+
+            (* Check that the block's timestamp is not too far in the future.
+               This seems dodgy: if a block is just on the margin, mightn't it
+               cause a fork because of varying clocks or just the varying time
+               at which a node frst sees it?  Nevertheless, this is what the
+               reference implementation does.
+            *)
+            val () =
+               if Word32.toLargeInt timestamp > Time.toSeconds (Time.now ()) + Constants.allowedTimeDrift then
+                  raise (Reject "timestamp too far in the future")
                else
                   ()
 
@@ -299,6 +399,8 @@ structure Verify :> VERIFY =
                          SOME tx
                       else
                          NONE)
+
+            val enforceP2sh = timestamp >= Constants.payToScriptHashTimestamp
 
             val balance =
                Block.traverseBlock 
@@ -345,9 +447,21 @@ structure Verify :> VERIFY =
                             balance + amountOut
                          end
                       else
+                         (* Not coinbase. *)
                          let
+                            (* Check that the transaction is final.  The reference implementation does this only as
+                               part of a block, not for loose transactions.  Probably this is so that the block number
+                               does not have to be made available to transaction checking, but possibly this is so
+                               that un-final transactions are passsed around by the peer-to-peer network.
+                            *)
+                            val () =
+                               if isFinalTx blockNumber tx then
+                                  ()
+                               else
+                                  raise (Reject "transacton is not final")
+
                             val fee =
-                               verifyTxMain spendTx tx
+                               verifyTxMain enforceP2sh spendTx tx
                                handle exn as (Reject _) =>
                                   (
                                   Log.long (fn () => "Verification failure at "^ B.toStringHex (B.rev hash) ^", "^ Int64.toString (blockPos + Int64.fromInt pos));

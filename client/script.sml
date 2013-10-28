@@ -92,6 +92,7 @@ structure Script :> SCRIPT =
        | Checkmultisig
        | CheckmultisigVerify
        | Reserved
+       | Invalid
        | Verif
        | Vernotif
 
@@ -218,6 +219,7 @@ structure Script :> SCRIPT =
            | Checkmultisig => W.byte 0wxae
            | CheckmultisigVerify => W.byte 0wxaf
            | Reserved => W.byte 0wx50
+           | Invalid => W.byte 0wxff
            | Verif => W.byte 0wx65
            | Vernotif => W.byte 0wx66)
 
@@ -261,7 +263,7 @@ structure Script :> SCRIPT =
               | 0wx4f => R.return MinusOne
               | 0wx50 => R.return Reserved
               | 0wx61 => R.return Nop
-              | 0wx62 => R.return Reserved
+              | 0wx62 => R.return Invalid
               | 0wx63 => R.return If
               | 0wx64 => R.return Notif
               | 0wx65 => R.return Verif
@@ -300,8 +302,8 @@ structure Script :> SCRIPT =
               | 0wx86 => R.return Xor
               | 0wx87 => R.return Equal
               | 0wx88 => R.return EqualVerify
-              | 0wx89 => R.return Reserved
-              | 0wx8a => R.return Reserved
+              | 0wx89 => R.return Invalid
+              | 0wx8a => R.return Invalid
               | 0wx8b => R.return OneAdd 
               | 0wx8c => R.return OneSub 
               | 0wx8d => R.return TwoMul 
@@ -350,7 +352,7 @@ structure Script :> SCRIPT =
               | 0wxb8 => R.return Nop
               | 0wxb9 => R.return Nop
    
-              | _ => R.return Reserved)
+              | _ => R.return Invalid)
             )
 
 
@@ -442,7 +444,16 @@ structure Script :> SCRIPT =
            | Checkmultisig => "CHECKMULTISIG"
            | CheckmultisigVerify => "CHECKMULTISIGVERIFY"
            | Reserved => "RESERVED"
+           | Invalid => "INVALIDOPCODE"
            | Verif => "VERIF"
            | Vernotif => "VERNOTIF")
+
+      fun isConstant inst =
+         (case inst of
+             Const _ => true
+           | Constn _ => true
+           | MinusOne => true
+           | Reserved => true  (* sic *)
+           | _ => false)
 
    end

@@ -178,13 +178,13 @@ structure Interpret :> INTERPRET =
          (Opcodes 96 and below -- other than 80 -- push constants.)
       *)
          
-      val unusual = Array.tabulate (256, (fn i => i > 96))
+      val unusual = Array.tabulate (256, (fn i => i > 0x60))
       val () =
          List.app (fn i => Array.update (unusual, i, true))
-         [78, 80]
+         [0x4e, 0x50]
       val () =
          List.app (fn i => Array.update (unusual, i, false))
-         [118, 169, 136, 172, 174]
+         [0x76, 0xa9, 0x88, 0xac, 0xae]
 
 
       (* stksz = |stack| + |altstack|, which may not exceed Constants.maxStackSize
@@ -737,6 +737,9 @@ structure Interpret :> INTERPRET =
                             end
 
                       | S.Reserved =>
+                           raise Reject
+
+                      | S.Invalid =>
                            raise Reject
 
                        | S.Verif =>

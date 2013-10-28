@@ -22,16 +22,22 @@ signature VERIFY =
       exception Reject of string
 
 
-      (* verifyTx spendTx tx
+      (* verifyTx enforceP2sh spendTx tx
          
-            spendTx coord
-            -------------
-            If coord is valid and unspent, marks it as spent (if appropriate), and returns SOME of its transaction.
-            Otherwise, returns NONE.
+         enforceP2sh is true if the pay-to-script-hash rule is to be enforced (should be true, except for legacy transactions)
+
+         spendTx is as follows:
+
+            * spendTx coord
+
+              If coord is valid and unspent, marks it as spent (if appropriate), and returns SOME of its transaction.
+              Otherwise, returns NONE.
 
          Returns true iff tx passes verification.  Calls spendTx on all tx's inputs.
+
+         NB: verifyTx does not guard against multiple spends except by calling spendTx.
       *)
-      val verifyTx : (Transaction.coord -> Transaction.tx option) -> Transaction.tx -> bool
+      val verifyTx : bool -> (Transaction.coord -> Transaction.tx option) -> Transaction.tx -> bool
 
 
       type pos = Int64.int

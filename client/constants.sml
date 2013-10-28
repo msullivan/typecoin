@@ -167,6 +167,12 @@ structure Constants =
       (* Coinbase transaction may not be spent for this many blocks. *)
       val coinbaseMaturity = 100
 
+      (* Enforce pay-to-script-hash beginning with this timestamp *)
+      val payToScriptHashTimestamp : Word32.word = 0w1333238400   (* April 1, 2012 *)
+
+      (* Reject a block whose timestamp is more than this far in the future. *)
+      val allowedTimeDrift : LargeInt.int  = 2 * 60 * 60          (* 2 hours *)
+
 
 
       (* File constants *)
