@@ -36,9 +36,9 @@ structure Log :> LOG =
          (OS.FileSys.fileSize filename; true)
          handle OS.SysErr _ => false
 
-      fun initialize () =
+      fun initialize logfile =
          let
-            val path = OS.Path.concat (Constants.dataDirectory, "log")
+            val path = OS.Path.concat (Constants.dataDirectory, logfile)
 
             val outs =
                (* This test shouldn't be necessary, but not every platform implements
@@ -58,7 +58,7 @@ structure Log :> LOG =
       fun cleanup () =
          (
          TextIO.closeOut (!theOutstream);
-         theOutstream := TextIO.stdErr
+         theOutstream := TextIOUtil.nullOut
          )
 
    end

@@ -6,6 +6,7 @@ structure BitcoinChain :> CHAIN =
 
       val name = "Bitcoin"
       val port = 8333
+      val testnet = false
       val magic : Word32.word = 0wxd9b4bef9
 
       val genesisHash =
@@ -24,7 +25,6 @@ structure BitcoinChain :> CHAIN =
 
       val blockchainFile = "blockchain.dat"
       val indexFile = "index.dat"
-      val utxoFile = "utxo.dat"
 
       val alertKey =
          ECDERp.decodePubkey (EllipticCurveParams.secp256k1, bfh "04fc9702847840aaf195de8442ebecedf5b095cdbb9bc716bda9110971b28a49e0ead8564ff0db22209e0374782c093bb899692d524e9d6a6956e7c5ecbcd68284")
@@ -39,6 +39,7 @@ structure TestnetChain :> CHAIN =
 
       val name = "Testnet"
       val port = 18333
+      val testnet = true
       val magic : Word32.word = 0wx0709110b
 
       val genesisHash =
@@ -55,7 +56,6 @@ structure TestnetChain :> CHAIN =
 
       val blockchainFile = "testblockchain.dat"
       val indexFile = "testindex.dat"
-      val utxoFile = "testutxo.dat"
 
       val alertKey =
          ECDERp.decodePubkey (EllipticCurveParams.secp256k1, bfh "04fc9702847840aaf195de8442ebecedf5b095cdbb9bc716bda9110971b28a49e0ead8564ff0db22209e0374782c093bb899692d524e9d6a6956e7c5ecbcd68284")

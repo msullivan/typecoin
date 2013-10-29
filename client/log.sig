@@ -4,6 +4,6 @@ signature LOG =
       val short : string -> unit
       val long : (unit -> string) -> unit
 
-      val initialize : unit -> unit
+      val initialize : string -> unit
       val cleanup : unit -> unit
    end

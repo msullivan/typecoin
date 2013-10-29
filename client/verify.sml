@@ -252,7 +252,9 @@ structure Verify :> VERIFY =
                   B.sub (outScript, 22) = 0wx87  (* EQUAL *)
                   andalso
                   (* XX I'm curious if there really were any p2sh-resembling transactions before 1333238400 *)
-                  if enforceP2sh then true else (Log.long (fn () => "Unusual: premature pay-to-script-hash"); false)
+                  if enforceP2sh
+                     then true
+                     else (not Chain.testnet) andalso (Log.long (fn () => "Unusual: premature pay-to-script-hash"); false)
                then
                   let
                      val () = Log.long (fn () => "Unusual: pay-to-script-hash");

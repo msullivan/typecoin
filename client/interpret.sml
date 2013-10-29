@@ -173,9 +173,9 @@ structure Interpret :> INTERPRET =
       type txenv = Transaction.tx * int * BS.substring
 
 
-      (* Opcodes over 96 are unusual, except DUP, HASH160, EQUALVERIFY, CHECKSIG, CHECKMULTSIG.
-         PUSHDATA4 and RESERVED (80) are also unusual.
-         (Opcodes 96 and below -- other than 80 -- push constants.)
+      (* Opcodes over 0x60 are unusual, except DUP, HASH160, EQUALVERIFY, CHECKSIG, CHECKMULTSIG, NOP, EQUAL.
+         PUSHDATA4 and RESERVED (0x50) are also unusual.
+         (Opcodes 0x60 and below -- other than 0x50 -- push constants.)
       *)
          
       val unusual = Array.tabulate (256, (fn i => i > 0x60))
@@ -184,7 +184,7 @@ structure Interpret :> INTERPRET =
          [0x4e, 0x50]
       val () =
          List.app (fn i => Array.update (unusual, i, false))
-         [0x76, 0xa9, 0x88, 0xac, 0xae]
+         [0x76, 0xa9, 0x88, 0xac, 0xae, 0x61, 0x87]
 
 
       (* stksz = |stack| + |altstack|, which may not exceed Constants.maxStackSize
