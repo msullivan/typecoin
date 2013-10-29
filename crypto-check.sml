@@ -78,6 +78,8 @@ struct
   fun hashTxnBody txnBody =
       hash (IOTypes.writeToVector TypeCoinTxn.writeTxn_body txnBody)
 
+  (* Tau in UTF-8 *)
+  val magicNumber = Bytestring.fromList [0xcf, 0x84]
 
   fun createTxn (txn: txn_specifier as
                  {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
@@ -91,7 +93,7 @@ struct
 
           val txnHash = hashTxnBody typecoin_txn
           val fakePubKey = Bytestring.concat [
-                           Bytestring.fromString "typecoin",
+                           magicNumber,
                            txnHash
                            ]
           val realPubKey = Encoding.encodePubkey (param, recovery_pubkey)
