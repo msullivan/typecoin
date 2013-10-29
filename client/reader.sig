@@ -12,6 +12,7 @@ signature READER =
       val byte : Word8.word reader
       val word16B : Word.word reader
       val word16L : Word.word reader
+      val word32B : Word32.word reader
       val word32L : Word32.word reader
       val word64L : Word64.word reader
       val bytes : int -> Bytestring.string reader

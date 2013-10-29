@@ -54,5 +54,9 @@
         commo.sml
         process.sig
         process.sml
+        rpc-message.sig
+        rpc-message.sml
+        rpc-server.sig
+        rpc-server.sml
         main.sml
         go.sml

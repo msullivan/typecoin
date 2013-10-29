@@ -81,6 +81,16 @@ structure Reader : READER =
          else
             raise SyntaxError
 
+      fun word32B cos =
+         if C.minSize (cos, 4) then
+            let
+               val (str, cos') = C.splitAt (cos, 4)
+            in
+               (ConvertWord.bytesToWord32SB str, cos')
+            end
+         else
+            raise SyntaxError
+
       fun word32L cos =
          if C.minSize (cos, 4) then
             let

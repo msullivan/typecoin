@@ -16,6 +16,7 @@ signature WRITER =
       val word16B : Word.word -> writer
       val word16L : Word.word -> writer
       val word32L : Word32.word -> writer
+      val word32B : Word32.word -> writer
       val word64L : Word64.word -> writer
       val bytes : Bytestring.string -> writer
       val bytesS : Bytesubstring.substring -> writer

@@ -42,6 +42,9 @@ structure Writer :> WRITER =
          else
             O.output (B.substring (ConvertWord.wordToBytesL w, 0, 2))
 
+      fun word32B w =
+         O.output (ConvertWord.word32ToBytesB w)
+
       fun word32L w =
          O.output (ConvertWord.word32ToBytesL w)
 

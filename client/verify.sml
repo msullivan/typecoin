@@ -245,7 +245,7 @@ structure Verify :> VERIFY =
                   (* recognize pay-to-script-hash *)
                   B.size outScript = 23
                   andalso
-                  B.sub (outScript, 0) = 0wxa6   (* HASH160 *)
+                  B.sub (outScript, 0) = 0wxa9   (* HASH160 *)
                   andalso
                   B.sub (outScript, 1) = 0wx14   (* 20-byte constant *)
                   andalso
@@ -386,7 +386,7 @@ structure Verify :> VERIFY =
                reference implementation does.
             *)
             val () =
-               if Word32.toLargeInt timestamp > Time.toSeconds (Time.now ()) + Constants.allowedTimeDrift then
+               if Word32.toLargeInt timestamp > Time.toSeconds (Time.+ (Time.now (), Constants.allowedTimeDrift)) then
                   raise (Reject "timestamp too far in the future")
                else
                   ()

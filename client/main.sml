@@ -64,9 +64,7 @@ structure Main =
          Scheduler.repeating (Time.fromSeconds (60 * 60)) Blockchain.writeIndex;
 
          Process.initialize ();
-(*
-         doInject ();
-*)
+         RpcServer.initialize ();
 
          ()
          )
@@ -74,6 +72,7 @@ structure Main =
 
       fun cleanup () =
          (
+         RpcServer.cleanup ();
          Process.cleanup ();
          Blockchain.close ();
          Log.cleanup ()

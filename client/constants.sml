@@ -171,7 +171,7 @@ structure Constants =
       val payToScriptHashTimestamp : Word32.word = 0w1333238400   (* April 1, 2012 *)
 
       (* Reject a block whose timestamp is more than this far in the future. *)
-      val allowedTimeDrift : LargeInt.int  = 2 * 60 * 60          (* 2 hours *)
+      val allowedTimeDrift = Time.fromSeconds (2 * 60 * 60)       (* 2 hours *)
 
 
 
@@ -180,6 +180,20 @@ structure Constants =
       val dataDirectory = "data"
       val seedFile = "seed.dat"
       val alertFile = "alert.dat"
+
+
+
+      (* RPC constants *)
+
+      (* Do RPC over this port. *)
+      val rpcPort = 87678
+
+      (* Ignore any RPC request larger than this. *)
+      val maximumRpcRequest = 8192                                (* 8k *)
+
+      (* Keep RPC connections this long. *)
+      val rpcLifetime = Time.fromSeconds (5 * 60)                 (* 5 minutes *)
+
 
 
       (* Randomization constants *)

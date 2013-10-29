@@ -36,6 +36,12 @@ is
         process.sml
         reader.sig
         reader.sml
+        rpc.sig
+        rpc.sml
+        rpc-message.sig
+        rpc-message.sml
+        rpc-server.sig
+        rpc-server.sml
         script.sig
         script.sml
         scheduler.sig

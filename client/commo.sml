@@ -451,7 +451,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
                 theInsock := SOME insock;
                 Scheduler.insertRead insock (fn () => answer insock)
              end
-             handle NetworkException =>
+             handle Network.NetworkException _ =>
                 let in
                    Log.long (fn () => "Unable to open socket for incoming connections");
                    theInsock := NONE
