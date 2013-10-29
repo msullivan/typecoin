@@ -15,9 +15,10 @@ structure RpcMessage :> RPC_MESSAGE =
       (* No logical order to these, just the order in which they were added. *)
 
       datatype request =
-         Inject of Transaction.tx
+         CloseChannel
+       | ShutdownServer
+       | Inject of Transaction.tx
        | LookupTx of Bytestring.string
-       | CloseChannel
        | LastBlock
        | PositionByNumber of int
 
@@ -55,24 +56,27 @@ structure RpcMessage :> RPC_MESSAGE =
 
       fun requestWriter req =
          (case req of
-             Inject tx =>
+             CloseChannel =>
                 W.byte 0w1
+
+           | ShutdownServer =>
+                W.byte 0w2
+
+           | Inject tx =>
+                W.byte 0w3
                 >>>
                 Transaction.writer tx
 
            | LookupTx str =>
-                W.byte 0w2
+                W.byte 0w4
                 >>>
                 W.bytesVar str
 
-           | CloseChannel =>
-                W.byte 0w3
-
            | LastBlock =>
-                W.byte 0w4
+                W.byte 0w5
 
            | PositionByNumber i =>
-                W.byte 0w5
+                W.byte 0w6
                 >>>
                 intWriter i)
 
@@ -81,14 +85,16 @@ structure RpcMessage :> RPC_MESSAGE =
          >>= (fn branch =>
          (case branch of
              0w1 =>
-                R.wrap Inject Transaction.reader
-           | 0w2 =>
-                R.wrap LookupTx R.bytesVar
-           | 0w3 =>
                 R.return CloseChannel
+           | 0w2 =>
+                R.return ShutdownServer
+           | 0w3 =>
+                R.wrap Inject Transaction.reader
            | 0w4 =>
-                R.return LastBlock
+                R.wrap LookupTx R.bytesVar
            | 0w5 =>
+                R.return LastBlock
+           | 0w6 =>
                 R.wrap PositionByNumber intReader
            | _ =>
                 raise R.SyntaxError)

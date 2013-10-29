@@ -3,9 +3,10 @@ signature RPC_MESSAGE =
    sig
 
       datatype request =
-         Inject of Transaction.tx
+         CloseChannel
+       | ShutdownServer
+       | Inject of Transaction.tx
        | LookupTx of Bytestring.string
-       | CloseChannel
        | LastBlock
        | PositionByNumber of int
 

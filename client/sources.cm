@@ -38,6 +38,10 @@ is
         reader.sml
         rpc.sig
         rpc.sml
+        rpc-action.sig
+        rpc-action.sml
+        rpc-client.sig
+        rpc-client.sml
         rpc-message.sig
         rpc-message.sml
         rpc-server.sig

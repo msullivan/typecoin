@@ -310,7 +310,7 @@ structure Blockchain :> BLOCKCHAIN =
            | Cons (_, _, _, _, _, utxo) => utxo)
 
 
-      fun getTransaction pos =
+      fun getTxByPosition pos =
          let
             val (tx, _) =
                Transaction.reader (inputCostring pos)
@@ -320,11 +320,11 @@ structure Blockchain :> BLOCKCHAIN =
          end
          
 
-      fun getTransactionByHash utxo hash =
+      fun getTxWithUtxo utxo hash =
          (case Utxo.find utxo hash of
              NONE => NONE
            | SOME pos =>
-                SOME (getTransaction pos
+                SOME (getTxByPosition pos
                       handle
                       Reader.SyntaxError =>
                          (
@@ -495,7 +495,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    !verification
                                    andalso
                                    not (Verify.verifyStoredBlock
-                                           getTransactionByHash
+                                           getTxWithUtxo
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            (pos+blockOffsetInRecord)
                                            num
@@ -563,7 +563,7 @@ structure Blockchain :> BLOCKCHAIN =
    
                         val eblock = EBlock.fromBytes (inputData pos)
                      in
-                        Verify.verifyStoredBlock getTransactionByHash utxo (pos+blockOffsetInRecord) i eblock
+                        Verify.verifyStoredBlock getTxWithUtxo utxo (pos+blockOffsetInRecord) i eblock
                      end
                   then
                      let in
@@ -665,7 +665,7 @@ structure Blockchain :> BLOCKCHAIN =
                                in
                                   if
                                      Verify.verifyStoredBlock 
-                                        getTransactionByHash
+                                        getTxWithUtxo
                                         utxo
                                         (pos+blockOffsetInRecord)
                                         num
@@ -1161,6 +1161,8 @@ structure Blockchain :> BLOCKCHAIN =
       fun utxoByNumber num = blockUtxo (hashByNumber num)
 
       fun currentUtxo () = utxoByNumber (!lastblock)
+
+      fun getTx hash = getTxWithUtxo (currentUtxo ()) hash
          
 
 

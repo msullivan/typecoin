@@ -30,35 +30,6 @@ structure RpcServer :> RPC_SERVER =
             ()
 
 
-      (* CloseChannel messages are already served. *)
-      fun serveMessage conn req =
-         ((case req of
-              M.Inject tx =>
-                 (
-                 Process.inject tx;
-                 M.True
-                 )
- 
-            | M.LookupTx hash =>
-                 (case Blockchain.getTransactionByHash (Blockchain.currentUtxo ()) hash of
-                     SOME tx =>
-                        M.Transaction tx
-                   | NONE =>
-                        M.False)
- 
-            | M.CloseChannel =>
-                 (* Can't handle CloseChannel in here due to catch-all exception handler below. *)
-                 raise (Fail "precondition")
-
-            | M.LastBlock =>
-                 M.Int (Blockchain.lastBlock ())
-
-            | M.PositionByNumber i =>
-                 M.Integer (Int64.toLarge (Blockchain.positionByNumber i)))
-          handle exn =>
-             M.Exception (M.String (Bytestring.fromString (exnMessage exn))))
-
-
       fun recvMessage fk sk =
          let
             fun kmsg str =
@@ -103,8 +74,12 @@ structure RpcServer :> RPC_SERVER =
                              closeConn conn;
                              Scheduler.exit ()
                              )
+                        | M.ShutdownServer =>
+                             Scheduler.shutdown ()
                         | _ =>
-                             serveMessage conn req)
+                             (RpcAction.act req
+                              handle exn =>
+                                 M.Exception (M.String (B.fromString (exnMessage exn)))))
 
                    val respstr = Writer.write (M.responseWriter resp)
                 in
