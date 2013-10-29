@@ -177,6 +177,8 @@ struct
   type crypto_address = Logic.crypto_address
   type crypto_principal = Logic.crypto_principal
 
+  type amount = IntInf.int
+
   datatype input = Input of
            {source: txnid * int,
             prop: Logic.prop
@@ -186,7 +188,8 @@ struct
   datatype output = Output of
            {dest: crypto_address,
             prop: Logic.prop,
-            needs_receipt: bool
+            needs_receipt: bool,
+            amount: amount option
            }
   type outputs = output list
 

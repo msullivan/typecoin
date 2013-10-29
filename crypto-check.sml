@@ -64,4 +64,49 @@ struct
           val crypto_sig = Encoding.encodeSg crypto_sig
       in {principal = principal, prop = prop, crypto_sig = crypto_sig} end
 
+  (* OK, yeah, we'll do the bitcoin stuff here too. *)
+  (* What our default quantity of bitcoin we use to represent a resource is. *)
+  (* 0.001 btc *)
+  val baseAmount: LargeInt.int = 100000
+  type txn_specifier =
+       {typecoin_txn: TypeCoinTxn.txn_body,
+        keys: Signing.privkey list,
+        fee: LargeInt.int,
+        recovery_pubkey: Signing.pubkey,
+        recovery_amount: LargeInt.int}
+
+  fun hashTxnBody txnBody =
+      hash (IOTypes.writeToVector TypeCoinTxn.writeTxn_body txnBody)
+
+
+  fun createTxn (txn: txn_specifier as
+                 {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
+      let val (TypeCoinTxn.TxnBody {inputs, outputs, ...}) = typecoin_txn
+
+          fun convertInput (TypeCoinTxn.Input {source = (txnid, i), ...}) =
+              (Bytestring.rev (valOf (Bytestring.fromStringHex txnid)), i)
+          fun convertOutput (TypeCoinTxn.Output {dest, amount, ...}) =
+              (Commerce.PayToKeyHash dest,
+               getOpt (amount, baseAmount))
+
+          val txnHash = hashTxnBody typecoin_txn
+          val fakePubKey = Bytestring.concat [
+                           Bytestring.fromString "typecoin",
+                           txnHash
+                           ]
+          val realPubKey = Encoding.encodePubkey (param, recovery_pubkey)
+          val fakeOutput = (Commerce.Multisig (1, [fakePubKey, realPubKey]),
+                            recovery_amount)
+
+          val inputs' = map convertInput inputs
+          val outputs' = map convertOutput outputs
+      in Commerce.createTx {
+           inputs = inputs',
+           outputs = fakeOutput :: outputs',
+           fee = fee,
+           keys = keys
+         }
+      end
+
+
 end
