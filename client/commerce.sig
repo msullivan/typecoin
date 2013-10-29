@@ -23,10 +23,11 @@ signature COMMERCE =
       exception NoKey
 
       val createTx :
-         { inputs : Transaction.coord list,
-           outputs : (output * LargeInt.int) list,
-           fee : LargeInt.int,
-           keys : ECDSAp.privkey list }
+         (Bytestring.string -> Transaction.tx option)
+         -> { inputs : Transaction.coord list,
+              outputs : (output * LargeInt.int) list,
+              fee : LargeInt.int,
+              keys : ECDSAp.privkey list }
          -> Transaction.tx
 
    end

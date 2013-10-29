@@ -90,7 +90,7 @@ structure Commerce :> COMMERCE =
                 raise Analyze)
 
 
-      fun createTx { inputs, outputs, fee, keys } =
+      fun createTx (getTx : B.string -> Transaction.tx option) { inputs, outputs, fee, keys } =
          let
             val () =
                (* Check that the amounts are in range. *)
@@ -100,12 +100,10 @@ structure Commerce :> COMMERCE =
                           else
                              ()) outputs
 
-            val utxo = Blockchain.currentUtxo ()
-
             val inputs' =
                map 
                (fn (txhash, n) =>
-                   (case Blockchain.getTransactionByHash utxo txhash of
+                   (case getTx txhash of
                        NONE =>
                           raise (Invalid "input transaction not found")
                      | SOME tx =>
