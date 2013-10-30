@@ -9,6 +9,8 @@ struct
   val [x, y, z, z', w, x1, y1, z1, w1, x2, y2, z2, w2, z1', z2'] =
       map MVar ["x", "y", "z", "z'", "w", "x1", "y1", "z1", "w1", "x2", "y2", "z2", "w2", "z1'", "z2'"]
 
+  structure TB = TypeCoinBasis
+
 
 
   (*****************************************************************)
@@ -28,45 +30,26 @@ struct
                                        needs_receipt = false, amount = NONE}
 
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
-  val (test_keypair1 : keypair as (test_pubkey1, test_privkey1)) =
-      (SOME
-           (11831032065352454438641876800627675216545526971670677831117729227462543208862,
-            115110513735647463363474328864503181748072497052594184213934648437348368030219),
-       84949032573639129980743211979748855589646357655829367172829447606736725751911)
-  val (test_keypair2 : keypair as (test_pubkey2, test_privkey2)) =
-      (SOME
-           (58983369042593963632619891589595911832440092793514839008342864010329496907151,
-            62162639805088467693464181659153423717612090991394312282516252926635931265248),
-       30031085134376089938835666959011487879061968753113189013180106434494274397669)
-  val (test_keypair3 : keypair as (test_pubkey3, test_privkey3)) =
-      (SOME
-           (91414779336211869123681701981829070536738525253602829724283724650164868267290,
-            45324093941933083857292792809424115783627380967806617052739798377324684734767),
-       63864662182596890716986802929790865809740337433382096343017620806541489714467)
-  val (test_keypair4 : keypair as (test_pubkey4, test_privkey4)) =
-      (SOME
-           (85078306604668984981987122722772113896360372037051247591313875911018671009534,
-            82276512876817439049078547073873774935889717301632314030883121023431781113962),
-       9058177031455919178826547575639311957926744239246079304451874958948223778964)
-  val (alice_keypair as (alice_pubkey, alice_privkey)) = test_keypair1
-  val alice_hash = hashPubKey alice_pubkey
-  val (bob_keypair as (bob_pubkey, bob_privkey)) = test_keypair2
-  val bob_hash = hashPubKey bob_pubkey
-  val (charlie_keypair as (charlie_pubkey, charlie_privkey)) = test_keypair3
-  val charlie_hash = hashPubKey charlie_pubkey
-  val (janet_keypair as (janet_pubkey, janet_privkey)) = test_keypair4
-  val janet_hash = hashPubKey janet_pubkey
+
+  fun makeKeyStuff privkey =
+      let val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (param, privkey)
+          val hash = hashPubKey pubkey
+          val id = TB.principal_hash (TB.hashBytestringToHashObj hash)
+      in ((pubkey, privkey), pubkey, privkey, hash, id) end
+
+  val (alice_keypair, alice_pubkey, alice_privkey, alice_hash, alice) =
+      makeKeyStuff 84949032573639129980743211979748855589646357655829367172829447606736725751911
+  val (bob_keypair, bob_pubkey, bob_privkey, bob_hash, bob) =
+      makeKeyStuff 30031085134376089938835666959011487879061968753113189013180106434494274397669
+  val (charlie_keypair, charlie_pubkey, charlie_privkey, charlie_hash, charlie) =
+      makeKeyStuff 63864662182596890716986802929790865809740337433382096343017620806541489714467
+  val (janet_keypair, janet_pubkey, janet_privkey, janet_hash, janet) =
+      makeKeyStuff 9058177031455919178826547575639311957926744239246079304451874958948223778964
 
 
   (* Ok, lets test some transaction stuff. *)
   val P = SRule
   val C = SConst
-  structure TB = TypeCoinBasis
-
-  val alice = TB.principal_hash (TB.hashBytestringToHashObj alice_hash)
-  val bob = TB.principal_hash (TB.hashBytestringToHashObj bob_hash)
-  val charlie = TB.principal_hash (TB.hashBytestringToHashObj charlie_hash)
-  val janet = TB.principal_hash (TB.hashBytestringToHashObj janet_hash)
 
 
   (*******************************************************************************************)
