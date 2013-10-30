@@ -61,6 +61,7 @@ structure Network :> NETWORK =
 
       fun sendVec (sock, v) =
          let
+            (* MLton: note signal handling in platform-mlton.sml. *)
             val n = Socket.sendVec (sock, v)
          in
             Bytesubstring.size v = n
