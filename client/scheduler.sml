@@ -50,17 +50,22 @@ structure Scheduler :> SCHEDULER =
                    queueSize := !queueSize - 1;
                    (case dispatch (!fr) of
                        SHUTDOWN => ()
-                     | EXIT => wait ())
+                     | EXIT =>
+                          (* Give sockets priority over timeouts.  This way we
+                             don't close sockets for inactivity when were just
+                             too busy to listen.
+                          *)
+                          select Time.zeroTime)
                    )
                 else
                    wait ())
          
-      and wait () = select (SOME heartbeatInterval)
+      and wait () = select heartbeatInterval
 
       and select timeout =
          let
             val {rds=rready, wrs=wready, ...} =
-               S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=timeout}
+               S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=(SOME timeout)}
                handle exn => raise (SchedulerException exn)
          in
             sockloop (wready @ rready)
