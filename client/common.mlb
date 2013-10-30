@@ -8,10 +8,6 @@
         constants.sml
         log.sig
         log.sml
-        base58.sig
-        base58.sml
-        textcode.sig
-        textcode.sml
         reader.sig
         reader.sml
         writer.sig
@@ -20,10 +16,6 @@
         network.sml
         seed.sig
         seed.sml
-        scheduler.sig
-        scheduler.sml
-        sink.sig
-        sink.sml
         script.sig
         script.sml
         transaction.sig
@@ -38,27 +30,9 @@
         eblock.sml
         address.sig
         address.sml
-        message.sig
-        message.sml
-        peer.sig
-        peer.sml
         utxo.sig
         utxo.sml
         verify.sig
         verify.sml
-        blockchain.sig
-        blockchain.sml
-        commerce.sig
-        commerce.sml
-        commo.sig
-        commo.sml
-        process.sig
-        process.sml
         unityped.sig
         unityped.sml
-        rpc-action.sig
-        rpc-action.sml
-        rpc-server.sig
-        rpc-server.sml
-        main.sml
-        go.sml
