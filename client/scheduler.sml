@@ -50,15 +50,17 @@ structure Scheduler :> SCHEDULER =
                    queueSize := !queueSize - 1;
                    (case dispatch (!fr) of
                        SHUTDOWN => ()
-                     | EXIT => timeloop ())
+                     | EXIT => select NONE)
                    )
                 else
                    wait ())
          
-      and wait () =
+      and wait () = select (SOME heartbeatInterval)
+
+      and select timeout =
          let
             val {rds=rready, wrs=wready, ...} =
-               S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=SOME heartbeatInterval}
+               S.select {rds=(!rsocks), wrs=(!wsocks), exs=[], timeout=timeout}
                handle exn => raise (SchedulerException exn)
          in
             sockloop (wready @ rready)

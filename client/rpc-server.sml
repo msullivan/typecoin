@@ -58,10 +58,12 @@ structure RpcServer :> RPC_SERVER =
          let
             fun fk () =
                (
-               Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size method))))
-               andalso
-               Network.sendVec (sock, BS.full method) ;
-               
+               Log.long (fn () => "RPC error");
+
+               (* Mask a bug in Mlton sockets (see below). *)
+               Network.sendVec (sock, BS.full (B.^ (ConvertWord.word32ToBytesB (Word32.fromInt (B.size method)),
+                                                    method)));
+
                closeConn conn
                )
          in
@@ -98,9 +100,13 @@ structure RpcServer :> RPC_SERVER =
                    val respstr = Writer.write (U.writer resp)
                 in
                    if
-                      Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size respstr))))
-                      andalso
-                      Network.sendVec (sock, BS.full respstr)
+                      (* Batch these two sends together to mask a bug in Mlton sockets.
+                         Sometimes, when a socket has been closed remotely, the first
+                         send to that socket seems to succeed, and then the second send
+                         exits the program, unmaskably.
+                      *)
+                      Network.sendVec (sock, BS.full (B.^ (ConvertWord.word32ToBytesB (Word32.fromInt (B.size respstr)),
+                                                           respstr)))
                    then
                       (
                       timeout := Scheduler.once Constants.rpcLifetime (fn () => closeConn conn);

@@ -64,7 +64,8 @@ structure Network :> NETWORK =
             val n = Socket.sendVec (sock, v)
          in
             Bytesubstring.size v = n
-         end handle OS.SysErr (err, _) =>
+         end
+         handle OS.SysErr (err, _) =>
             (
             Log.long (fn () => "Send error: " ^ err);
             false
