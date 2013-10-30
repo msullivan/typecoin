@@ -45,6 +45,9 @@ structure RPC :> RPC =
                (case rpc (M.BlockByNumber i) of
                    M.String str => str
                  | _ => raise RPC)
+
+            fun blockByNumber i =
+               Block.readBlock (dataByNumber i)
       
             fun tx hash =
                (case rpc (M.LookupTx hash) of

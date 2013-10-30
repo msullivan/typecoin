@@ -10,6 +10,7 @@ signature BLOCKCHAIN_RPC =
       val lastBlock : unit -> int
       val totalDifficulty : unit -> IntInf.int
       val dataByNumber : int -> Bytestring.string
+      val blockByNumber : int -> Block.block
       val tx : hash -> Transaction.tx option
       val txDataByNumber : int -> int -> Bytestring.string
       val txByNumber : int -> int -> Transaction.tx
