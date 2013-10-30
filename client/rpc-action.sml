@@ -55,6 +55,14 @@ structure RpcAction :> RPC_ACTION =
                 Nil
                 )
 
+           | (0w19, Bytestring hash) =>
+                (* Blockchain.blockNumber *)
+                Int (Blockchain.blockNumber hash)
+
+           | (0w20, Int i) =>
+                (* Blockchain.hashByNumber *)
+                Bytestring (Blockchain.hashByNumber i)
+
            | _ =>
                 Method)
 

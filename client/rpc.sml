@@ -44,6 +44,9 @@ structure RPC :> RPC =
             fun member hash =
                fromBool (rpc (0w10, Bytestring hash))
 
+            fun blockNumber hash =
+               fromInt (rpc (0w19, Bytestring hash))
+
             fun blockData hash =
                fromBytestring (rpc (0w11, Bytestring hash))
 
@@ -59,6 +62,9 @@ structure RPC :> RPC =
             fun totalDifficulty () =
                fromInteger (rpc (0w14, Nil))
       
+            fun hashByNumber i =
+               fromBytestring (rpc (0w20, Int i))
+
             fun dataByNumber i =
                fromBytestring (rpc (0w15, Int i))
 
