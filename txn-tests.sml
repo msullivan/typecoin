@@ -1,4 +1,4 @@
-structure TxnTests =
+functor TxnTests(val initial_input_txid : string) =
 struct
   open LF Logic TypeCoinTxn TestUtil
   infixr -->
@@ -31,12 +31,14 @@ struct
 
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
 
-  fun makeKeyStuff privkey_text =
-      let val (privkey, bs) = Textcode.decodePrivkeyTestnet privkey_text
-          val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (param, privkey)
+  fun makeKeyStuff' privkey =
+      let val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (param, privkey)
           val hash = hashPubKey pubkey
           val id = TB.principal_hash (TB.hashBytestringToHashObj hash)
       in ((pubkey, privkey), pubkey, privkey, hash, id) end
+  fun makeKeyStuff privkey_text =
+      let val (privkey, bs) = Textcode.decodePrivkeyTestnet privkey_text
+      in makeKeyStuff' privkey end
 
 
   val (alice_keypair, alice_pubkey, alice_privkey, alice_hash, alice) =
@@ -54,14 +56,18 @@ struct
   val C = SConst
 
 
+  (*********** Set up a transaction *************)
+
+
+
   (*******************************************************************************************)
   (* First, somebody publishes a transaction with some
    * simple rules about authorization. *)
 
   local
-    val input_txid = "cfe4b9e60d887f59860bdd60bc9c4e0abeabe235ee34ad7e05e3f68e015039eb"
+    val input_txid = initial_input_txid
     (* Set up the initial signature for a simple authorization logic. *)
-    val inputs = [Input {source = (input_txid, 1), prop = POne}]
+    val inputs = [Input {source = (input_txid, 0), prop = POne}]
     val resource' = c_app "resource" []
     val nonce = TB.hash256
     val auth_sg = FromNamed.convertLogicSg
@@ -103,13 +109,15 @@ struct
   val test_resource = resource_named (TB.bytestringToLFBytestring (Bytestring.fromString "foo"))
 
 
-  fun mk_real_txn () = TypeCoinCrypto.createTxn {
+  fun mk_real_txn () = TypeCoinCrypto.createTxn [] {
                  typecoin_txn = initial_auth_txn,
                  keys = [charlie_privkey],
                  fee = TypeCoinCrypto.baseAmount div 2,
                  recovery_amount = TypeCoinCrypto.baseAmount div 2,
                  recovery_pubkey = charlie_pubkey
                  }
+
+  val initial_auth_real_txn = mk_real_txn ()
 
   end
 
@@ -251,4 +259,9 @@ struct
        (bob_auth_txnid, bob_auth_txn)]
 
 
+end
+
+structure ParamThings =
+struct
+  val initial_thing = "36406c4b848a8a8beb1c9ead8b43df3e66c951d42e115014e3ede2494231b35f"
 end

@@ -81,9 +81,15 @@ struct
   (* Tau in UTF-8 *)
   val magicNumber = Bytestring.implode [0wxCF, 0wx84]
 
-  fun createTxn (txn: txn_specifier as
+
+  (* txns is a list of transactions that we might want to reference
+   * that haven't landed yet *)
+  fun createTxn txns
+                (txn: txn_specifier as
                  {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
       let val (TypeCoinTxn.TxnBody {inputs, outputs, ...}) = typecoin_txn
+
+          fun fromHexId id = Bytestring.rev (valOf (Bytestring.fromStringHex id))
 
           fun convertInput (TypeCoinTxn.Input {source = (txnid, i), ...}) =
               (Bytestring.rev (valOf (Bytestring.fromStringHex txnid)), i)
@@ -103,7 +109,12 @@ struct
           val inputs' = map convertInput inputs
           val outputs' = map convertOutput outputs
 
-          fun lookup _ = raise Fail "unimpl"
+          fun lookup id =
+              (case List.find (fn (id', _) => fromHexId id' = id) txns of
+                   SOME (_, txn) => SOME txn
+                 (* if we don't have it, do an rpc lookup *)
+                 | NONE => RPC.Blockchain.tx id)
+
       in Commerce.createTx lookup {
            inputs = inputs',
            outputs = fakeOutput :: outputs',
