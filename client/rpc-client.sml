@@ -18,18 +18,6 @@ structure RpcClient :> RPC_CLIENT =
       exception RemoteError of string
 
 
-      fun connect () =
-         let
-            val sock =
-               Network.connect (loopback, Constants.rpcPort)
-               handle Network.NetworkException _ => raise RPC
-         in
-            theSock := SOME sock;
-            theCostring := C.fromProcess (fn () => BS.full (Network.recvVec sock));
-            sock
-         end
-
-
       fun disconnect () =
          (
          Option.app Network.close (!theSock);
@@ -38,6 +26,42 @@ structure RpcClient :> RPC_CLIENT =
          )
 
          
+      fun connect () =
+         let
+            val sock =
+               Network.connect (loopback, Constants.rpcPort)
+               handle Network.NetworkException _ => raise RPC
+
+            val sd = Socket.sockDesc sock
+
+            fun receive () =
+               let
+                  val {rds=ready, ...} =
+                     Socket.select {rds=[sd], wrs=[], exs=[], timeout=SOME Constants.rpcTimeout}
+                     handle _ => raise RPC
+               in
+                  (case ready of
+                      [] =>
+                         (* timeout *)
+                         raise RPC
+                    | [_] =>
+                         BS.full (Network.recvVec sock)
+                    | _ =>
+                         (* only gave select one descriptor *)
+                         raise (Fail "impossible"))
+               end
+               handle RPC =>
+                  (
+                  disconnect ();
+                  raise RPC
+                  )
+         in
+            theSock := SOME sock;
+            theCostring := C.fromProcess receive;
+            sock
+         end
+
+
       fun send sock str =
          (Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size str))))
           andalso

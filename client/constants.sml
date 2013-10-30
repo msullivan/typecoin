@@ -188,6 +188,9 @@ structure Constants =
       (* Do RPC over this port. *)
       val rpcPort = 87678
 
+      (* Wait this long for an rpc response. *)
+      val rpcTimeout = Time.fromSeconds 15
+
       (* Ignore any RPC request larger than this. *)
       val maximumRpcRequest = 8192                                (* 8k *)
 
