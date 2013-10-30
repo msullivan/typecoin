@@ -5,10 +5,15 @@ signature RPC_MESSAGE =
       datatype request =
          CloseChannel
        | ShutdownServer
-       | Inject of Transaction.tx
-       | LookupTx of Bytestring.string
+       | BlockMember of Bytestring.string
+       | LookupBlock of Bytestring.string
+       | BlockPrimary of Bytestring.string
        | LastBlock
-       | PositionByNumber of int
+       | TotalDifficulty
+       | BlockByNumber of int
+       | LookupTx of Bytestring.string
+       | TxByNumber of int * int
+       | Inject of Transaction.tx
 
       datatype response =
          False

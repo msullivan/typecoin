@@ -2,11 +2,17 @@
 signature BLOCKCHAIN_RPC =
    sig
       type hash = Bytestring.string
-      type pos = Int64.int
 
+      val member : hash -> bool
+      val blockData : hash -> Bytestring.string
+      val block : hash -> Block.block
+      val blockPrimary : hash -> bool
       val lastBlock : unit -> int
-      val positionByNumber : int -> pos
-      val getTx : hash -> Transaction.tx option
+      val totalDifficulty : unit -> IntInf.int
+      val dataByNumber : int -> Bytestring.string
+      val tx : hash -> Transaction.tx option
+      val txDataByNumber : int -> int -> Bytestring.string
+      val txByNumber : int -> int -> Transaction.tx
    end
 
 

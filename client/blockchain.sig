@@ -23,21 +23,25 @@ signature BLOCKCHAIN =
       val member : hash -> bool
       val blockPosition : hash -> pos              (* position in the record *)
       val blockNumber : hash -> int                (* block number in the chain *)
-      val blockData : hash -> Bytestring.string    (* the block itself *)
+      val blockData : hash -> Bytestring.string    (* the block data *)
+      val block : hash -> Block.block              (* the block itself *)
       val blockPrimary : hash -> bool              (* is the block on the primary chain *)
       val blockUtxo : hash -> Utxo.table           (* UTXO table incorporating the block *)
 
       val lastBlock : unit -> int
-      val totalDifficulty : unit -> IntInf.int
+      val totalDifficulty : unit -> IntInf.int     (* difficulty on startup taken to be zero *)
       val currentUtxo : unit -> Utxo.table
 
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
+      val blockByNumber : int -> Block.block
       val positionByNumber : int -> pos
       val utxoByNumber : int -> Utxo.table
 
-      val getTx : hash -> Transaction.tx option
-      val getTxWithUtxo : Utxo.table -> hash -> Transaction.tx option
+      val tx : hash -> Transaction.tx option
+      val txWithUtxo : Utxo.table -> hash -> Transaction.tx option
+      val txDataByNumber : int -> int -> Bytestring.string
+      val txByNumber : int -> int -> Transaction.tx
 
       (* Starts with verification suspended. *)
       val initialize : unit -> unit

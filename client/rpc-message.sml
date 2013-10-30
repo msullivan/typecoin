@@ -12,15 +12,18 @@ structure RpcMessage :> RPC_MESSAGE =
       infixr 3 >>= >> >>>
 
 
-      (* No logical order to these, just the order in which they were added. *)
-
       datatype request =
          CloseChannel
        | ShutdownServer
-       | Inject of Transaction.tx
-       | LookupTx of Bytestring.string
+       | BlockMember of Bytestring.string
+       | LookupBlock of Bytestring.string
+       | BlockPrimary of Bytestring.string
        | LastBlock
-       | PositionByNumber of int
+       | TotalDifficulty
+       | BlockByNumber of int
+       | LookupTx of Bytestring.string
+       | TxByNumber of int * int
+       | Inject of Transaction.tx
 
       datatype response =
          True
@@ -62,23 +65,49 @@ structure RpcMessage :> RPC_MESSAGE =
            | ShutdownServer =>
                 W.byte 0w2
 
-           | Inject tx =>
+           | BlockMember str =>
                 W.byte 0w3
                 >>>
-                Transaction.writer tx
+                W.bytesVar str
 
-           | LookupTx str =>
+           | LookupBlock str =>
                 W.byte 0w4
                 >>>
                 W.bytesVar str
 
-           | LastBlock =>
+           | BlockPrimary str =>
                 W.byte 0w5
-
-           | PositionByNumber i =>
-                W.byte 0w6
                 >>>
-                intWriter i)
+                W.bytesVar str
+
+           | LastBlock =>
+                W.byte 0w6
+
+           | TotalDifficulty =>
+                W.byte 0w7
+
+           | BlockByNumber i =>
+                W.byte 0w8
+                >>>
+                intWriter i
+
+           | LookupTx str =>
+                W.byte 0w9
+                >>>
+                W.bytesVar str
+
+           | TxByNumber (i, j) =>
+                W.byte 0w10
+                >>>
+                intWriter i
+                >>>
+                intWriter j
+
+           | Inject tx =>
+                W.byte 0w11
+                >>>
+                Transaction.writer tx)
+
 
       val requestReader =
          R.byte
@@ -89,13 +118,28 @@ structure RpcMessage :> RPC_MESSAGE =
            | 0w2 =>
                 R.return ShutdownServer
            | 0w3 =>
-                R.wrap Inject Transaction.reader
+                R.wrap BlockMember R.bytesVar
            | 0w4 =>
-                R.wrap LookupTx R.bytesVar
+                R.wrap LookupBlock R.bytesVar
            | 0w5 =>
-                R.return LastBlock
+                R.wrap BlockPrimary R.bytesVar
            | 0w6 =>
-                R.wrap PositionByNumber intReader
+                R.return LastBlock
+           | 0w7 =>
+                R.return TotalDifficulty
+           | 0w8 =>
+                R.wrap BlockByNumber intReader
+           | 0w9 =>
+                R.wrap LookupTx R.bytesVar
+           | 0w10 =>
+                intReader
+                >>= (fn i =>
+                intReader
+                >>= (fn j =>
+                R.return (TxByNumber (i, j))
+                ))
+           | 0w11 =>
+                R.wrap Inject Transaction.reader
            | _ =>
                 raise R.SyntaxError)
          )

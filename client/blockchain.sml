@@ -320,7 +320,7 @@ structure Blockchain :> BLOCKCHAIN =
          end
          
 
-      fun getTxWithUtxo utxo hash =
+      fun txWithUtxo utxo hash =
          (case Utxo.find utxo hash of
              NONE => NONE
            | SOME pos =>
@@ -495,7 +495,7 @@ structure Blockchain :> BLOCKCHAIN =
                                    !verification
                                    andalso
                                    not (Verify.verifyStoredBlock
-                                           getTxWithUtxo
+                                           txWithUtxo
                                            (Utxo.branch (utxoFromLineage (!predlin)))
                                            (pos+blockOffsetInRecord)
                                            num
@@ -563,7 +563,7 @@ structure Blockchain :> BLOCKCHAIN =
    
                         val eblock = EBlock.fromBytes (inputData pos)
                      in
-                        Verify.verifyStoredBlock getTxWithUtxo utxo (pos+blockOffsetInRecord) i eblock
+                        Verify.verifyStoredBlock txWithUtxo utxo (pos+blockOffsetInRecord) i eblock
                      end
                   then
                      let in
@@ -665,7 +665,7 @@ structure Blockchain :> BLOCKCHAIN =
                                in
                                   if
                                      Verify.verifyStoredBlock 
-                                        getTxWithUtxo
+                                        txWithUtxo
                                         utxo
                                         (pos+blockOffsetInRecord)
                                         num
@@ -1125,6 +1125,9 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun blockData hash = inputData (blockPosition hash)
 
+      fun block hash =
+         Block.readBlock (blockData hash)
+
       fun blockPrimary hash =
          (case T.find theTable hash of
              NONE => false
@@ -1158,12 +1161,53 @@ structure Blockchain :> BLOCKCHAIN =
          else
             A.sub (thePrimaryFork, num)
 
+      fun blockByNumber num =
+         Block.readBlock (dataByNumber num)
+
       fun utxoByNumber num = blockUtxo (hashByNumber num)
 
       fun currentUtxo () = utxoByNumber (!lastblock)
 
-      fun getTx hash = getTxWithUtxo (currentUtxo ()) hash
-         
+      fun tx hash = txWithUtxo (currentUtxo ()) hash
+
+
+      local
+         exception FoundIt of Bytestring.string
+      in
+      
+         fun txDataByNumber num i =
+            let
+               val blstr = dataByNumber num
+            in
+               (* A little cheaper than parsing to a list and projecting it out. *)
+               Block.traverseBlock
+                  (fn (j, _, _, txstr, ()) => if i = j then raise (FoundIt (BS.string txstr)) else ())
+                  ()
+                  blstr ;
+   
+               raise Absent
+            end
+            handle FoundIt str => str
+
+      end
+
+      local
+         exception FoundIt of Transaction.tx
+      in
+         fun txByNumber num i =
+            let
+               val blstr = dataByNumber num
+            in
+               (* A little cheaper than parsing to a list and projecting it out. *)
+               Block.traverseBlock
+                  (fn (j, _, tx, _, ()) => if i = j then raise (FoundIt tx) else ())
+                  ()
+                  blstr ;
+   
+               raise Absent
+            end
+            handle FoundIt str => str
+      end
 
 
 
