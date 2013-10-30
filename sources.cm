@@ -11,11 +11,13 @@ Group is
         lf-check.sml
         logic-check.sml
         from-named.sml
-        tests.sml
-        test-util.sml
         typecoin-basis.sml
         typecoin.sml
         crypto-check.sml
+
+        test-util.sml
+	tests.sml
+	txn-tests.sml
 
         (* stuff copied and modified from tom-lib *)
         layout.sml
