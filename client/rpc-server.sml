@@ -84,7 +84,10 @@ structure RpcServer :> RPC_SERVER =
                                     )
                                | 0w2 =>
                                     (* shut down server *)
+                                    (
+                                    Log.long (fn () => "Server shut down by client");
                                     Scheduler.shutdown ()
+                                    )
                                | _ =>
                                     (RpcAction.act (method, args)
                                      handle exn =>
