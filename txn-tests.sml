@@ -31,20 +31,22 @@ struct
 
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
 
-  fun makeKeyStuff privkey =
-      let val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (param, privkey)
+  fun makeKeyStuff privkey_text =
+      let val (privkey, bs) = Textcode.decodePrivkeyTestnet privkey_text
+          val pubkey = EllipticCurveCryptoFp.privkeyToPubkey (param, privkey)
           val hash = hashPubKey pubkey
           val id = TB.principal_hash (TB.hashBytestringToHashObj hash)
       in ((pubkey, privkey), pubkey, privkey, hash, id) end
 
+
   val (alice_keypair, alice_pubkey, alice_privkey, alice_hash, alice) =
-      makeKeyStuff 84949032573639129980743211979748855589646357655829367172829447606736725751911
+      makeKeyStuff "cVJyNyhCz75VZWozsTadnwbUqrZ21VAXSJAWB8oN1i7dLWWkZ5Fq"
   val (bob_keypair, bob_pubkey, bob_privkey, bob_hash, bob) =
-      makeKeyStuff 30031085134376089938835666959011487879061968753113189013180106434494274397669
+      makeKeyStuff "cPLgLvqFApKGU4qLn6pQfHvd2yxMkNFzLGwMyuj9F4JxmLEr25Ka"
   val (charlie_keypair, charlie_pubkey, charlie_privkey, charlie_hash, charlie) =
-      makeKeyStuff 63864662182596890716986802929790865809740337433382096343017620806541489714467
+      makeKeyStuff "cNHr8jYFhvnrk2QoFz2Zf1NwsfQ7P16KDCsEmZx3L2SThxGiiLaa"
   val (janet_keypair, janet_pubkey, janet_privkey, janet_hash, janet) =
-      makeKeyStuff 9058177031455919178826547575639311957926744239246079304451874958948223778964
+      makeKeyStuff "cT7DFiLHy257w1ridKdKco3CHesfCERFPKTqyC21hH1vj3V5SfAU"
 
 
   (* Ok, lets test some transaction stuff. *)
