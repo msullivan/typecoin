@@ -72,10 +72,9 @@ struct
   (*******************************************************************************************)
   (* First, somebody publishes a transaction with some
    * simple rules about authorization. *)
-  functor InitialTxn(val input_txid : string) =
-  struct
 
   local
+    val input_txid = "cfe4b9e60d887f59860bdd60bc9c4e0abeabe235ee34ad7e05e3f68e015039eb"
     (* Set up the initial signature for a simple authorization logic. *)
     val inputs = [Input {source = (input_txid, 1), prop = POne}]
     val resource' = c_app "resource" []
@@ -129,21 +128,14 @@ struct
 
   end
 
-  end
-
-  structure I = InitialTxn(val input_txid = "cfe4b9e60d887f59860bdd60bc9c4e0abeabe235ee34ad7e05e3f68e015039eb")
-  open I
-
-
   (* OK, now Charlie is gonna publish some things:
    * saying that if Alice says somebody can access foo,
    * then Charlie says that.
    * He also gives himself a persistent token giving himself
    * access. He doesn't *really* need this, but it means less
    * signing. *)
-  functor CharlieTxn(val input_txid : string) =
-  struct
   local
+    val input_txid = "bogus_tx2"
     val inputs = [Input {source = (input_txid, 0), prop = POne}]
     val self_persistent_access_prop =
         affirmationProp charlie_pubkey (PBang (PAtom (can_access test_resource)))
@@ -181,20 +173,17 @@ struct
        proof_term = proof_term}
   val charlie_delegates_to_alice =
       MRule (Const.LId charlie_auth_txnid, "charlie_delegates_to_alice")
-  end
 
   end
 
 
-  structure I = CharlieTxn(val input_txid = "bogus_tx2")
-  open I
+
 
 
   (* Now Alice sends a proof to Bob saying he can access a resource. *)
-  functor AliceTxn(val input_txid : string) =
-  struct
 
   local
+    val input_txid = "bogus_tx3"
     val inputs = [Input {source = (input_txid, 0), prop = POne}]
     val alice_says_can_access_prop =
         affirmationProp alice_pubkey (PAtom (can_access test_resource))
@@ -226,11 +215,6 @@ struct
        outputs = outputs,
        proof_term = proof_term}
   end
-
-
-  structure I = AliceTxn(val input_txid = "bogus_tx3")
-  open I
-
 
 
   (* Now Bob proves he can access it. *)
