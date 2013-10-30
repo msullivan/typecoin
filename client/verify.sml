@@ -257,8 +257,6 @@ structure Verify :> VERIFY =
                      else (not Chain.testnet) andalso (Log.long (fn () => "Unusual: premature pay-to-script-hash"); false)
                then
                   let
-                     val () = Log.long (fn () => "Unusual: pay-to-script-hash");
-
                      (* The input script must contain only constants. *)
                      val () =
                         if List.all Script.isConstant (Script.readScript inScript) then
