@@ -1,5 +1,5 @@
 
-        $(CMLIB)/cmlib.mlb
+        $(CMLIB)/cmlib-mlton.mlb
 
         platform.sig
         platform-mlton.sml

@@ -50,7 +50,7 @@ structure Scheduler :> SCHEDULER =
                    queueSize := !queueSize - 1;
                    (case dispatch (!fr) of
                        SHUTDOWN => ()
-                     | EXIT => select NONE)
+                     | EXIT => wait ())
                    )
                 else
                    wait ())

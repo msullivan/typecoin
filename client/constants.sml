@@ -124,7 +124,7 @@ structure Constants =
       val utxoTableSize = 1 * 1024 * 1024
 
       (* Record UTXO undo data for this many blocks.  Must be at least chainTrustConfirmations. *)
-      val maxUtxoHistory = chainTrustConfirmations
+      val maxUtxoHistory = 10
 
       (* Put this number at the beginning of the index, when written to disk. *)
       val indexMagicNumber : Word32.word = 0wx02030405
