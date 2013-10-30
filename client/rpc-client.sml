@@ -5,7 +5,7 @@ structure RpcClient :> RPC_CLIENT =
       structure B = Bytestring
       structure BS = Bytesubstring
       structure C = BytesubstringCostring
-      structure M = RpcMessage
+      structure U = Unityped
 
 
       val theSock : Network.asock option ref = ref NONE
@@ -69,9 +69,9 @@ structure RpcClient :> RPC_CLIENT =
          end
 
 
-      fun rpc req =
+      fun rpc (method, args) =
          let
-            val sock = connectAndSend (Writer.write (M.requestWriter req))
+            val sock = connectAndSend (Writer.write (U.writer (U.Cons (U.Byte method, args))))
          in
             let
                val cos = !theCostring
@@ -81,18 +81,21 @@ structure RpcClient :> RPC_CLIENT =
                   handle Overflow => raise RPC
                        | Subscript => raise RPC
    
-               val msg =
-                  Reader.readfullS M.responseReader (C.slice (cos, 4, sz))
+               val resp =
+                  Reader.readfullS U.reader (C.slice (cos, 4, sz))
                   handle Reader.SyntaxError => raise RPC
                        | Subscript => raise RPC
             in
                theCostring := C.suffix (cos, 4+sz);
                
-               (case msg of
-                   M.Exception (M.String str) =>
-                      raise (RemoteError (B.toString str))
+               (case resp of
+                   U.Method =>
+                      (* remote syntax error *)
+                      raise RPC
+                 | U.Exception (U.String str) =>
+                      raise (RemoteError str)
                  | _ =>
-                      msg)
+                      resp)
             end
             handle RPC =>
                (
@@ -102,20 +105,22 @@ structure RpcClient :> RPC_CLIENT =
          end
 
 
+      (* These method numbers must be consistent with RpcServer. *)
+
       fun close () =
          (case !theSock of
              NONE =>
                 ()
            | SOME sock =>
                 (
-                send sock (Writer.write (M.requestWriter M.CloseChannel));
+                send sock (Writer.write (U.writer (U.Cons (U.Byte 0w1, U.Nil))));
                 disconnect ()
                 ))
 
 
       fun shutdown () =
          (
-         connectAndSend (Writer.write (M.requestWriter M.ShutdownServer));
+         connectAndSend (Writer.write (U.writer (U.Cons (U.Byte 0w2, U.Nil))));
          disconnect ()
          )
 

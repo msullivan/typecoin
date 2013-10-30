@@ -2,7 +2,6 @@
 signature RPC_ACTION =
    sig
 
-      (* Precondition: the request is not CloseChannel or ShutdownServer. *)
-      val act : RpcMessage.request -> RpcMessage.response
+      val act : Word8.word * Unityped.unityped -> Unityped.unityped
 
    end

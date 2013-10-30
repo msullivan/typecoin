@@ -2,55 +2,61 @@
 structure RpcAction :> RPC_ACTION =
    struct
 
-      structure M = RpcMessage
-   
-      fun act req =
-         (case req of
-             M.CloseChannel =>
-                raise (Fail "precondition")
+      open Unityped
 
-           | M.ShutdownServer =>
-                raise (Fail "precondition")
+      fun Bool true = True
+        | Bool false = Nil
 
-           | M.BlockMember hash =>
-                if Blockchain.member hash then
-                   M.True
-                else
-                   M.False
+      fun act (method : Word8.word, args) =
+         (* These method numbers and formats must be consistent with those in RPC.
+            Method numbers less that 10 are reserved.
+         *)
+         (case (method, args) of
+             (0w10, Bytestring hash) =>
+                (* Blockchain.member *)
+                Bool (Blockchain.member hash)
 
-           | M.LookupBlock hash =>
-                M.String (Blockchain.blockData hash)
+           | (0w11, Bytestring hash) =>
+                (* Blockchain.blockData *)
+                Bytestring (Blockchain.blockData hash)
 
-           | M.BlockPrimary hash =>
-                if Blockchain.blockPrimary hash then
-                   M.True
-                else
-                   M.False
+           | (0w12, Bytestring hash) =>
+                (* Blockchain.blockPrimary *)
+                Bool (Blockchain.blockPrimary hash)
 
-           | M.LastBlock =>
-                M.Int (Blockchain.lastBlock ())
+           | (0w13, Nil) =>
+                (* Blockchain.lastBlock *)
+                Int (Blockchain.lastBlock ())
 
-           | M.TotalDifficulty =>
-                M.Integer (Blockchain.totalDifficulty ())
+           | (0w14, Nil) =>
+                (* Blockchain.totalDifficulty *)
+                Integer (Blockchain.totalDifficulty ())
 
-           | M.BlockByNumber i =>
-                M.String (Blockchain.dataByNumber i)
+           | (0w15, Int i) =>
+                (* Blockchain.dataByNumber *)
+                Bytestring (Blockchain.dataByNumber i)
 
-           | M.LookupTx hash =>
+           | (0w16, Bytestring hash) =>
+                (* Blockchain.tx *)
                 (case Blockchain.tx hash of
                     SOME tx =>
-                       M.Transaction tx
+                       Bytestring (Transaction.writeTx tx)
                   | NONE =>
-                       M.False)
+                       Nil)
 
-           | M.TxByNumber (i, j) =>
-                M.String (Blockchain.txDataByNumber i j)
+           | (0w17, Cons (Int i, Int j)) =>
+                (* Blockchain.txDataByNumber *)
+                Bytestring (Blockchain.txDataByNumber i j)
 
-           | M.Inject tx =>
+           | (0w18, Bytestring txstr) =>
+                (* Process.inject *)
                 (
-                Process.inject tx;
-                M.True
-                ))
+                Process.inject (Transaction.readTx txstr);
+                Nil
+                )
+
+           | _ =>
+                Method)
 
    end
 

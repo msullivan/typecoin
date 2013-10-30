@@ -54,8 +54,8 @@
         commo.sml
         process.sig
         process.sml
-        rpc-message.sig
-        rpc-message.sml
+        unityped.sig
+        unityped.sml
         rpc-action.sig
         rpc-action.sml
         rpc-server.sig

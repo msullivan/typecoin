@@ -1,13 +1,17 @@
 
+(* To do: ought to exchange a protocol version number when a connection is opened.
+   Also ought to authenticate and encrypt.
+*)
+
 structure RpcServer :> RPC_SERVER =
    struct
 
       structure B = Bytestring
       structure BS = Bytesubstring
-      structure M = RpcMessage
+      structure U = Unityped
 
 
-      val syntax = Writer.write (M.responseWriter M.Syntax)
+      val method = Writer.write (U.writer U.Method)
 
 
       type conn =
@@ -33,7 +37,7 @@ structure RpcServer :> RPC_SERVER =
       fun recvMessage fk sk =
          let
             fun kmsg str =
-               sk (Reader.readfullS M.requestReader str)
+               sk (Reader.readfullS U.reader str)
                handle Reader.SyntaxError => (fk (); Sink.DONE)
 
             fun k str =
@@ -54,9 +58,9 @@ structure RpcServer :> RPC_SERVER =
          let
             fun fk () =
                (
-               Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size syntax))))
+               Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size method))))
                andalso
-               Network.sendVec (sock, BS.full syntax) ;
+               Network.sendVec (sock, BS.full method) ;
                
                closeConn conn
                )
@@ -69,19 +73,26 @@ structure RpcServer :> RPC_SERVER =
 
                    val resp =
                       (case req of
-                          M.CloseChannel =>
-                             (
-                             closeConn conn;
-                             Scheduler.exit ()
-                             )
-                        | M.ShutdownServer =>
-                             Scheduler.shutdown ()
+                          U.Cons (U.Byte method, args) =>
+                             (* These method numbers must be consistent with those in RpcClient. *)
+                             (case method of
+                                 0w1 =>
+                                    (* close channel *)
+                                    (
+                                    closeConn conn;
+                                    Scheduler.exit ()
+                                    )
+                               | 0w2 =>
+                                    (* shut down server *)
+                                    Scheduler.shutdown ()
+                               | _ =>
+                                    (RpcAction.act (method, args)
+                                     handle exn =>
+                                        U.Exception (U.String (exnMessage exn))))
                         | _ =>
-                             (RpcAction.act req
-                              handle exn =>
-                                 M.Exception (M.String (B.fromString (exnMessage exn)))))
+                             U.Method)
 
-                   val respstr = Writer.write (M.responseWriter resp)
+                   val respstr = Writer.write (U.writer resp)
                 in
                    if
                       Network.sendVec (sock, BS.full (ConvertWord.word32ToBytesB (Word32.fromInt (B.size respstr))))

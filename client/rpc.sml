@@ -2,8 +2,38 @@
 structure RPC :> RPC =
    struct
 
-      structure M = RpcMessage
       open RpcClient
+      open Unityped
+
+
+      fun fromUnit u =
+         (case u of
+             Nil => ()
+           | _ => raise RPC)
+
+      fun fromBool u =
+         (case u of
+             True => true
+           | Nil => false
+           | _ => raise RPC)
+
+      fun fromInt u =
+         (case u of
+             Int i => i
+           | _ => raise RPC)
+
+      fun fromInteger u =
+         (case u of
+             Integer i => i
+           | _ => raise RPC)
+
+      fun fromBytestring u =
+         (case u of
+             Bytestring str => str
+           | _ => raise RPC)
+
+      
+      (* These method numbers and formats must be consistent with RpcAction. *)
 
       structure Blockchain =
          struct
@@ -12,56 +42,43 @@ structure RPC :> RPC =
             type pos = Int64.int
       
             fun member hash =
-               (case rpc (M.BlockMember hash) of
-                   M.True => true
-                 | M.False => false
-                 | _ => raise RPC)
+               fromBool (rpc (0w10, Bytestring hash))
 
             fun blockData hash =
-               (case rpc (M.LookupBlock hash) of
-                   M.String str => str
-                 | _ => raise RPC)
+               fromBytestring (rpc (0w11, Bytestring hash))
 
             fun block hash =
                Block.readBlock (blockData hash)
 
             fun blockPrimary hash =
-               (case rpc (M.BlockPrimary hash) of
-                   M.True => true
-                 | M.False => false
-                 | _ => raise RPC)
+               fromBool (rpc (0w12, Bytestring hash))
 
             fun lastBlock () =
-               (case rpc M.LastBlock of
-                   M.Int i => i
-                 | _ => raise RPC)
+               fromInt (rpc (0w13, Nil))
 
             fun totalDifficulty () =
-               (case rpc M.TotalDifficulty of
-                   M.Integer i => i
-                 | _ => raise RPC)
+               fromInteger (rpc (0w14, Nil))
       
             fun dataByNumber i =
-               (case rpc (M.BlockByNumber i) of
-                   M.String str => str
-                 | _ => raise RPC)
+               fromBytestring (rpc (0w15, Int i))
 
             fun blockByNumber i =
                Block.readBlock (dataByNumber i)
       
             fun tx hash =
-               (case rpc (M.LookupTx hash) of
-                   M.Transaction tx => SOME tx
-                 | M.False => NONE
+               (case rpc (0w16, Bytestring hash) of
+                   Bytestring txstr =>
+                      (SOME (Transaction.readTx txstr)
+                       handle Reader.SyntaxError => raise RPC)
+                 | Nil => NONE
                  | _ => raise RPC)
 
             fun txDataByNumber i j =
-               (case rpc (M.TxByNumber (i, j)) of
-                   M.String str => str
-                 | _ => raise RPC)
+               fromBytestring (rpc (0w17, Cons (Int i, Int j)))
 
             fun txByNumber i j =
-               Transaction.readTx (txDataByNumber i j)
+               (Transaction.readTx (txDataByNumber i j)
+                handle Reader.SyntaxError => raise RPC)
 
          end
 
@@ -69,9 +86,8 @@ structure RPC :> RPC =
          struct
       
             fun inject tx =
-               (case rpc (M.Inject tx) of
-                   M.True => ()
-                 | _ => raise RPC)
+               fromUnit (rpc (0w18, Bytestring (Transaction.writeTx tx)))
+
 
          end
    end

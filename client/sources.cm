@@ -42,8 +42,6 @@ is
         rpc-action.sml
         rpc-client.sig
         rpc-client.sml
-        rpc-message.sig
-        rpc-message.sml
         rpc-server.sig
         rpc-server.sml
         script.sig
@@ -60,6 +58,8 @@ is
         textcode.sml
         transaction.sig
         transaction.sml
+        unityped.sig
+        unityped.sml
         utxo.sig
         utxo.sml
         verify.sig

@@ -5,7 +5,7 @@ signature RPC_CLIENT =
       exception RPC
       exception RemoteError of string
 
-      val rpc : RpcMessage.request -> RpcMessage.response
+      val rpc : Word8.word * Unityped.unityped -> Unityped.unityped
       val close : unit -> unit
       val shutdown : unit -> unit
 
