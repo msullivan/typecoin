@@ -1,4 +1,56 @@
 
+(* Renames transactions in a typecoin transaction *)
+(* Is missing an important part, so, welp. *)
+structure TypeCoinRename =
+struct
+  local
+    open Logic TypeCoinTxn
+  in
+
+  fun renameProp name' name prop =
+      LogicSubst.replaceLocProp (Const.LId name') (Const.LId name) prop
+
+  fun renameInput name' name (Input {source = (txnid, n), prop}) =
+      (Input {source = (if txnid = name then name' else txnid, n),
+              prop = renameProp name' name prop})
+  (* wtb functional record update *)
+  fun renameOutput name' name
+      (Output {prop, dest, needs_receipt, amount}) =
+      (Output {prop = renameProp name' name prop,
+               dest = dest, needs_receipt = needs_receipt, amount = amount})
+
+  fun renameAffirmation name' name {prop, principal, crypto_sig} =
+      {prop = renameProp name' name prop,
+       principal = principal, crypto_sig = crypto_sig}
+
+  fun renameSgEntry name' name entry =
+      (case entry of
+           SRule (i, prop) => SRule (i, renameProp name' name prop)
+         | SConst (c, i, e) => SConst (c, i,
+                                       LFSubst.substAndReplaceExp 0 [] 0
+                                       (Const.LId name') (Const.LId name) e)
+         | SSignedAffirmation (i, aff) =>
+           SSignedAffirmation (i, renameAffirmation name' name aff))
+
+  fun renameLinearSgEntry name' name entry =
+      (case entry of
+           LSResource prop => LSResource (renameProp name' name prop)
+         | LSSignedAffirmation aff => LSSignedAffirmation (renameAffirmation name' name aff))
+
+  fun renameProof _ = raise Fail "unimplemented. sigh"
+
+  fun renameTxnBody name' name
+      (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term}) =
+      TxnBody {inputs = map (renameInput name' name) inputs,
+               outputs = map (renameOutput name' name) outputs,
+               linear_sg = map (renameLinearSgEntry name' name) linear_sg,
+               persistent_sg = map (renameSgEntry name' name) persistent_sg,
+               proof_term = renameProof proof_term}
+
+  end
+end
+
+
 
 structure TypeCoinCheck =
 struct

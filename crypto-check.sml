@@ -79,7 +79,7 @@ struct
       hash (IOTypes.writeToVector TypeCoinTxn.writeTxn_body txnBody)
 
   (* Tau in UTF-8 *)
-  val magicNumber = Bytestring.fromList [0xcf, 0x84]
+  val magicNumber = Bytestring.implode [0wxCF, 0wx84]
 
   fun createTxn (txn: txn_specifier as
                  {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
@@ -102,7 +102,9 @@ struct
 
           val inputs' = map convertInput inputs
           val outputs' = map convertOutput outputs
-      in Commerce.createTx {
+
+          fun lookup _ = raise Fail "unimpl"
+      in Commerce.createTx lookup {
            inputs = inputs',
            outputs = fakeOutput :: outputs',
            fee = fee,

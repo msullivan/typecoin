@@ -269,6 +269,9 @@ struct
            prop = prop,
            crypto_sig = Bytestring.null}
 
+  fun StdOutput {dest, prop} = Output {dest = dest, prop = prop,
+                                       needs_receipt = false, amount = NONE}
+
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
   val (test_keypair1 : keypair as (test_pubkey1, test_privkey1)) =
       (SOME
@@ -310,8 +313,6 @@ struct
   val charlie = TB.principal_hash (TB.hashBytestringToHashObj charlie_hash)
   val janet = TB.principal_hash (TB.hashBytestringToHashObj janet_hash)
 
-  fun StdOutput {dest, prop} = Output {dest = dest, prop = prop,
-                                       needs_receipt = false, amount = NONE}
 
   (*******************************************************************************************)
   (* First, somebody publishes a transaction with some

@@ -3,6 +3,7 @@ signature LOGIC_SUBST =
 sig
   val substProp : int -> LFSyntax.exp list -> int -> Logic.prop -> Logic.prop
   val replaceThisProp : Const.location -> Logic.prop -> Logic.prop
+  val replaceLocProp : Const.location -> Const.location -> Logic.prop -> Logic.prop
   val liftProp : int -> Logic.prop -> Logic.prop
 end
 
@@ -22,16 +23,16 @@ struct
 
   open Logic
 
-  (* substProp skip substs lift loc A
+  (* substProp skip substs lift loc' loc A
 
      s = substs, l = lift, m = skip
 
      if    |s| = n
-     then  return A[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m][loc/this]
+     then  return A[0 .. m-1 . s0[^m] .. sn-1[^m] . ^l+m][loc'/loc]
    *)
-  fun substPropMain skip substs lift loc prop =
-      let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc
-          val subst = substPropMain skip substs lift loc
+  fun substPropMain skip substs lift loc' loc prop =
+      let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc' loc
+          val subst = substPropMain skip substs lift loc' loc
       in
       (case prop of
            PAtom p => PAtom (lfsubst p)
@@ -46,10 +47,10 @@ struct
 
          | PForall (b, t, A) =>
            PForall (b, lfsubst t,
-                    substPropMain (skip+1) substs lift loc A)
+                    substPropMain (skip+1) substs lift loc' loc A)
          | PExists (b, t, A) =>
            PExists (b, lfsubst t,
-                    substPropMain (skip+1) substs lift loc A)
+                    substPropMain (skip+1) substs lift loc' loc A)
 
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
@@ -60,9 +61,13 @@ struct
       end
 
   fun substProp skip substs lift prop =
-      substPropMain skip substs lift Const.LThis prop
+      substPropMain skip substs lift Const.LThis Const.LThis prop
+  (* [loc'/loc]prop *)
+  fun replaceLocProp loc' loc prop =
+      substPropMain 0 [] 0 loc' loc prop
+  (* [loc/this]prop *)
   fun replaceThisProp loc prop =
-      substPropMain 0 [] 0 loc prop
+      replaceLocProp loc Const.LThis prop
 
   fun liftProp 0 A = A (* optimiz *)
     | liftProp lift A = substProp 0 [] lift A
