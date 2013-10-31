@@ -402,6 +402,8 @@ structure Verify :> VERIFY =
 
             val enforceP2sh = timestamp >= Constants.payToScriptHashTimestamp
 
+            val () = Log.short "#"
+
             val balance =
                Block.traverseBlock 
                (fn (i, pos, tx, txstr, balance) =>
