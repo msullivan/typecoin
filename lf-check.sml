@@ -99,7 +99,7 @@ struct
            in (case head of
                    HConst (loc, c) =>
                    if loc = ns then EApp (HConst (ns', c), spine')
-                   else EApp (HConst (ns, c), spine')
+                   else EApp (HConst (loc, c), spine')
                  | HVar (i, s) =>
                    if i < skip then
                        EApp (HVar (i, s), spine')
@@ -218,7 +218,8 @@ in
           PrettyLF.prettyMsg "while checking: " e))
 
   fun checkExpr sg ctx exp typ =
-      (case exp of
+      ((*print (PrettyLF.prettyMsg2 "checking: " exp "," "at: " typ ^ "\n");*)
+       case exp of
            EKind => raise TypeError "kind is no classifier"
          | EType => requireKind typ
          | EProp => requireKind typ
@@ -234,6 +235,7 @@ in
 
          | EApp (h, spine) =>
            let val t = checkHead sg ctx h
+               (*val () = print (PrettyLF.prettyMsg "head has type: " t ^ "\n")*)
                val t' = checkSpine sg ctx t spine
                val () = requireAtomic t'
            in exprEquality' exp typ t' end)
@@ -241,7 +243,8 @@ in
     | checkHead sg _ (HConst c) = Sig.lookup sg c
   and checkSpine sg ctx typ SNil = typ
     | checkSpine sg ctx typ (SApp (e, s)) =
-      let val (t1, t2) =
+      let (*val () = print (PrettyLF.prettyMsg "checking at: " typ ^ "\n")*)
+          val (t1, t2) =
                (case typ of EPi (_, t1, t2) => (t1, t2)
                           | _ => raise TypeError "lhs of app must be pi")
           val () = checkExpr sg ctx e t1

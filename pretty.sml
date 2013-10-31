@@ -71,7 +71,7 @@ struct
 
   val toLayoutTop = toLayoutTop1
 
-  fun prettyExp e = L.tostringex WIDTH (toLayoutExp e)
+  fun prettyExp e = L.tostringex WIDTH (toLayoutTop e)
 
 
 
