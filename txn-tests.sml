@@ -1,5 +1,18 @@
-functor TxnTests(val initial_input_txid : string) =
+functor TxnTests(Inputs : sig
+                     val initial_input_txid : string
+                     val alice_input_txid : string
+                     val bob_input_txid : string
+                     val charlie_input_txid : string
+                 end) =
 struct
+  val actually_create = false
+
+  open Inputs
+
+  (* Lurr. *)
+  val _ = Signals.setHandler (UnixSignals.sigPIPE, Signals.IGNORE)
+
+
   open LF Logic TypeCoinTxn TestUtil
   infixr -->
   fun v s = HVar (~1, s)
@@ -29,6 +42,9 @@ struct
   fun StdOutput {dest, prop} = Output {dest = dest, prop = prop,
                                        needs_receipt = false, amount = NONE}
 
+  fun makeTxnId real_txn =
+      Bytestring.toStringHex (Bytestring.rev (TypeCoinCrypto.hash (Transaction.writeTx real_txn)))
+
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
 
   fun makeKeyStuff' privkey =
@@ -39,7 +55,6 @@ struct
   fun makeKeyStuff privkey_text =
       let val (privkey, bs) = Textcode.decodePrivkeyTestnet privkey_text
       in makeKeyStuff' privkey end
-
 
   val (alice_keypair, alice_pubkey, alice_privkey, alice_hash, alice) =
       makeKeyStuff' 84949032573639129980743211979748855589646357655829367172829447606736725751911
@@ -63,6 +78,18 @@ struct
   (*******************************************************************************************)
   (* First, somebody publishes a transaction with some
    * simple rules about authorization. *)
+
+  val pending: (string * Transaction.tx) list ref = ref nil
+  fun register id txn = pending := (id, txn) :: !pending
+
+  fun setup id f =
+      if actually_create then
+          let val real_txn = f ()
+              val id = makeTxnId real_txn
+              val () = register id real_txn
+          in id end
+      else id
+
 
   local
     val input_txid = initial_input_txid
@@ -90,13 +117,6 @@ struct
   val proof_term = MLam ("z", POne, z)
 
   in
-  val initial_auth_txnid = "auth" (* bogus! *)
-
-  val resource = c_app' initial_auth_txnid "resource" []
-  fun resource_named x = c_app' initial_auth_txnid "resource_named" [x]
-  fun can_access x = c_app' initial_auth_txnid "can_access" [x]
-  fun can_access_nonce x n = c_app' initial_auth_txnid "can_access_nonce" [x, n]
-  val use_access = MRule (Const.LId initial_auth_txnid, "use_access")
 
   val initial_auth_txn = TxnBody
       {inputs = inputs,
@@ -106,18 +126,25 @@ struct
        proof_term = proof_term}
 
 
-  val test_resource = resource_named (TB.bytestringToLFBytestring (Bytestring.fromString "foo"))
-
-
-  fun mk_real_txn () = TypeCoinCrypto.createTxn [] {
+  val initial_auth_txnid =
+      setup "e419b618998b72e146980f3476e99b5178e1be36eac278eeb45dc357743b5a2b"
+      (fn _ =>
+          TypeCoinCrypto.createTxn [] {
                  typecoin_txn = initial_auth_txn,
                  keys = [charlie_privkey],
                  fee = TypeCoinCrypto.baseAmount div 2,
                  recovery_amount = TypeCoinCrypto.baseAmount div 2,
                  recovery_pubkey = charlie_pubkey
-                 }
+          })
 
-  val initial_auth_real_txn = mk_real_txn ()
+  val resource = c_app' initial_auth_txnid "resource" []
+  fun resource_named x = c_app' initial_auth_txnid "resource_named" [x]
+  fun can_access x = c_app' initial_auth_txnid "can_access" [x]
+  fun can_access_nonce x n = c_app' initial_auth_txnid "can_access_nonce" [x, n]
+  val use_access = MRule (Const.LId initial_auth_txnid, "use_access")
+
+  val test_resource = resource_named (TB.bytestringToLFBytestring (Bytestring.fromString "foo"))
+
 
   end
 
@@ -128,8 +155,7 @@ struct
    * access. He doesn't *really* need this, but it means less
    * signing. *)
   local
-    val input_txid = "bogus_tx2"
-    val inputs = [Input {source = (input_txid, 0), prop = POne}]
+    val inputs = [Input {source = (charlie_input_txid, 1), prop = POne}]
     val self_persistent_access_prop =
         affirmationProp charlie_pubkey (PBang (PAtom (can_access test_resource)))
     val outputs = [StdOutput {dest = charlie_hash, prop = self_persistent_access_prop}]
@@ -157,27 +183,34 @@ struct
             z2)))
 
   in
-  val charlie_auth_txnid = "charlie" (* bogus! *)
+
   val charlie_auth_txn = TxnBody
       {inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
        proof_term = proof_term}
+
+  val charlie_auth_txnid =
+      setup "c919d1f954d384e019e13bc5632ceb9e924362915d98f02a5218d3689cdcb6b2"
+      (fn _ =>
+          TypeCoinCrypto.createTxn (!pending) {
+                 typecoin_txn = charlie_auth_txn,
+                 keys = [charlie_privkey],
+                 fee = TypeCoinCrypto.baseAmount div 2,
+                 recovery_amount = TypeCoinCrypto.baseAmount div 2,
+                 recovery_pubkey = charlie_pubkey
+          })
+
   val charlie_delegates_to_alice =
       MRule (Const.LId charlie_auth_txnid, "charlie_delegates_to_alice")
 
   end
 
 
-
-
-
   (* Now Alice sends a proof to Bob saying he can access a resource. *)
-
   local
-    val input_txid = "bogus_tx3"
-    val inputs = [Input {source = (input_txid, 0), prop = POne}]
+    val inputs = [Input {source = (alice_input_txid, 1), prop = POne}]
     val alice_says_can_access_prop =
         affirmationProp alice_pubkey (PAtom (can_access test_resource))
     val outputs = [StdOutput {dest = bob_hash, prop = alice_says_can_access_prop}]
@@ -200,13 +233,23 @@ struct
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
-  val alice_auth_txnid = "alice" (* bogus! *)
   val alice_auth_txn = TxnBody
       {inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
        proof_term = proof_term}
+
+  val alice_auth_txnid =
+      setup "b4ec90da38d8346b03c6fa769fcbff03488a532d6519403599b0faa8c778c7ba"
+      (fn _ =>
+          TypeCoinCrypto.createTxn (!pending) {
+                 typecoin_txn = alice_auth_txn,
+                 keys = [alice_privkey],
+                 fee = TypeCoinCrypto.baseAmount div 2,
+                 recovery_amount = TypeCoinCrypto.baseAmount div 2,
+                 recovery_pubkey = alice_pubkey
+      })
   end
 
 
@@ -221,14 +264,18 @@ struct
         affirmationProp charlie_pubkey can_access_nonce
 
     val input_txid = alice_auth_txnid
-    val inputs = [Input {source = (input_txid, 0),
-                         prop = alice_says_can_access_prop}]
+    val inputs = [Input {source = (alice_auth_txnid, 0),
+                         prop = alice_says_can_access_prop},
+                  Input {source = (bob_input_txid, 1),
+                         prop = POne}]
 
     val outputs = [StdOutput {dest = bob_hash, prop = charlie_says_can_access_nonce}]
     val sg = []
     val linear_sg = []
     val proof_term =
-        MLam ("z", alice_says_can_access_prop,
+        MLam ("z", PTensor (alice_says_can_access_prop, POne),
+         MTensorLet (z, "z1", "z2",
+         MOneLet (z2,
          MBind (charlie_delegates_to_alice, "y",
           MReturn (
            charlie,
@@ -238,18 +285,28 @@ struct
               use_access,
               test_resource),
              nonce),
-            MApp (y, z)))))
+            MApp (y, z1)))))))
 
   in
-  val bob_auth_txnid = "bob" (* bogus! *)
   val bob_auth_txn = TxnBody
       {inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
        proof_term = proof_term}
-  end
 
+  val bob_auth_txnid =
+      setup "4b827a45e03b6fe2145e1f24d63645d9826a9320836d3e560fa3eb1e2af2d1a2"
+      (fn _ =>
+          TypeCoinCrypto.createTxn (!pending) {
+                 typecoin_txn = bob_auth_txn,
+                 keys = [bob_privkey, bob_privkey],
+                 fee = TypeCoinCrypto.baseAmount div 2,
+                 recovery_amount = TypeCoinCrypto.baseAmount div 2 * 3,
+                 recovery_pubkey = bob_pubkey
+      })
+
+  end
 
 
   val auth_test_chain =
@@ -258,10 +315,15 @@ struct
        (alice_auth_txnid, alice_auth_txn),
        (bob_auth_txnid, bob_auth_txn)]
 
+  fun submit () = List.app (fn (_, tx) => RPC.Process.inject tx) (rev (!pending))
+
 
 end
 
 structure ParamThings =
 struct
-  val initial_thing = "36406c4b848a8a8beb1c9ead8b43df3e66c951d42e115014e3ede2494231b35f"
+  val initial_input_txid = "2d93d4c866f3fd7b4738717020d7f750b3f01c425df3b91ffecce6abf5348310"
+  val charlie_input_txid = "5bec004110726e8619690d843685395ecf118d1fc2a0cb45ecabe194bacbe14b"
+  val alice_input_txid = "3a2a766f9b2ca4a240053438a8f973fcaf27ed0f0eec4e76153b60944bb049dc"
+  val bob_input_txid = "727b0afde4b0bf560a3369be60253706ade8ec82b69c8e65d12cfab033981069"
 end

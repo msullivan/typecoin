@@ -123,7 +123,9 @@ struct
 
   fun checkTransaction sg tr
                        (txnid, TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term}) =
-      let (* Check the inputs and the outputs and the signatures and build up
+      let val () = print ("checking " ^ txnid ^ "\n")
+
+          (* Check the inputs and the outputs and the signatures and build up
            * the data structures we need to check the proof term. *)
           val input_props = checkInputs tr inputs
           val sg' = LogicCheck.checkSignature sg persistent_sg

@@ -11,7 +11,7 @@ struct
 
 
   fun hashKey key = RIPEMD160.hashBytes (SHA256.hashBytes key)
-  fun hash data = SHA256.hashBytes data
+  fun hash data = SHA256.hashBytes (SHA256.hashBytes data)
 
   (* We need affirmations to be signed relative to the transaction
    * they are in, because we don't want it to be possible to pick up
@@ -117,7 +117,7 @@ struct
 
       in Commerce.createTx lookup {
            inputs = inputs',
-           outputs = fakeOutput :: outputs',
+           outputs = outputs' @ [fakeOutput],
            fee = fee,
            keys = keys
          }
