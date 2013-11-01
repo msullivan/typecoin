@@ -56,6 +56,22 @@ struct
            PReceipt (lfconvert k, convert A))
       end
 
+  fun convertLargeElim G convertProof convertBody proof =
+      let val convert = convertProof G
+          val lfconvert = convertExp G
+          val bconvert = convertBody G
+      in
+      (case proof of
+           LBangLet (M1, v, M2) => LBangLet (convert M1, v, bconvert M2)
+         | LTensorLet (M1, v1, v2, M2) => LTensorLet (convert M1, v1, v2, bconvert M2)
+         | LCase (M, v1, M1, v2, M2) => LCase (convert M, v1, bconvert M1, v2, bconvert M2)
+         | LOneLet (M1, M2) => LOneLet (convert M1, bconvert M2)
+         | LUnpack (M1, x, v, M2) => LUnpack (convert M1, x, v, convertBody (x::G) M2)
+         | LBind (M1, v, M2) => LBind (convert M1, v, bconvert M2)
+      )
+      end
+
+
   fun convertProof G proof =
       let val convert = convertProof G
           val lfconvert = convertExp G
@@ -64,25 +80,20 @@ struct
            MRule c => MRule c
          | MVar v => MVar v
          | MBang M => MBang (convert M)
-         | MBangLet (M1, v, M2) => MBangLet (convert M1, v, convert M2)
          | MLam (v, A, M) => MLam (v, convertProp G A, convert M)
          | MApp (M1, M2) => MApp (convert M1, convert M2)
          | MTensor (M1, M2) => MTensor (convert M1, convert M2)
-         | MTensorLet (M1, v1, v2, M2) => MTensorLet (convert M1, v1, v2, convert M2)
          | MWith (M1, M2) => MWith (convert M1, convert M2)
          | MPi (i, M) => MPi (i, convert M)
          | MInj (i, M, A) => MInj (i, convert M, convertProp G A)
-         | MCase (M, v1, M1, v2, M2) => MCase (convert M, v1, convert M1, v2, convert M2)
          | MOne => MOne
-         | MOneLet (M1, M2) => MOneLet (convert M1, convert M2)
          | MAbort (M, A, vs) => MAbort (convert M, convertProp G A, vs)
          | MTop vs => MTop vs
          | MForallLam (x, t, M) => MForallLam (x, lfconvert t, convertProof (x::G) M)
          | MForallApp (M, t) => MForallApp (convert M, lfconvert t)
          | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)
-         | MUnpack (M1, x, v, M2) => MUnpack (convert M1, x, v, convertProof (x::G) M2)
          | MReturn (k, M) => MReturn (lfconvert k, convert M)
-         | MBind (M1, v, M2) => MBind (convert M1, v, convert M2)
+         | MLarge l => MLarge (convertLargeElim G convertProof convertProof l)
       )
       end
 
@@ -94,16 +105,9 @@ struct
       (case exp of
            ERet M => ERet (convertp M)
          | ELet (E1, v, E2) => ELet (convert E1, v, convert E2)
-         | EBangLet (M1, v, E2) => EBangLet (convertp M1, v, convert E2)
-         | ETensorLet (M1, v1, v2, E2) => ETensorLet (convertp M1, v1, v2, convert E2)
-         | ECase (M, v1, E1, v2, E2) => ECase (convertp M, v1, convert E1, v2, convert E2)
-         | EOneLet (M1, E2) => EOneLet (convertp M1, convert E2)
-         | EUnpack (M1, x, v, E2) => EUnpack (convertp M1, x, v, convertProofExp (x::G) E2)
-         | EBind (M1, v, E2) => EBind (convertp M1, v, convert E2)
+         | ELarge l => ELarge (convertLargeElim G convertProof convertProofExp l)
       )
       end
-
-
 
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
