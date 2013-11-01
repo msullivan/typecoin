@@ -114,7 +114,7 @@ struct
         ]
   (* This transaction just establishes the rules. No useful outputs. *)
   val outputs = [StdOutput {dest = charlie_hash, prop = POne}]
-  val proof_term = MLam ("z", POne, z)
+  val proof_term = z
 
   in
 
@@ -123,6 +123,7 @@ struct
        persistent_sg = auth_sg,
        linear_sg = [],
        outputs = outputs,
+       var = "z",
        proof_term = proof_term}
 
 
@@ -177,10 +178,9 @@ struct
         LSSignedAffirmation self_persistent_access
     ]
     val proof_term =
-        MLam ("z", PTensor (POne, self_persistent_access_prop),
          MTensorLet (z, "z1", "z2",
           MOneLet (z1,
-            z2)))
+            z2))
 
   in
 
@@ -189,6 +189,7 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
+       var = "z",
        proof_term = proof_term}
 
   val charlie_auth_txnid =
@@ -226,10 +227,9 @@ struct
         LSSignedAffirmation alice_says_can_access
     ]
     val proof_term =
-        MLam ("z", PTensor (POne, alice_says_can_access_prop),
          MTensorLet (z, "z1", "z2",
           MOneLet (z1,
-            z2)))
+            z2))
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
@@ -238,6 +238,7 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
+       var = "z",
        proof_term = proof_term}
 
   val alice_auth_txnid =
@@ -273,7 +274,6 @@ struct
     val sg = []
     val linear_sg = []
     val proof_term =
-        MLam ("z", PTensor (alice_says_can_access_prop, POne),
          MTensorLet (z, "z1", "z2",
          MOneLet (z2,
          MBind (charlie_delegates_to_alice, "y",
@@ -285,7 +285,7 @@ struct
               use_access,
               test_resource),
              nonce),
-            MApp (y, z1)))))))
+            MApp (y, z1))))))
 
   in
   val bob_auth_txn = TxnBody
@@ -293,6 +293,7 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
+       var = "z",
        proof_term = proof_term}
 
   val bob_auth_txnid =

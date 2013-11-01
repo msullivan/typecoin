@@ -40,11 +40,12 @@ struct
   fun renameProof _ = raise Fail "unimplemented. sigh"
 
   fun renameTxnBody name' name
-      (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term}) =
+      (TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term}) =
       TxnBody {inputs = map (renameInput name' name) inputs,
                outputs = map (renameOutput name' name) outputs,
                linear_sg = map (renameLinearSgEntry name' name) linear_sg,
                persistent_sg = map (renameSgEntry name' name) persistent_sg,
+               var = var,
                proof_term = renameProof proof_term}
 
   end
@@ -122,7 +123,8 @@ struct
   val debug_prop_pair = ref (POne, POne)
 
   fun checkTransaction sg tr
-                       (txnid, TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term}) =
+                       (txnid,
+                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term}) =
       let val () = print ("checking " ^ txnid ^ "\n")
 
           (* Check the inputs and the outputs and the signatures and build up
@@ -136,12 +138,13 @@ struct
           (* Build up the prop that we need to prove. *)
           val input_prop = build_tensor (input_props @ linear_sg_props @ receipt_props)
           val output_prop = build_tensor output_props
-          val expected_prop = PLolli (input_prop, output_prop)
+
+          val ctx = LogicContext.insert LogicContext.empty var input_prop false
 
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferProofOuter sg' LogicContext.empty proof_term
-          val () = debug_prop_pair := (actual_prop, expected_prop)
-          val () = LogicCheck.propEquality actual_prop expected_prop
+          val actual_prop = LogicCheck.inferProofOuter sg' ctx proof_term
+          val () = debug_prop_pair := (actual_prop, output_prop)
+          val () = LogicCheck.propEquality actual_prop output_prop
 
           (* Ok. Everything checks out! Now we just need to update the
            * data structures. *)
