@@ -9,6 +9,8 @@ struct
   structure Encoding = ECDERp
   val param = EllipticCurveParams.secp256k1
 
+  val Error = Fail
+
 
   fun hashKey key = RIPEMD160.hashBytes (SHA256.hashBytes key)
   fun hash data = SHA256.hashBytes (SHA256.hashBytes data)
@@ -81,6 +83,13 @@ struct
   (* Tau in UTF-8 *)
   val magicNumber = Bytestring.implode [0wxCF, 0wx84]
 
+  fun makeFakePubkey typecoin_txn =
+      Bytestring.concat [
+        magicNumber,
+        hashTxnBody typecoin_txn
+      ]
+
+  fun fromHexId id = Bytestring.rev (valOf (Bytestring.fromStringHex id))
 
   (* txns is a list of transactions that we might want to reference
    * that haven't landed yet *)
@@ -89,19 +98,13 @@ struct
                  {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
       let val (TypeCoinTxn.TxnBody {inputs, outputs, ...}) = typecoin_txn
 
-          fun fromHexId id = Bytestring.rev (valOf (Bytestring.fromStringHex id))
-
           fun convertInput (TypeCoinTxn.Input {source = (txnid, i), ...}) =
               (Bytestring.rev (valOf (Bytestring.fromStringHex txnid)), i)
           fun convertOutput (TypeCoinTxn.Output {dest, amount, ...}) =
               (Commerce.PayToKeyHash dest,
                getOpt (amount, baseAmount))
 
-          val txnHash = hashTxnBody typecoin_txn
-          val fakePubKey = Bytestring.concat [
-                           magicNumber,
-                           txnHash
-                           ]
+          val fakePubKey = makeFakePubkey typecoin_txn
           val realPubKey = Encoding.encodePubkey (param, recovery_pubkey)
           val fakeOutput = (Commerce.Multisig (1, [fakePubKey, realPubKey]),
                             recovery_amount)
@@ -122,6 +125,45 @@ struct
            keys = keys
          }
       end
+
+  (* Checks a typecoin transaction against a bitcoin transaction *)
+  fun checkTxn tcTxn (realTxn: Transaction.tx) =
+      let val {inputs=realInputs, outputs=realOutputs, ...} = realTxn
+          val (TypeCoinTxn.TxnBody {inputs=tcInputs, outputs=tcOutputs, ...}) = tcTxn
+
+          val (hashTxout :: revTxouts) = rev realOutputs
+          val regularTxouts = rev revTxouts
+
+          val hashOutput = Commerce.analyze (Script.readScript (#script hashTxout))
+          val fakePubkey = (case hashOutput of
+                                Commerce.Multisig (1, [fakePubkey, _]) => fakePubkey
+                              | _ => raise Error "real txn doesn't have typecoin hash")
+          val () = if fakePubkey = makeFakePubkey tcTxn then () else
+                   raise Error "transaction hash doesn't match!"
+
+          fun checkInput (TypeCoinTxn.Input {source=(txnid, n), ...},
+                          {from=(txnid', n'), ...} : Transaction.txin) =
+              if fromHexId txnid = txnid' andalso n = n' then () else
+              raise Error "transaction inputs don't match"
+
+          val () = ListPair.appEq checkInput (tcInputs, realInputs)
+
+          fun checkOutput (TypeCoinTxn.Output {dest, amount=amountOpt, ...},
+                          {script, amount=amount', ...} : Transaction.txout) =
+              let val dest' = (case Commerce.analyze (Script.readScript script) of
+                                   Commerce.PayToKeyHash dest' => dest'
+                                 | _ => raise Error "nonstandard output")
+              in (if dest = dest' then () else
+                  raise Error "transaction destinations don't match";
+                  (case amountOpt of
+                       SOME amount => if amount = Word64.toLargeInt amount' then () else
+                                      raise Error "transaction amounts don't match"
+                     | NONE => ()))
+              end
+
+          val () = ListPair.appEq checkOutput (tcOutputs, regularTxouts)
+
+      in () end
 
 
 end
