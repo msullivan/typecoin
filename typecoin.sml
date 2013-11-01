@@ -40,13 +40,13 @@ struct
   fun renameProof _ = raise Fail "unimplemented. sigh"
 
   fun renameTxnBody name' name
-      (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term,
+      (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_exp,
                 var, name=txnname, metadata}) =
       TxnBody {inputs = map (renameInput name' name) inputs,
                outputs = map (renameOutput name' name) outputs,
                linear_sg = map (renameLinearSgEntry name' name) linear_sg,
                persistent_sg = map (renameSgEntry name' name) persistent_sg,
-               proof_term = renameProof proof_term,
+               proof_exp = renameProof proof_exp,
                var = var,
                name = txnname,
                metadata = metadata}
@@ -127,7 +127,7 @@ struct
 
   fun checkTransaction sg tr
                        (txnid,
-                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term,
+                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_exp,
                                  name, ...}) =
       let val () = print ("checking " ^ txnid ^ "/" ^ name ^ "\n")
 
@@ -146,7 +146,7 @@ struct
           val ctx = LogicContext.insert LogicContext.empty var input_prop false
 
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferProofOuter sg' ctx proof_term
+          val actual_prop = LogicCheck.inferExpOuter sg' ctx proof_exp
           val () = debug_prop_pair := (actual_prop, output_prop)
           val () = LogicCheck.propEquality actual_prop output_prop
 

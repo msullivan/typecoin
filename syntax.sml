@@ -229,7 +229,7 @@ struct
             linear_sg: linear_sg,
             outputs: outputs,
             var: Variable.var,
-            proof_term: Logic.proof}
+            proof_exp: Logic.pexp}
   type txn = txnid * txn_body
 
   type chain = txn list
