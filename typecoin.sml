@@ -139,7 +139,7 @@ struct
           val expected_prop = PLolli (input_prop, output_prop)
 
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferProofOuter sg' proof_term
+          val actual_prop = LogicCheck.inferProofOuter sg' LogicContext.empty proof_term
           val () = debug_prop_pair := (actual_prop, expected_prop)
           val () = LogicCheck.propEquality actual_prop expected_prop
 

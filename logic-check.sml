@@ -13,6 +13,8 @@ sig
   val empty : ctx
   val fromLFContext : LFContext.ctx -> ctx
   val lfContext : ctx -> LFContext.ctx
+
+  val getVariables : ctx -> Variable.var list
   val insert : ctx -> Variable.var -> Logic.prop -> bool -> ctx
   val extendLF : ctx -> LFSyntax.exp -> ctx
   val lookup : ctx -> Variable.var -> Logic.prop * bool
@@ -90,6 +92,8 @@ struct
   fun fromLFContext lf_ctx = (lf_ctx, VarDict.empty)
 
   fun lfContext (lf_ctx, _) = lf_ctx
+
+  fun getVariables (_, ctx) = VarDict.domain ctx
 
   fun insert (lf_ctx, logic_ctx) v A persistent =
       if VarDict.member logic_ctx v then
@@ -398,8 +402,11 @@ struct
 
       end
 
-      fun inferProofOuter sg M =
-          let val D = (LogicContext.empty, VarSet.empty)
+
+      fun inferProofOuter sg G M =
+          let val res = foldl (fn (v, res) => VarSet.insert res v)
+                              VarSet.empty (LogicContext.getVariables G)
+              val D = (G, res)
               val (A, res) = checkProof sg D M
               val () = if VarSet.isEmpty res then () else
                        raise ProofError "not all resources used"
