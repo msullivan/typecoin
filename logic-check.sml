@@ -403,61 +403,60 @@ struct
       end
 
 
-      fun inferProofOuter sg G M =
-          let val res = foldl (fn (v, res) => VarSet.insert res v)
-                              VarSet.empty (LogicContext.getVariables G)
-              val D = (G, res)
-              val (A, res) = checkProof sg D M
-              val () = if VarSet.isEmpty res then () else
-                       raise ProofError "not all resources used"
-          in A end
+  fun inferProofOuter sg G M =
+      let val res = foldl (fn (v, res) => VarSet.insert res v)
+                          VarSet.empty (LogicContext.getVariables G)
+          val D = (G, res)
+          val (A, res) = checkProof sg D M
+          val () = if VarSet.isEmpty res then () else
+                   raise ProofError "not all resources used"
+      in A end
 
-      fun checkRuleSgEntry sg (id, prop) =
-          (checkProp sg Ctx.empty prop;
-           thawedProp prop;
-           Signature.insert_rule sg (Const.LThis, id) prop)
+  fun checkRuleSgEntry sg (id, prop) =
+      (checkProp sg Ctx.empty prop;
+       thawedProp prop;
+       Signature.insert_rule sg (Const.LThis, id) prop)
 
-      fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
-          let val hashed_key = TypeCoinCrypto.hashKey principal
-              val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
-          in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
+  fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
+      let val hashed_key = TypeCoinCrypto.hashKey principal
+          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
+      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
 
-      fun checkSignedAffirmationSgEntry sg (id, affirm) =
-          let val prop' = affirmationToProp affirm
-              val () = checkProp sg Ctx.empty prop'
-              (* crypto is checked in checkCrypto *)
-          in Signature.insert_rule sg (Const.LThis, id) prop' end
+  fun checkSignedAffirmationSgEntry sg (id, affirm) =
+      let val prop' = affirmationToProp affirm
+          val () = checkProp sg Ctx.empty prop'
+      (* crypto is checked in checkCrypto *)
+      in Signature.insert_rule sg (Const.LThis, id) prop' end
 
-      fun checkSgEntry sg (SRule entry) = checkRuleSgEntry sg entry
-        | checkSgEntry sg (SSignedAffirmation entry) = checkSignedAffirmationSgEntry sg entry
-        | checkSgEntry sg (SConst entry) = TypeCheckLF.checkSgEntry sg entry
+  fun checkSgEntry sg (SRule entry) = checkRuleSgEntry sg entry
+    | checkSgEntry sg (SSignedAffirmation entry) = checkSignedAffirmationSgEntry sg entry
+    | checkSgEntry sg (SConst entry) = TypeCheckLF.checkSgEntry sg entry
 
-      fun checkSignature sg decls =
-          foldl (fn (e, sg) => checkSgEntry sg e) sg decls
-
-
-      (* Install a declaration in the signature at a certain namespace.
-       * Should have already been checked. *)
-      fun installSgEntry sg ns (SRule (id, prop)) =
-          let val prop' = LogicSubst.replaceThisProp (Const.LId ns) prop
-          in Signature.insert_rule sg (Const.LId ns, id) prop' end
-        | installSgEntry sg ns (SConst (_, id, e)) =
-          let val e' = LFSubst.replaceThisExp (Const.LId ns) e
-          in Signature.insert sg (Const.LId ns, id) e' end
-        | installSgEntry sg ns (SSignedAffirmation (id, affirm)) =
-          let val prop' = LogicSubst.replaceThisProp (Const.LId ns) (affirmationToProp affirm)
-          in Signature.insert_rule sg (Const.LId ns, id) prop' end
+  fun checkSignature sg decls =
+      foldl (fn (e, sg) => checkSgEntry sg e) sg decls
 
 
+  (* Install a declaration in the signature at a certain namespace.
+   * Should have already been checked. *)
+  fun installSgEntry sg ns (SRule (id, prop)) =
+      let val prop' = LogicSubst.replaceThisProp (Const.LId ns) prop
+      in Signature.insert_rule sg (Const.LId ns, id) prop' end
+    | installSgEntry sg ns (SConst (_, id, e)) =
+      let val e' = LFSubst.replaceThisExp (Const.LId ns) e
+      in Signature.insert sg (Const.LId ns, id) e' end
+    | installSgEntry sg ns (SSignedAffirmation (id, affirm)) =
+      let val prop' = LogicSubst.replaceThisProp (Const.LId ns) (affirmationToProp affirm)
+      in Signature.insert_rule sg (Const.LId ns, id) prop' end
 
-     fun installSignature sg ns decls =
-         foldl (fn (decl, sg) => installSgEntry sg ns decl) sg decls
 
-     (* Make a signature containing the basis *)
-     val basis_sg =
-         (checkSignature Signature.empty TypeCoinBasis.basis;
-          installSignature Signature.empty "$" TypeCoinBasis.basis)
 
+  fun installSignature sg ns decls =
+      foldl (fn (decl, sg) => installSgEntry sg ns decl) sg decls
+
+  (* Make a signature containing the basis *)
+  val basis_sg =
+      (checkSignature Signature.empty TypeCoinBasis.basis;
+       installSignature Signature.empty "$" TypeCoinBasis.basis)
 
 end
 
