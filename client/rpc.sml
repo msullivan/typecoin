@@ -6,31 +6,38 @@ structure RPC :> RPC =
       open Unityped
 
 
+      fun abort () =
+         (
+         close ();
+         raise RPC
+         )
+
+
       fun fromUnit u =
          (case u of
              Nil => ()
-           | _ => raise RPC)
+           | _ => abort ())
 
       fun fromBool u =
          (case u of
              True => true
            | Nil => false
-           | _ => raise RPC)
+           | _ => abort ())
 
       fun fromInt u =
          (case u of
              Int i => i
-           | _ => raise RPC)
+           | _ => abort ())
 
       fun fromInteger u =
          (case u of
              Integer i => i
-           | _ => raise RPC)
+           | _ => abort ())
 
       fun fromBytestring u =
          (case u of
              Bytestring str => str
-           | _ => raise RPC)
+           | _ => abort ())
 
       
       (* These method numbers and formats must be consistent with RpcAction. *)
@@ -84,23 +91,23 @@ structure RPC :> RPC =
                (case rpc (0w16, Bytestring hash) of
                    Bytestring txstr =>
                       (SOME (Transaction.readTx txstr)
-                       handle Reader.SyntaxError => raise RPC)
+                       handle Reader.SyntaxError => abort ())
                  | Nil => NONE
-                 | _ => raise RPC)
+                 | _ => abort ())
 
             fun txDataByNumber i j =
                fromBytestring (rpc (0w17, Cons (Int i, Int j)))
 
             fun txByNumber i j =
                (Transaction.readTx (txDataByNumber i j)
-                handle Reader.SyntaxError => raise RPC)
+                handle Reader.SyntaxError => abort ())
 
             fun txByPosition pos =
                (case rpc (0w23, Integer (Int64.toLarge pos)) of
                    Bytestring str =>
                       (Transaction.readTx str
-                       handle Reader.SyntaxError => raise RPC)
-                 | _ => raise RPC)
+                       handle Reader.SyntaxError => abort ())
+                 | _ => abort ())
 
          end
 
@@ -109,7 +116,6 @@ structure RPC :> RPC =
       
             fun inject tx =
                fromUnit (rpc (0w18, Bytestring (Transaction.writeTx tx)))
-
 
          end
    end
