@@ -148,6 +148,26 @@ struct
                  | MReturn of principal * proof
                  | MBind of proof * var * proof
 
+  (* Proof expressions for the top level thing *)
+  datatype pexp =
+         (* Include regular proofs *)
+           ERet of proof
+         (* A sequencing operation for pexps. *)
+         | ELet of pexp * var * pexp
+
+         (* Duplications of all of the large elim forms. Sigh. *)
+         | ETensorLet of proof * var * var * pexp
+         | EBangLet of proof * var * pexp
+         | EOneLet of proof * pexp
+         | ECase of proof * var * pexp * var * pexp
+         (* Unpack is a bit funny because it means that our
+          * constraints contain variables, which would be bad.
+          * Eh, that's fine, though. It just fails the constraint check.
+          * *)
+         | EUnpack of proof * LF.binding * var * pexp
+         | EBind of proof * var * pexp
+
+
   (* ????????????? *)
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring

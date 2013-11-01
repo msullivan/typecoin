@@ -402,15 +402,112 @@ struct
 
       end
 
+  (* Most of these cases are annoying duplications of things in checkProof. *)
+  (* The handling of resources is more general that it needs to be, given
+   * the heavily restricted form of proof expressions. This is so that we could
+   * copy/paste the cases from checkProof.
+   * Oh, wait, no, I wound up adding a general pexp let, so we need it.
+   *
+   * Sigh. This is not elegant.
+   *)
+  fun checkProofExp sg (D as (ctx, res)) E =
+      let val checkProof = checkProof sg
+          val checkProofExp = checkProofExp sg
+          val checkProp = checkProp sg
+          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+      in
+      (case E of
+           ERet M => checkProof D M
+         | ELet (E1, v, E2) =>
+           let val (A1', res') = checkProofExp D E1
+               val ctx' = Ctx.insert ctx v A1' true
+           in discharge v
+               (checkProofExp (ctx', res') E2)
+           end
 
-  fun inferProofOuter sg G M =
+
+         (* Code duplication ahoy! *)
+         | ETensorLet (M1, v1, v2, E2) =>
+           let val (A', res') = checkProof D M1
+               val (A1, A2) =
+                   (case A' of PTensor As => As
+                             | _ => raise ProofError "tensor let of non tensor")
+               val D' = addResource
+                            (addResource (ctx, res') v1 A1)
+                            v2 A2
+           in discharge v1
+              (discharge v2
+               (checkProofExp D' E2))
+           end
+
+         | EBangLet (M1, v, E2) =>
+           let val (bA1', res') = checkProof D M1
+               val A1' = (case bA1' of PBang A1' => A1'
+                                     | _ => raise ProofError "let bang of non bang")
+               val ctx' = Ctx.insert ctx v A1' true
+           in checkProofExp (ctx', res') E2 end
+
+         | ECase (M, v1, E1, v2, E2) =>
+           let val (A', res') = checkProof D M
+               val (A1, A2) =
+                   (case A' of POplus As => As
+                             | _ => raise ProofError "case of non oplus")
+
+               val D' = (ctx, res')
+               val (C1, res1) = discharge v1
+                                (checkProofExp (addResource D' v1 A1) E1)
+               val (C2, res2) = discharge v2
+                                (checkProofExp (addResource D' v2 A2) E2)
+               val () = requireResourceEquality res1 res2
+               val () = propEquality C1 C2
+           in (C1, res1) end
+
+         | EOneLet (M1, E2) =>
+           let val (A1, res') = checkProof D M1
+               val () = propEquality A1 POne
+           in checkProofExp (ctx, res') E2 end
+
+         | EUnpack (M1, _, v, E2) =>
+           let val (etA, res') = checkProof D M1
+               val (_, t, A) =
+                   (case etA of PExists x => x
+                              | _ => raise ProofError "unpack of non exists")
+               val ctx' = Ctx.extendLF ctx t
+               val D' = addResource (ctx', res') v A
+               val (C, res'') = checkProofExp D' E2
+
+               (* check that the result prop doesn't mention the variable *)
+               val () = checkProp ctx C
+           in (C, res'') end
+
+         | EBind (M1, v, E2) =>
+           let val (affkA, res') = checkProof D M1
+               val (k, A) =
+                   (case affkA of PAffirms x => x
+                                | _ => raise ProofError "bind of non affirms")
+               val D' = addResource (ctx, res') v A
+               val (affkB, res'') = discharge v (checkProofExp D' E2)
+               val (k', B) =
+                   (case affkB of PAffirms x => x
+                                | _ => raise ProofError "bind must result in affirms")
+               (* principals must match *)
+               val () = TypeCheckLF.exprEquality k k'
+           in (PAffirms (k, B), res'') end
+
+      )
+      end
+
+  fun inferOuter checkFn sg G M =
       let val res = foldl (fn (v, res) => VarSet.insert res v)
                           VarSet.empty (LogicContext.getVariables G)
           val D = (G, res)
-          val (A, res) = checkProof sg D M
+          val (A, res) = checkFn sg D M
           val () = if VarSet.isEmpty res then () else
                    raise ProofError "not all resources used"
       in A end
+
+  val inferProofOuter = inferOuter checkProof
+  val inferExpOuter = inferOuter checkProofExp
 
   fun checkRuleSgEntry sg (id, prop) =
       (checkProp sg Ctx.empty prop;

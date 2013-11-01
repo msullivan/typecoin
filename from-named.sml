@@ -86,6 +86,24 @@ struct
       )
       end
 
+  fun convertProofExp G exp =
+      let val convertp = convertProof G
+          val convert = convertProofExp G
+          val lfconvert = convertExp G
+      in
+      (case exp of
+           ERet M => ERet (convertp M)
+         | ELet (E1, v, E2) => ELet (convert E1, v, convert E2)
+         | EBangLet (M1, v, E2) => EBangLet (convertp M1, v, convert E2)
+         | ETensorLet (M1, v1, v2, E2) => ETensorLet (convertp M1, v1, v2, convert E2)
+         | ECase (M, v1, E1, v2, E2) => ECase (convertp M, v1, convert E1, v2, convert E2)
+         | EOneLet (M1, E2) => EOneLet (convertp M1, convert E2)
+         | EUnpack (M1, x, v, E2) => EUnpack (convertp M1, x, v, convertProofExp (x::G) E2)
+         | EBind (M1, v, E2) => EBind (convertp M1, v, convert E2)
+      )
+      end
+
+
 
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
