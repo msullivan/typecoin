@@ -310,7 +310,7 @@ structure Blockchain :> BLOCKCHAIN =
            | Cons (_, _, _, _, _, utxo) => utxo)
 
 
-      fun getTxByPosition pos =
+      fun txByPosition pos =
          let
             val (tx, _) =
                Transaction.reader (inputCostring pos)
@@ -318,13 +318,13 @@ structure Blockchain :> BLOCKCHAIN =
          in
             tx
          end
-         
+
 
       fun txWithUtxo utxo hash =
          (case Utxo.find utxo hash of
              NONE => NONE
            | SOME pos =>
-                SOME (getTxByPosition pos
+                SOME (txByPosition pos
                       handle
                       Reader.SyntaxError =>
                          (

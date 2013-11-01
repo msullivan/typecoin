@@ -7,6 +7,9 @@ structure RpcAction :> RPC_ACTION =
       fun Bool true = True
         | Bool false = Nil
 
+      fun Tx tx =
+         Bytestring (Transaction.writeTx tx)
+
       fun act (method : Word8.word, args) =
          (* These method numbers and formats must be consistent with those in RPC.
             Method numbers less that 10 are reserved.
@@ -40,7 +43,7 @@ structure RpcAction :> RPC_ACTION =
                 (* Blockchain.tx *)
                 (case Blockchain.tx hash of
                     SOME tx =>
-                       Bytestring (Transaction.writeTx tx)
+                       Tx tx
                   | NONE =>
                        Nil)
 
@@ -50,10 +53,8 @@ structure RpcAction :> RPC_ACTION =
 
            | (0w18, Bytestring txstr) =>
                 (* Process.inject *)
-                (
-                Process.inject (Transaction.readTx txstr);
-                Nil
-                )
+                ((Process.inject (Transaction.readTx txstr); Nil)
+                 handle Reader.SyntaxError => Method)
 
            | (0w19, Bytestring hash) =>
                 (* Blockchain.blockNumber *)
@@ -62,6 +63,18 @@ structure RpcAction :> RPC_ACTION =
            | (0w20, Int i) =>
                 (* Blockchain.hashByNumber *)
                 Bytestring (Blockchain.hashByNumber i)
+
+           | (0w21, Bytestring hash) =>
+                (* Blockchain.blockPosition *)
+                Integer (Int64.toLarge (Blockchain.blockPosition hash))
+
+           | (0w22, Int i) =>
+                (* Blockchain.positionByNumber *)
+                Integer (Int64.toLarge (Blockchain.positionByNumber i))
+
+           | (0w23, Integer pos) =>
+                (* Blockchain.txByPosition *)
+                Tx (Blockchain.txByPosition (Int64.fromLarge pos))
 
            | _ =>
                 Method)

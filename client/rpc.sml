@@ -41,8 +41,14 @@ structure RPC :> RPC =
             type hash = Bytestring.string
             type pos = Int64.int
       
+            (* Must match the value in Blockchain. *)
+            val blockOffsetInRecord : pos = 40
+
             fun member hash =
                fromBool (rpc (0w10, Bytestring hash))
+
+            fun blockPosition hash =
+               Int64.fromLarge (fromInteger (rpc (0w21, Bytestring hash)))
 
             fun blockNumber hash =
                fromInt (rpc (0w19, Bytestring hash))
@@ -71,6 +77,9 @@ structure RPC :> RPC =
             fun blockByNumber i =
                Block.readBlock (dataByNumber i)
       
+            fun positionByNumber i =
+               Int64.fromLarge (fromInteger (rpc (0w22, Int i)))
+
             fun tx hash =
                (case rpc (0w16, Bytestring hash) of
                    Bytestring txstr =>
@@ -85,6 +94,13 @@ structure RPC :> RPC =
             fun txByNumber i j =
                (Transaction.readTx (txDataByNumber i j)
                 handle Reader.SyntaxError => raise RPC)
+
+            fun txByPosition pos =
+               (case rpc (0w23, Integer (Int64.toLarge pos)) of
+                   Bytestring str =>
+                      (Transaction.readTx str
+                       handle Reader.SyntaxError => raise RPC)
+                 | _ => raise RPC)
 
          end
 

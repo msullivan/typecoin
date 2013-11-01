@@ -2,8 +2,12 @@
 signature BLOCKCHAIN_RPC =
    sig
       type hash = Bytestring.string
+      type pos = Int64.int
+
+      val blockOffsetInRecord : pos
 
       val member : hash -> bool
+      val blockPosition : hash -> pos
       val blockNumber : hash -> int
       val blockData : hash -> Bytestring.string
       val block : hash -> Block.block
@@ -13,9 +17,11 @@ signature BLOCKCHAIN_RPC =
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
       val blockByNumber : int -> Block.block
+      val positionByNumber : int -> pos
       val tx : hash -> Transaction.tx option
       val txDataByNumber : int -> int -> Bytestring.string
       val txByNumber : int -> int -> Transaction.tx
+      val txByPosition : pos -> Transaction.tx
    end
 
 

@@ -39,9 +39,9 @@ signature BLOCKCHAIN =
       val utxoByNumber : int -> Utxo.table
 
       val tx : hash -> Transaction.tx option
-      val txWithUtxo : Utxo.table -> hash -> Transaction.tx option
       val txDataByNumber : int -> int -> Bytestring.string
       val txByNumber : int -> int -> Transaction.tx
+      val txByPosition : pos -> Transaction.tx
 
       (* Starts with verification suspended. *)
       val initialize : unit -> unit
