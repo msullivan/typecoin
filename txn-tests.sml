@@ -119,7 +119,9 @@ struct
   in
 
   val initial_auth_txn = TxnBody
-      {inputs = inputs,
+      {name = "initial-auth",
+       metadata = [],
+       inputs = inputs,
        persistent_sg = auth_sg,
        linear_sg = [],
        outputs = outputs,
@@ -139,7 +141,7 @@ struct
           })
 
   val resource = c_app' initial_auth_txnid "resource" []
-  fun resource_named x = c_app' initial_auth_txnid "resource_named" [x]
+  fun resource_named  x = c_app' initial_auth_txnid "resource_named" [x]
   fun can_access x = c_app' initial_auth_txnid "can_access" [x]
   fun can_access_nonce x n = c_app' initial_auth_txnid "can_access_nonce" [x, n]
   val use_access = MRule (Const.LId initial_auth_txnid, "use_access")
@@ -185,7 +187,9 @@ struct
   in
 
   val charlie_auth_txn = TxnBody
-      {inputs = inputs,
+      {name = "charlie-auth",
+       metadata = [],
+       inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
@@ -234,7 +238,9 @@ struct
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
   val alice_auth_txn = TxnBody
-      {inputs = inputs,
+      {name = "alice-auth",
+       metadata = [],
+       inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
@@ -289,7 +295,9 @@ struct
 
   in
   val bob_auth_txn = TxnBody
-      {inputs = inputs,
+      {name = "bob-auth",
+       metadata = [],
+       inputs = inputs,
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,

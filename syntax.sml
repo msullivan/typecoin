@@ -202,7 +202,9 @@ struct
 
 
   datatype txn_body = TxnBody of
-           {inputs: inputs,
+           {name: string,
+            metadata: string list,
+            inputs: inputs,
             persistent_sg: persistent_sg,
             linear_sg: linear_sg,
             outputs: outputs,

@@ -40,13 +40,16 @@ struct
   fun renameProof _ = raise Fail "unimplemented. sigh"
 
   fun renameTxnBody name' name
-      (TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term}) =
+      (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term,
+                var, name=txnname, metadata}) =
       TxnBody {inputs = map (renameInput name' name) inputs,
                outputs = map (renameOutput name' name) outputs,
                linear_sg = map (renameLinearSgEntry name' name) linear_sg,
                persistent_sg = map (renameSgEntry name' name) persistent_sg,
+               proof_term = renameProof proof_term,
                var = var,
-               proof_term = renameProof proof_term}
+               name = txnname,
+               metadata = metadata}
 
   end
 end
@@ -124,8 +127,9 @@ struct
 
   fun checkTransaction sg tr
                        (txnid,
-                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term}) =
-      let val () = print ("checking " ^ txnid ^ "\n")
+                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term,
+                                 name, ...}) =
+      let val () = print ("checking " ^ txnid ^ "/" ^ name ^ "\n")
 
           (* Check the inputs and the outputs and the signatures and build up
            * the data structures we need to check the proof term. *)
