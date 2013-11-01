@@ -15,6 +15,7 @@ structure RpcClient :> RPC_CLIENT =
 
 
       exception RPC
+      exception Timeout
       exception RemoteError of string
 
 
@@ -43,7 +44,7 @@ structure RpcClient :> RPC_CLIENT =
                   (case ready of
                       [] =>
                          (* timeout *)
-                         raise RPC
+                         raise Timeout
                     | [_] =>
                          BS.full (Network.recvVec sock)
                     | _ =>
