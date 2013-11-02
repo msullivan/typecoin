@@ -35,6 +35,9 @@ struct
   fun substPropMain skip substs lift loc' loc prop =
       let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc' loc
           val subst = substPropMain skip substs lift loc' loc
+
+          fun substConstraint (CBefore e) = CBefore (lfsubst e)
+            | substConstraint (CUnrevoked e) = CUnrevoked (lfsubst e)
       in
       (case prop of
            PAtom p => PAtom (lfsubst p)
@@ -53,6 +56,8 @@ struct
          | PExists (b, t, A) =>
            PExists (b, lfsubst t,
                     substPropMain (skip+1) substs lift loc' loc A)
+
+         | PConstrained (A, cs) => PConstrained (subst A, map substConstraint cs)
 
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
@@ -124,12 +129,14 @@ struct
 
   exception ProofError of string
 
-  val principal_ty = TypeCoinBasis.principal
-  val address_ty = TypeCoinBasis.address
-
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+
+          fun checkConstraint (CBefore e) = checkLF e TypeCoinBasis.number
+            | checkConstraint (CUnrevoked e) = checkLF e TypeCoinBasis.coord
+
+
       in
       (case prop of
            PAtom t => checkLF t LF.EProp
@@ -149,11 +156,15 @@ struct
            (checkLF t LF.EType;
             checkProp sg (Ctx.extendLF ctx t) A)
 
+         | PConstrained (A, cs) =>
+           (check A;
+            app checkConstraint cs)
+
          | PAffirms (k, A) =>
-           (checkLF k principal_ty;
+           (checkLF k TypeCoinBasis.principal;
             check A)
          | PReceipt (k, A) =>
-           (checkLF k address_ty;
+           (checkLF k TypeCoinBasis.address;
             check A))
       end
 
@@ -171,6 +182,7 @@ struct
          | PTensor (A, B) => (thawedProp A; thawedProp B)
          | PWith (A, B) => (thawedProp A; thawedProp B)
          | PForall (_, _, A) => thawedProp A
+         | PConstrained (A, _) => thawedProp A
 
          (* Not totally sure about whether we want to permit these. *)
          | POplus (A, B) => raise Frozen "oplus not supported"
@@ -409,7 +421,7 @@ struct
 
 
          | MReturn (k, M) =>
-           let val () = checkLF k principal_ty
+           let val () = checkLF k TypeCoinBasis.principal
                val (A, res') = checkProof D M
            in (PAffirms (k, A), res') end
 
@@ -441,6 +453,13 @@ struct
            in discharge v
                (checkProofExp (ctx', res') E2)
            end
+
+         | EOpen M =>
+           let val (A', res') = checkProof D M
+               val (A, cs) = (case A' of PConstrained xs => xs
+                                       | _ => raise ProofError "open of a non-constrained")
+               (* XXX: TODO: Check the constraints! *)
+           in (A, res') end
 
          | ELarge l => checkLargeElim sg checkProof checkProofExp D l
       )

@@ -28,6 +28,9 @@ struct
          | EApp (h, s) => EApp (convertHead G h, convertSpine G s))
   and convertSpine G s = LF.mapSpine (convertExp G) s
 
+  fun convertConstraint G (CBefore e) = CBefore (convertExp G e)
+    | convertConstraint G (CUnrevoked e) = CUnrevoked (convertExp G e)
+
   fun convertProp G prop =
       let val convert = convertProp G
           val lfconvert = convertExp G
@@ -52,6 +55,8 @@ struct
 
          | PAffirms (k, A) =>
            PAffirms (lfconvert k, convert A)
+         | PConstrained (A, cs) =>
+           PConstrained (convert A, map (convertConstraint G) cs)
          | PReceipt (k, A) =>
            PReceipt (lfconvert k, convert A))
       end
@@ -105,6 +110,7 @@ struct
       (case exp of
            ERet M => ERet (convertp M)
          | ELet (E1, v, E2) => ELet (convert E1, v, convert E2)
+         | EOpen M => EOpen (convertp M)
          | ELarge l => ELarge (convertLargeElim G convertProof convertProofExp l)
       )
       end

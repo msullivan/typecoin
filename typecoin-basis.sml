@@ -33,6 +33,7 @@ struct
   fun plusp' n1 n2 n3 = c_app "plusp" [n1, n2, n3]
   fun inc' n1 n2 = c_app "inc" [n1, n2]
 
+  val coord' = c_app "coord" []
 
   fun byteFmt b = StringCvt.padLeft #"0" 2 (Word8.fmt StringCvt.HEX b)
 
@@ -72,6 +73,9 @@ struct
        (T, "number", EType),
        (O, "zero", number'),
        (O, "pos-num", pos' --> number'),
+
+       (T, "coord", EType),
+       (O, "mk_coord", hash256' --> number' --> coord'),
 
        (* Binary arithmetic! *)
        (T, "inc", pos' --> pos' --> EType),
@@ -149,6 +153,9 @@ struct
   fun bsnoc bs b = c_app' "$" "::" [bs, b]
   val zero = c_app' "$" "zero" []
   fun pos_num n = c_app' "$" "pos_num" [n]
+
+  val coord = c_app' "$" "coord" []
+  fun mk_coord (id, n) = c_app' "$" "mk_coord" [id, n]
 
 
   (* Utility stuff *)

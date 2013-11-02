@@ -95,9 +95,16 @@ struct
   type principal = LF.exp
   (* addresses are LF expressions with type "$.address" *)
   type address = LF.exp
+  (* numbers are LF expressions with type "$.number" *)
+  type number = LF.exp
+  (* coords are LF expressions with type "$.coord" *)
+  type coord = LF.exp
 
   type const = Const.const
   type var = Variable.var
+
+  datatype constraint = CBefore of number
+                      | CUnrevoked of coord
 
   datatype prop = PAtom of atom
                 | PBang of prop
@@ -113,6 +120,9 @@ struct
                 | PExists of LF.binding * LF.exp * prop
 
                 | PAffirms of principal * prop
+
+                | PConstrained of prop * constraint list
+
                 (* receipts don't have any rules; they are introduced by
                  * typecoin things *)
                 | PReceipt of address * prop
@@ -175,6 +185,8 @@ struct
            ERet of proof
          (* A sequencing operation for pexps. *)
          | ELet of pexp * var * pexp
+
+         | EOpen of proof
 
          (* Inclusion of all the large elim forms. *)
          | ELarge of (proof, pexp) large_elim
