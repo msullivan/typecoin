@@ -1,20 +1,12 @@
-functor TxnTests(Inputs : sig
-                     val initial_input_txid : string
-                     val alice_input_txid : string
-                     val bob_input_txid : string
-                     val charlie_input_txid : string
-                 end) =
+structure TxnTestHelpers =
 struct
-  val actually_create = false
-
-  open Inputs
-
   (* Lurr. *)
   val _ = Signals.setHandler (UnixSignals.sigPIPE, Signals.IGNORE)
 
 
+
+
   open LF Logic TypeCoinTxn TestUtil
-  infixr -->
   fun v s = HVar (~1, s)
   fun var s = EApp (v s, SNil)
   val [n, m, p, A, B, e, e', D, k, r] =
@@ -82,13 +74,31 @@ struct
   val pending: (string * Transaction.tx) list ref = ref nil
   fun register id txn = pending := (id, txn) :: !pending
 
-  fun setup id f =
+  fun setup actually_create id f =
       if actually_create then
           let val real_txn = f ()
               val id = makeTxnId real_txn
               val () = register id real_txn
           in id end
       else id
+
+
+end
+
+
+functor TxnTests(Inputs : sig
+                     val initial_input_txid : string
+                     val alice_input_txid : string
+                     val bob_input_txid : string
+                     val charlie_input_txid : string
+                 end) =
+struct
+
+  open Inputs TxnTestHelpers
+  val actually_create = false
+  val setup = setup actually_create
+
+  infixr -->
 
 
   local
