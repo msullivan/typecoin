@@ -87,3 +87,151 @@ struct
 
   end
 end
+
+
+structure PrettyLogic =
+struct
+  local
+      open Logic
+
+      structure L = Layout
+
+      val $ = L.str
+      val % = L.mayAlign
+      val %% = L.freeStyleAlign
+      val & = L.seq
+
+      val WIDTH = 80
+      val fmt = L.tostringex WIDTH
+  in
+
+  fun isRightAssoc (PLolli _) = true
+    | isRightAssoc _ = false
+
+  fun precedence A =
+      (case A of
+           PAtom _ => 0
+         | POne => 0
+         | PZero => 0
+         | PTop => 0
+         | PReceipt _ => 5
+         | PConstrained _ => 5 (* XXX? *)
+         | PBang _ => 10
+         | PAffirms _ => 50 (* XXX? *)
+
+         (* tensor vs with? *)
+         | PTensor _ => 20
+         | PWith _ => 20
+         | POplus _ => 30
+         | PLolli _ => 40
+
+         | PForall _ => 50
+         | PExists _ => 50
+      )
+
+  fun paren true l = L.paren l
+    | paren false l = l
+
+  fun quantLayout sep x t =
+      &[$sep, $x, $" : ", PrettyLF.toLayoutExp t, $"."]
+
+  fun abbrevHash bs =
+      let val text = Bytestring.toStringHex (Bytestring.rev bs)
+      in String.substring (text, 0, 6) ^ "..." end
+
+  fun toLayoutPrincipal k =
+      $ (abbrevHash (TypeCoinBasis.lfPrincipalToBytestring k))
+  fun toLayoutAddress k =
+      $ (abbrevHash (TypeCoinBasis.lfAddressToBytestring k))
+  fun toLayoutNumber n =
+      $ (Int.toString (TypeCoinBasis.lfNumToInt n))
+  fun toLayoutCoord c =
+      let val (a, i) = TypeCoinBasis.lfCoordToCoord c
+      in L.tuple [$(abbrevHash a), $(Int.toString i)] end
+
+  fun specialLFLayout f e =
+      ((f e)
+       handle _ => PrettyLF.toLayoutExp e)
+
+  fun toLayoutConstraint (CBefore n) = &[$"before ", specialLFLayout toLayoutNumber n]
+    | toLayoutConstraint (CUnrevoked c) = &[$"unrevoked ", specialLFLayout toLayoutCoord c]
+
+  fun toLayoutProp A =
+      (case A of
+           PAtom e => PrettyLF.toLayoutExp e
+         | POne => $"1"
+         | PZero => $"0"
+         | PTop => $"T"
+         | PReceipt (k, A) =>
+           &[$"Receipt(",
+             %[ specialLFLayout toLayoutAddress k, toLayoutProp A ],
+             $")"
+            ]
+         | PConstrained (A', cs) =>
+           &[ toLayoutHelp true A A',
+              L.list (map toLayoutConstraint cs)
+            ]
+
+         | PBang A' => &[$"!", toLayoutPrefix A A']
+         | PAffirms (K, A') => &[$"<", specialLFLayout toLayoutPrincipal K, $">",
+                                 toLayoutPrefix A A']
+         | PForall (x, t, A') =>
+           %%[ quantLayout "!" x t,
+               toLayoutPrefix A A' ]
+         | PExists (x, t, A') =>
+           %%[ quantLayout "?" x t,
+               toLayoutPrefix A A' ]
+
+         | PTensor As => toLayoutBinop "*" A As
+         | PLolli As => toLayoutBinop "-o" A As
+         | PWith As => toLayoutBinop "&" A As
+         | POplus As => toLayoutBinop "+" A As
+
+
+      )
+
+  and toLayoutHelp associate A_outer A =
+      let val cmp = if associate then (op >) else (op >=)
+          val needParens = cmp (precedence A, precedence A_outer)
+      in paren needParens (toLayoutProp A) end
+
+  and toLayoutBinop sep A_outer (A1, A2) =
+      let val rightAssoc = isRightAssoc A_outer
+      in
+          % [&[toLayoutHelp (not rightAssoc) A_outer A1, $(" " ^ sep)],
+              toLayoutHelp rightAssoc A_outer A2]
+      end
+
+  and toLayoutPrefix A_outer A = toLayoutHelp true A_outer A
+
+  (* Another try that doesn't screw over ->s ?? *)
+  fun toLayoutTop2 A =
+      let fun loop l (A as PLolli (A1, A2)) =
+              loop (&[toLayoutHelp false A A1, $" -o"] :: l) A2
+            | loop l A = %[%% (rev l), toLayoutProp A]
+      in loop [] A end
+  fun toLayoutTop1 A =
+      let fun loop l (PForall (x, t, A)) = loop (quantLayout "!" x t :: l) A
+            | loop l e = %[%% (rev l), toLayoutTop2 e]
+      in loop [] A end
+
+  val toLayoutTop = toLayoutTop1
+
+  (* GRRRRR. Where does this belong. *)
+  fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
+      let val hashed_key = TypeCoinCrypto.hashKey principal
+          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
+      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
+
+
+  fun prettyDecl (SRule (c, A)) = fmt (&[$c, $": ", toLayoutTop A , $"."])
+    | prettyDecl (SSignedAffirmation (c, aff)) = prettyDecl (SRule (c, affirmationToProp aff))
+    | prettyDecl (SConst d) = PrettyLF.prettyDecl d
+
+
+  fun prettySg sg =
+      String.concatWith "\n" (map prettyDecl sg)
+
+  end
+
+end

@@ -203,6 +203,14 @@ struct
       (lfHashToBytestring s, lfNumToInt i)
     | lfCoordToCoord _ = raise Fail "not a closed $.coord"
 
+  fun lfPrincipalToBytestring (EApp (HConst (LId "$", "principal_hash"), SApp (s, SNil))) =
+      lfHashToBytestring s
+    | lfPrincipalToBytestring _ = raise Fail "not a closed $.principal"
+  fun lfAddressToBytestring (EApp (HConst (LId "$", "address_hash"), SApp (s, SNil))) =
+      lfHashToBytestring s
+    | lfAddressToBytestring _ = raise Fail "not a closed $.address"
+
+
 
   (* convert a string containing a hash to an LF object of type hashN,
    * where N is the number of bits. If hashN isn't one of our types, then
