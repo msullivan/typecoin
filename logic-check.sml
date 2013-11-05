@@ -431,6 +431,14 @@ struct
 
       end
 
+  fun convertConstraint (CBefore e) =
+      (RCBefore (TypeCoinBasis.lfNumToInt e)
+       handle _ => raise ProofError "before constraint invalid")
+    | convertConstraint (CUnrevoked e) =
+      (RCUnrevoked (TypeCoinBasis.lfCoordToCoord e)
+       handle _ => raise ProofError "unrevoked constraint invalid")
+
+
   (* Most of these cases are annoying duplications of things in checkProof. *)
   (* The handling of resources is more general that it needs to be, given
    * the heavily restricted form of proof expressions. This is so that we could
@@ -439,9 +447,9 @@ struct
    *
    * Sigh. This is not elegant.
    *)
-  fun checkProofExp sg (D as (ctx, res)) E =
+  fun checkProofExp checkConstraint sg (D as (ctx, res)) E =
       let val checkProof = checkProof sg
-          val checkProofExp = checkProofExp sg
+          val checkProofExp = checkProofExp checkConstraint sg
           val checkProp = checkProp sg
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
       in
@@ -458,7 +466,7 @@ struct
            let val (A', res') = checkProof D M
                val (A, cs) = (case A' of PConstrained xs => xs
                                        | _ => raise ProofError "open of a non-constrained")
-               (* XXX: TODO: Check the constraints! *)
+               val () = app (checkConstraint o convertConstraint) cs
            in (A, res') end
 
          | ELarge l => checkLargeElim sg checkProof checkProofExp D l
@@ -475,7 +483,7 @@ struct
       in A end
 
   val inferProofOuter = inferOuter checkProof
-  val inferExpOuter = inferOuter checkProofExp
+  fun inferExpOuter checkConstraint = inferOuter (checkProofExp checkConstraint)
 
   fun checkRuleSgEntry sg (id, prop) =
       (checkProp sg Ctx.empty prop;

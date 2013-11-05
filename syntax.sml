@@ -205,6 +205,10 @@ struct
   (* Here the principal is the entire public key. *)
   type crypto_principal = bytestring
 
+
+  datatype real_constraint = RCBefore of int
+                           | RCUnrevoked of bytestring * int
+
   type signed_affirmation =
        {principal: crypto_principal,
         prop: prop,

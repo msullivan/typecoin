@@ -3,7 +3,7 @@ struct
 
   local
       structure BS = Bytestring
-      open LF Logic TestUtil
+      open LF Logic TestUtil Const
       infixr --> infix <--
 
 
@@ -168,7 +168,39 @@ struct
   fun intToLFNumber 0 = zero
     | intToLFNumber n = pos_num (intToLFPos n)
 
+  (* Turn a closed LF $.bit into an int *)
+  fun lfBitToInt (EApp (HConst (LId "$", "b0"), SNil)) = 0
+    | lfBitToInt (EApp (HConst (LId "$", "b1"), SNil)) = 1
+    | lfBitToInt _ = raise Fail "not a closed $.bit"
+  (* Turn a closed LF $.pos into an int *)
+  fun lfPosToInt (EApp (HConst (LId "$", "leading-one"), SNil)) = 1
+    | lfPosToInt (EApp (HConst (LId "$", "::"), SApp (bs, SApp (b, SNil)))) =
+      lfPosToInt bs * 2 + lfBitToInt b
+    | lfPosToInt _ = raise Fail "not a closed $.pos"
+  (* Turn a closed LF $.number into an int *)
+  fun lfNumToInt (EApp (HConst (LId "$", "zero"), SNil)) = 1
+    | lfNumToInt (EApp (HConst (LId "$", "pos_num"), SApp (n, SNil))) = lfPosToInt n
+    | lfNumToInt _ = raise Fail "not a closed $.number"
+
+
   fun byteToLFByte b = c_app' "$" ("b" ^ byteFmt b) []
+
+  (* FIXME: Maybe we should do some checking and produce a better exception. *)
+  fun lfByteToByte (EApp (HConst (LId "$", s), SNil)) =
+      valOf (Word8.fromString ("0x" ^ String.substring (s, 1, 2)))
+    | lfByteToByte _ = raise Fail "not a closed $.byte"
+
+  (* We should probably check that it is actually one of the mk_hash
+   * constants but I don't care. Use with care. *)
+  fun lfHashToBytestring (EApp (HConst (LId "$", c), s)) =
+      let val bytes = map lfByteToByte (spineToList s)
+      in Bytestring.implode bytes end
+    | lfHashToBytestring _ = raise Fail "not a closed $.hashNNN"
+
+  fun lfCoordToCoord (EApp (HConst (LId "$", "mk_coord"), SApp (s, SApp (i, SNil)))) =
+      (lfHashToBytestring s, lfNumToInt i)
+    | lfCoordToCoord _ = raise Fail "not a closed $.coord"
+
 
   (* convert a string containing a hash to an LF object of type hashN,
    * where N is the number of bits. If hashN isn't one of our types, then

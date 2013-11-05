@@ -145,8 +145,12 @@ struct
 
           val ctx = LogicContext.insert LogicContext.empty var input_prop false
 
+          (* Set up a function to register constraints *)
+          val constraints = ref nil
+          fun register c = constraints := c :: !constraints
+
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferExpOuter sg' ctx proof_exp
+          val actual_prop = LogicCheck.inferExpOuter register sg' ctx proof_exp
           val () = debug_prop_pair := (actual_prop, output_prop)
           val () = LogicCheck.propEquality actual_prop output_prop
 
