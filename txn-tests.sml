@@ -13,6 +13,8 @@ struct
       map var ["n", "m", "p", "A", "B", "e", "e'", "D", "k", "r"]
   val [x, y, z, z', w, x1, y1, z1, w1, x2, y2, z2, w2, z1', z2'] =
       map MVar ["x", "y", "z", "z'", "w", "x1", "y1", "z1", "w1", "x2", "y2", "z2", "w2", "z1'", "z2'"]
+  val [N, M, Q, N', M', K, Ti] =
+      map var ["N", "M", "Q", "N", "M", "K", "Ti"]
 
   structure TB = TypeCoinBasis
 
@@ -341,6 +343,66 @@ struct
 
 end
 
+
+structure MoneyTests =
+struct
+
+  open TxnTestHelpers
+  val actually_create = false
+  val setup = setup actually_create
+
+  infixr -->
+  infixr -@
+  val (op -@) = PLolli
+
+  fun nus e = PExists ("_", e, POne)
+
+  val num = TypeCoinBasis.number
+  val time = TypeCoinBasis.number
+  val plus = TypeCoinBasis.plus
+  val principal = TypeCoinBasis.principal
+
+  fun money' n = PAtom (c_app "money" [n])
+  fun issue' n = PAtom (c_app "issue" [n])
+  fun is_banker' k t = PAtom (c_app "is_banker" [k, t])
+
+  (* Alice is the president, or something. *)
+  val president = alice
+
+  val money_sg = FromNamed.convertLogicSg
+        [(* Simple things about manipulating money. *)
+         C (T, "money", num --> EProp),
+         P ("zero_money", money' (TypeCoinBasis.intToLFNumber 0)),
+         P ("redistribute",
+            PForall ("N", num, PForall ("M", num,
+            PForall ("N'", num, PForall ("M'", num,
+            PForall ("Q", num,
+                 nus (plus N M Q) -@ nus (plus N' M' Q) -@
+                 PTensor (money' N, money' M) -@
+                 PTensor (money' N', money' M'))))))),
+
+         (* Introducing money, central banker. *)
+         C (T, "is_banker",  principal --> time --> EProp),
+         C (T, "appointment",  principal --> time --> EProp),
+         P ("appoint",
+            PForall ("K", principal, PForall ("Ti", time,
+              PAffirms (president, PAtom (c_app "appointment" [K, Ti])) -@
+              PAtom (c_app "is_banker" [K, Ti])))),
+
+         C (T, "issue",  num --> EProp),
+         P ("print",
+            PForall ("K", principal, PForall ("Ti", time, PForall ("N", num,
+             PAtom (c_app "is_banker" [K, Ti]) -@
+             PAffirms (K, issue' N) -@
+             PConstrained (money' N, [CBefore Ti])))))
+        ]
+
+
+
+end
+
+
+
 structure ParamThings =
 struct
   val initial_input_txid = "2d93d4c866f3fd7b4738717020d7f750b3f01c425df3b91ffecce6abf5348310"
@@ -348,3 +410,5 @@ struct
   val alice_input_txid = "3a2a766f9b2ca4a240053438a8f973fcaf27ed0f0eec4e76153b60944bb049dc"
   val bob_input_txid = "727b0afde4b0bf560a3369be60253706ade8ec82b69c8e65d12cfab033981069"
 end
+
+

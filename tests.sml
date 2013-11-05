@@ -276,6 +276,11 @@ struct
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 
+  fun checkSignature sg =
+      ((LogicCheck.checkSignature LogicCheck.basis_sg sg)
+       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
+            | (e as LogicCheck.ProofError s) => (println s; raise e))
+
   fun checkChain chain =
       ((TypeCoinCheck.checkChain LogicCheck.basis_sg TxnDict.empty chain)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)

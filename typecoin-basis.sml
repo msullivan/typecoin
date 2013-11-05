@@ -154,6 +154,8 @@ struct
   val zero = c_app' "$" "zero" []
   fun pos_num n = c_app' "$" "pos_num" [n]
 
+  fun plus n1 n2 n3 = c_app' "$" "plus" [n1, n2, n3]
+
   val coord = c_app' "$" "coord" []
   fun mk_coord (id, n) = c_app' "$" "mk_coord" [id, n]
 
