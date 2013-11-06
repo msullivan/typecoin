@@ -76,6 +76,10 @@ structure RpcAction :> RPC_ACTION =
                 (* Blockchain.txByPosition *)
                 Tx (Blockchain.txByPosition (Int64.fromLarge pos))
 
+           | (0w24, Int i) =>
+                (* Blockchain.sizeByNumber *)
+                Int (Blockchain.sizeByNumber i)
+
            | _ =>
                 Method)
 

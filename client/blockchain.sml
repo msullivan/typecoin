@@ -1161,6 +1161,18 @@ structure Blockchain :> BLOCKCHAIN =
          else
             A.sub (thePrimaryFork, num)
 
+      fun sizeByNumber num =
+         if num > !lastblock then
+            raise Absent
+         else
+            let
+               val pos = A.sub (thePrimaryFork, num)
+               val ins = valOf (!theInstream)
+            in
+               MIO.SeekIO.seekIn (ins, pos+36);
+               Word32.toInt (ConvertWord.bytesToWord32L (MIO.inputN (ins, 4)))
+            end
+
       fun blockByNumber num =
          Block.readBlock (dataByNumber num)
 

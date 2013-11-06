@@ -17,6 +17,7 @@ signature BLOCKCHAIN_RPC =
       val hashByNumber : int -> hash
       val dataByNumber : int -> Bytestring.string
       val blockByNumber : int -> Block.block
+      val sizeByNumber : int -> int
       val positionByNumber : int -> pos
       val tx : hash -> Transaction.tx option
       val txDataByNumber : int -> int -> Bytestring.string

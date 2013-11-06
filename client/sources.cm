@@ -64,6 +64,8 @@ is
         utxo.sml
         verify.sig
         verify.sml
+        verifier.sig
+        verifier.sml
         writer.sig
         writer.sml
 

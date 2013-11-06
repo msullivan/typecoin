@@ -36,6 +36,7 @@ signature BLOCKCHAIN =
       val dataByNumber : int -> Bytestring.string
       val blockByNumber : int -> Block.block
       val positionByNumber : int -> pos
+      val sizeByNumber : int -> int
       val utxoByNumber : int -> Utxo.table
 
       val tx : hash -> Transaction.tx option

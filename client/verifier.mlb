@@ -1,4 +1,5 @@
 
         client.mlb
+        verifier.sig
         verifier.sml
         go-verifier.sml

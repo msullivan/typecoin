@@ -87,6 +87,9 @@ structure RPC :> RPC =
             fun positionByNumber i =
                Int64.fromLarge (fromInteger (rpc (0w22, Int i)))
 
+            fun sizeByNumber i =
+               fromInt (rpc (0w24, Int i))
+
             fun tx hash =
                (case rpc (0w16, Bytestring hash) of
                    Bytestring txstr =>
