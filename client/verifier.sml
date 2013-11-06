@@ -5,7 +5,7 @@ structure Verifier =
       structure BC = RPC.Blockchain
 
       fun retry f x =
-         (f x handle RPC.Timeout => (Log.long (fn () => "Timeout"); retry f x))
+         (f x handle RPC.RPC => (Log.long (fn () => ""); retry f x))
          
 
       (* takes a utxo table incorporating up to i, and advances it to j *)

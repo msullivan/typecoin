@@ -35,7 +35,6 @@ signature RPC =
    sig
 
       exception RPC
-      exception Timeout
       exception RemoteError of string
 
       structure Blockchain : BLOCKCHAIN_RPC
