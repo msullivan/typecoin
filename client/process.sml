@@ -479,7 +479,7 @@ structure Process :> PROCESS =
                            | Blockchain.NOEXTEND => ()
                            | Blockchain.EXTEND =>
                                 (case !syncing of
-                                    SOME _ =>
+                                    SOME syncconn =>
                                        let
                                           val blocks = Blockchain.lastBlock ()
                                        in
@@ -488,7 +488,11 @@ structure Process :> PROCESS =
                                           else
                                              ();
           
-                                          if blocks >= Commo.lastBlock conn then
+                                          if
+                                             blocks >= Commo.lastBlock conn
+                                             andalso
+                                             Commo.eq (conn, syncconn)
+                                          then
                                              (* We probably have all the blocks from conn at this point.  It's posssible
                                                 we don't (if there's currently a fork), but even if so, it's no big deal
                                                 to shut down sync early.  The last few blocks will still arrive, they
