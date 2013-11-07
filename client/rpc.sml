@@ -112,6 +112,13 @@ structure RPC :> RPC =
                        handle Reader.SyntaxError => abort ())
                  | _ => abort ())
 
+            fun txDataByNumberAndHash i hash =
+               fromBytestring (rpc (0w25, Cons (Int i, Bytestring hash)))
+
+            fun txByNumberAndHash i hash =
+               (Transaction.readTx (txDataByNumberAndHash i hash)
+                handle Reader.SyntaxError => abort ())
+
          end
 
       structure Process =

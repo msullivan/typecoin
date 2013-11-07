@@ -80,6 +80,10 @@ structure RpcAction :> RPC_ACTION =
                 (* Blockchain.sizeByNumber *)
                 Int (Blockchain.sizeByNumber i)
 
+           | (0w25, Cons (Int i, Bytestring hash)) =>
+                (* Blockchain.txDataByNumberAndHash *)
+                Bytestring (Blockchain.txDataByNumberAndHash i hash)
+
            | _ =>
                 Method)
 

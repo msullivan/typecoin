@@ -1184,41 +1184,56 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       local
-         exception FoundIt of Bytestring.string
-      in
+         exception FoundIt of Transaction.tx * Bytestring.string
       
-         fun txDataByNumber num i =
-            let
-               val blstr = dataByNumber num
-            in
-               (* A little cheaper than parsing to a list and projecting it out. *)
-               Block.traverseBlock
-                  (fn (j, _, _, txstr, ()) => if i = j then raise (FoundIt (BS.string txstr)) else ())
-                  ()
-                  blstr ;
+         fun findByNumber blstr i =
+            (
+            (* A little cheaper than parsing to a list and projecting it out. *)
+            Block.traverseBlock
+               (fn (j, _, tx, txstr, ()) => if i = j then raise (FoundIt (tx, BS.string txstr)) else ())
+               ()
+               blstr ;
    
-               raise Absent
-            end
-            handle FoundIt str => str
+            raise Absent
+            )
 
-      end
+         fun findByHash blstr hash =
+            (
+            (* A little cheaper than parsing to a list and projecting it out. *)
+            Block.traverseBlock
+               (fn (_, _, tx, txstr, ()) =>
+                   let
+                      val txstr' = BS.string txstr
+                   in
+                      if B.eq (hash, SHA256.hashBytes (SHA256.hashBytes txstr')) then
+                         raise (FoundIt (tx, txstr'))
+                      else
+                         ()
+                   end)
+               ()
+               blstr;
+   
+            raise Absent
+            )
 
-      local
-         exception FoundIt of Transaction.tx
       in
+
+         fun txDataByNumber num i =
+            findByNumber (dataByNumber num) i
+            handle FoundIt (_, str) => str
+
          fun txByNumber num i =
-            let
-               val blstr = dataByNumber num
-            in
-               (* A little cheaper than parsing to a list and projecting it out. *)
-               Block.traverseBlock
-                  (fn (j, _, tx, _, ()) => if i = j then raise (FoundIt tx) else ())
-                  ()
-                  blstr ;
-   
-               raise Absent
-            end
-            handle FoundIt str => str
+            findByNumber (dataByNumber num) i
+            handle FoundIt (tx, _) => tx
+
+         fun txDataByNumberAndHash num hash =
+            findByHash (dataByNumber num) hash
+            handle FoundIt (_, str) => str
+            
+         fun txByNumberAndHash num hash =
+            findByHash (dataByNumber num) hash
+            handle FoundIt (tx, _) => tx
+
       end
 
 
