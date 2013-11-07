@@ -44,17 +44,17 @@ structure Verifier :> VERIFIER =
 
 
       fun get i =
-         SOME (BC.positionByNumber i + BC.blockOffsetInRecord, BC.sizeByNumber i)
+         SOME (BC.positionByNumber i)
          handle RPC.RPC => NONE
 
          
-      val empty : int * (Pos.int * int) Queue.queue = (0, Queue.empty)
+      val empty : int * Pos.int Queue.queue = (0, Queue.empty)
 
       (* buffer begins at i *)
-      fun next i buffer =
+      fun next i (buffer as (sz, _)) =
          let
             fun fill (buf as (sz, q)) =
-               if sz > 10 then
+               if sz >= 15 then
                   buf
                else
                   (case get (i+sz) of
@@ -63,7 +63,11 @@ structure Verifier :> VERIFIER =
                     | SOME entry =>
                          fill (sz+1, Queue.insert q entry))
 
-            val (bufsize, queue) = fill buffer
+            val (bufsize, queue) =
+               if sz mod 5 = 0 then
+                  fill buffer
+               else
+                  buffer
          in
             if bufsize > 0 then
                let
@@ -133,11 +137,13 @@ structure Verifier :> VERIFIER =
             ()
          else
             (case get i of
-                SOME (pos, sz) =>
+                SOME pos =>
                    let
-                      val blstr = inputString ins pos sz
+                      val () = MIO.SeekIO.seekIn (ins, pos+36)
+                      val sz = Word32.toInt (ConvertWord.bytesToWord32L (MIO.inputN (ins, 4)))
+                      val blstr = MIO.inputN (ins, sz)
                    in
-                      Utxo.processBlock utxo pos i blstr;
+                      Utxo.processBlock utxo (pos+40) i blstr;
              
                       if i mod 1000 = 0 then
                          Log.long (fn () => "Re-indexed block " ^ Int.toString i)
@@ -169,15 +175,17 @@ structure Verifier :> VERIFIER =
          end
       
 
-      fun verify ins utxo i pos sz =
+      fun verify ins utxo i pos =
          let
-            val blstr = inputString ins pos sz
+            val () = MIO.SeekIO.seekIn (ins, pos+36)
+            val sz = Word32.toInt (ConvertWord.bytesToWord32L (MIO.inputN (ins, 4)))
+            val blstr = MIO.inputN (ins, sz)
          in
             Verify.verifyStoredBlock
                (fn utxo => fn hash =>
                    Option.map (readTx ins) (Utxo.find utxo hash))
                utxo 
-               pos
+               (pos+40)
                i
                (EBlock.fromBytes blstr)
          end
@@ -189,9 +197,9 @@ structure Verifier :> VERIFIER =
             ()
          else 
             let
-               val ((pos, sz), buffer') = next i buffer
+               val (pos, buffer') = next i buffer
             in
-               if verify ins utxo i pos sz then
+               if verify ins utxo i pos then
                   (
                   Log.long (fn () => "Verified "^ Int.toString i );
       
