@@ -12,6 +12,7 @@ is
         blockchain.sml
         chain.sig
         chain.sml
+        chain-bitcoin.sml
         commerce.sig
         commerce.sml
         commo.sig

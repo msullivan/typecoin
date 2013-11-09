@@ -5,6 +5,7 @@
         platform-mlton.sml
         chain.sig
         chain.sml
+        chain-$(CHAIN).sml
         constants.sml
         log.sig
         log.sml
