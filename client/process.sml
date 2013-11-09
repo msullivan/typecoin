@@ -489,9 +489,7 @@ structure Process :> PROCESS =
                                              ();
           
                                           if
-                                             blocks >= Commo.lastBlock conn
-                                             andalso
-                                             Commo.eq (conn, syncconn)
+                                             blocks >= Commo.lastBlock syncconn
                                           then
                                              (* We probably have all the blocks from conn at this point.  It's posssible
                                                 we don't (if there's currently a fork), but even if so, it's no big deal
