@@ -63,4 +63,5 @@ structure TestnetChain :> CHAIN =
    end
 
 
-structure Chain = BitcoinChain
+(*structure Chain = BitcoinChain*)
+structure Chain = TestnetChain
