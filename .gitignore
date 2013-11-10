@@ -1,6 +1,10 @@
 *~
 .cm
 client/data
+client/testnetclient
+client/testnetserver
+client/client
+client/server
 paper/*.aux
 paper/*.bbl
 paper/*.blg
