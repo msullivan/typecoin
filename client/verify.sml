@@ -172,6 +172,7 @@ structure Verify :> VERIFY =
          - correct difficulty
          - block version upgrade rule
          - timestamp not too early (GetMedianTimePast in main.h, called in main.cpp)
+         - block height in coinbase
       *) 
 
 
@@ -237,11 +238,14 @@ structure Verify :> VERIFY =
                You also require that the input script contains only constants, for some reason.
 
                Pay-to-script-hash came into effect at timestamp 1333238400 (April 1, 2012).  Before that time
-               there were (reportedly) transactions that failed the rule.  Thus, we need to be told whether
-               pay-to-script-hash is in effect, which is the purpose of enforceP2sh.
+               there was a transaction (6a26d2ecb67f27d1fa5524763b49029d7106e91e3cc05743073461a719776192)
+               that failed the rule.  Thus, we need to be told whether pay-to-script-hash is in effect, which
+               is the purpose of enforceP2sh.
             *)
             val () =
                if
+                  enforceP2sh
+                  andalso
                   (* recognize pay-to-script-hash *)
                   B.size outScript = 23
                   andalso
@@ -250,11 +254,6 @@ structure Verify :> VERIFY =
                   B.sub (outScript, 1) = 0wx14   (* 20-byte constant *)
                   andalso
                   B.sub (outScript, 22) = 0wx87  (* EQUAL *)
-                  andalso
-                  (* XX I'm curious if there really were any p2sh-resembling transactions before 1333238400 *)
-                  if enforceP2sh
-                     then true
-                     else (not Chain.testnet) andalso (Log.long (fn () => "Unusual: premature pay-to-script-hash"); false)
                then
                   let
                      (* The input script must contain only constants. *)
@@ -354,7 +353,6 @@ structure Verify :> VERIFY =
          orelse
          let
             val lockTime = Word32.toLargeInt lockTime
-            val () = Log.long (fn () => "Unusual: lockTime = "^ LargeInt.toString lockTime)
          in
             (if lockTime < 500000000 then
                 LargeInt.fromInt blockNumber > lockTime
