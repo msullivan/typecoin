@@ -20,7 +20,6 @@ functor CommoFun (structure ConnState : CONN_STATE)
 
       (* precomputed values *)
       val netAddrNull = M.mkNetaddr Address.null
-      val magic = BS.full (ConvertWord.word32ToBytesL Chain.magic)
       val msgVerack = M.writeMessage M.Verack
 
 
@@ -31,7 +30,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
       fun recvMessage fk sk =
          let
             fun k str =
-               if BS.eq (BS.slice (str, 0, SOME 4), magic) then
+               if BS.eq (BS.slice (str, 0, SOME 4), BS.full (#magic (!Chain.theChain))) then
                   let
                      val sz = Word32.toInt (ConvertWord.bytesToWord32SL (BS.slice (str, 16, SOME 4)))
                   in
@@ -293,7 +292,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
       fun contact peer fk sk =
          let
             val addr = Peer.address peer
-            val (sock, already) = Network.connectNB (Address.toInAddr addr, Chain.port)
+            val (sock, already) = Network.connectNB (Address.toInAddr addr, #port (!Chain.theChain))
 
             fun fk' () =
                (
@@ -446,7 +445,7 @@ functor CommoFun (structure ConnState : CONN_STATE)
             numConnections := 0;
 
             (let
-                val insock = Network.listen Chain.port
+                val insock = Network.listen (#port (!Chain.theChain))
              in
                 theInsock := SOME insock;
                 Scheduler.insertRead insock (fn () => answer insock)

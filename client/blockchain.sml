@@ -18,13 +18,6 @@ structure Blockchain :> BLOCKCHAIN =
           structure Integer = Pos)
 
 
-      (* Precomputed data *)
-      val genesisRecord =
-         B.concat [ConvertWord.word32ToBytesL 0w0,
-                   Chain.genesisHash,
-                   ConvertWord.word32ToBytesL (Word32.fromInt (B.size Chain.genesisBlock)),
-                   Chain.genesisBlock]
-
 
       (* For testing purposes only. *)
       val neverDoVerification = false
@@ -779,7 +772,7 @@ structure Blockchain :> BLOCKCHAIN =
             T.reset theTable Constants.blockTableSize;
 
             (* We don't put in a working UTXO table, so we'll have to retrofit one later if one is needed. *)
-            T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.null)));
+            T.insert theTable (#genesisHash (!Chain.theChain)) (ref (Nil (0, Utxo.null)));
 
             A.update (thePrimaryFork, 0, 0);
             Q.reset theDubiousQueue;
@@ -848,8 +841,9 @@ structure Blockchain :> BLOCKCHAIN =
             let
                val () = Log.long (fn () => "Writing index")
 
-               val path = OS.Path.concat (Constants.dataDirectory, Chain.indexFile ^ ".new")
-               val path' = OS.Path.concat (Constants.dataDirectory, Chain.indexFile)
+               val indexFile = #indexFile (!Chain.theChain)
+               val path = OS.Path.concat (Constants.dataDirectory, indexFile ^ ".new")
+               val path' = OS.Path.concat (Constants.dataDirectory, indexFile)
                val outs = BinIO.openOut path
    
                val blocks = !lastblock
@@ -905,7 +899,7 @@ structure Blockchain :> BLOCKCHAIN =
       exception ReadIndex
       fun readIndex () =
          let
-            val path = OS.Path.concat (Constants.dataDirectory, Chain.indexFile)
+            val path = OS.Path.concat (Constants.dataDirectory, #indexFile (!Chain.theChain))
 
             fun esc () = raise ReadIndex
          in
@@ -1007,7 +1001,16 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun initialize () =
          let
-            val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile)
+            val genesisHash = #genesisHash (!Chain.theChain)
+            val genesisBlock = #genesisBlock (!Chain.theChain)
+
+            val genesisRecord =
+               B.concat [ConvertWord.word32ToBytesL 0w0,
+                         genesisHash,
+                         ConvertWord.word32ToBytesL (Word32.fromInt (B.size genesisBlock)),
+                         genesisBlock]
+
+            val path = OS.Path.concat (Constants.dataDirectory, #blockchainFile (!Chain.theChain))
          in
             reset ();
 
@@ -1040,7 +1043,7 @@ structure Blockchain :> BLOCKCHAIN =
                                if B.eq (MIO.inputN (instream, B.size genesisRecord), genesisRecord) then
                                   (
                                   (* Retrofit a UTXO table for block 0.  See below. *)
-                                  T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
+                                  T.insert theTable genesisHash (ref (Nil (0, Utxo.new ())));
                                   Pos.fromInt (B.size genesisRecord)
                                   )
                                else
@@ -1094,7 +1097,7 @@ structure Blockchain :> BLOCKCHAIN =
                      Note that the table does *not* contain the genesis block's transaction.
                      This is Bitcoin's behavior; whether it is intentional or a bug, no one knows.
                   *)
-                  T.insert theTable Chain.genesisHash (ref (Nil (0, Utxo.new ())));
+                  T.insert theTable genesisHash (ref (Nil (0, Utxo.new ())));
 
                   Log.long (fn () => "Created new blockchain file")
                end

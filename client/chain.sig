@@ -2,15 +2,24 @@
 signature CHAIN =
    sig
 
-      val name : string
-      val port : int
-      val testnet : bool
-      val magic : Word32.word
-      val genesisHash : Bytestring.string
-      val genesisBlock : Bytestring.string
-      val seeds : string list
-      val blockchainFile : string
-      val indexFile : string
-      val alertKey : ECDSAp.pubkey
+      type chain =
+         {
+         name : string,
+         port : int,
+         testnet : bool,
+         magic : Bytestring.string,
+         genesisHash : Bytestring.string,
+         genesisBlock : Bytestring.string,
+         seeds : string list,
+         blockchainFile : string,
+         indexFile : string,
+         alertKey : ECDSAp.pubkey
+         }
+
+      val bitcoin : chain
+      val testnet : chain
+
+      (* Don't alter this once the program is running.  Defaults to bitcoin. *)
+      val theChain : chain ref
 
    end

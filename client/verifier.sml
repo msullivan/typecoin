@@ -220,7 +220,7 @@ structure Verifier :> VERIFIER =
             ()
          else
             let
-               val path = OS.Path.concat (Constants.dataDirectory, Chain.blockchainFile) 
+               val path = OS.Path.concat (Constants.dataDirectory, #blockchainFile (!Chain.theChain))
                val () = Log.initialize logfile
                val ins = MIO.openIn path
                val utxo = seekUtxo ins (start-1)

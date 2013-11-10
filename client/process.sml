@@ -256,7 +256,7 @@ structure Process :> PROCESS =
                           (fn (_, { services, address, port }) =>
                               not (Address.eq (address, Address.null)
                                    orelse
-                                   port <> Chain.port
+                                   port <> #port (!Chain.theChain)
                                    orelse
                                    Word64.andb (services, M.serviceNetwork) = 0w0)) l)
                       
@@ -528,7 +528,7 @@ structure Process :> PROCESS =
                           (Time.toSeconds timestamp,
                            { services = Message.serviceNetwork,
                              address = addr,
-                             port = Chain.port }))
+                             port = #port (!Chain.theChain) }))
                       (Peer.relayable ())
                 in
                    Commo.sendMessage conn (M.Addr l)
@@ -566,7 +566,7 @@ structure Process :> PROCESS =
                          OS.SysErr _ => NONE
                        | Overflow => NONE
                 in
-                   if ECDSAp.verify (EllipticCurveParams.secp256k1, Chain.alertKey, dhash payload, ECDERp.decodeSg sg) then
+                   if ECDSAp.verify (EllipticCurveParams.secp256k1, #alertKey (!Chain.theChain), dhash payload, ECDERp.decodeSg sg) then
                       let
                          val alert = Reader.readfull Message.parseAlert payload
                       in

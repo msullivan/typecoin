@@ -26,7 +26,6 @@ structure Message :> MESSAGE =
 
 
       (* precomputed values *)
-      val magic = ConvertWord.word32ToBytesL Chain.magic
       val zeros = Word8Vector.tabulate (32, (fn _ => 0w0))
       val nullhash = B.substring (zeros, 0, 32)
 
@@ -100,7 +99,7 @@ structure Message :> MESSAGE =
 
 
       fun mkNetaddr (addr : Address.addr) =
-         { services = theServices, address = addr, port = Chain.port }
+         { services = theServices, address = addr, port = #port (!Chain.theChain) }
 
       fun writeNetAddr ({ services, address, port }:netaddr) =
          (* services *)
@@ -350,7 +349,7 @@ structure Message :> MESSAGE =
             val payload' = W.write payload
          in
             W.write
-            (W.bytes magic                                  (* magic *)
+            (W.bytes (#magic (!Chain.theChain))             (* magic *)
              >>>
              W.bytes command                                (* command *)
              >>>

@@ -149,7 +149,7 @@ structure Peer :> PEER =
             if !queuedPeers < Constants.minPeers then
                (
                Log.long (fn () => "DNS seeding");
-               reseed (Time.- (Time.now (), Constants.dnsPenalty)) (map Network.dns Chain.seeds) []
+               reseed (Time.- (Time.now (), Constants.dnsPenalty)) (map Network.dns (#seeds (!Chain.theChain))) []
                )
             else
                ();

@@ -51,7 +51,7 @@ structure Log :> LOG =
 
          in
             theOutstream := outs;
-            long (fn () => Chain.name ^ " client");
+            long (fn () => #name (!Chain.theChain) ^ " client");
             long (fn () => Date.toString (Date.fromTimeLocal (Time.now ())))
          end
 
