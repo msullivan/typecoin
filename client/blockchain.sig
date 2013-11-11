@@ -52,4 +52,6 @@ signature BLOCKCHAIN =
       val writeIndex : unit -> unit
       val close : unit -> unit
 
+      val neverVerify : bool ref
+
    end

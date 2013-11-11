@@ -19,8 +19,7 @@ structure Blockchain :> BLOCKCHAIN =
 
 
 
-      (* For testing purposes only. *)
-      val neverDoVerification = false
+      val neverVerify = ref false
 
 
       (* I/O *)
@@ -510,7 +509,7 @@ structure Blockchain :> BLOCKCHAIN =
          we'll fail.
       *)
       fun resumeVerification () =
-         if neverDoVerification orelse !verification then
+         if !neverVerify orelse !verification then
             ()
          else
             let
@@ -1001,6 +1000,12 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun initialize () =
          let
+            val () =
+               if !neverVerify then
+                  Log.long (fn () => "Verification disabled!")
+               else
+                  ()
+
             val genesisHash = #genesisHash (!Chain.theChain)
             val genesisBlock = #genesisBlock (!Chain.theChain)
 

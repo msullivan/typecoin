@@ -215,6 +215,17 @@ structure Verifier :> VERIFIER =
             end
 
 
+      fun computeUtxo i =
+         let
+            val path = OS.Path.concat (Constants.dataDirectory, #blockchainFile (!Chain.theChain))
+            val ins = MIO.openIn path
+            val utxo = seekUtxo ins i
+         in
+            MIO.closeIn ins;
+            utxo
+         end
+
+
       fun verifier start finish logfile =
          if start < 1 orelse finish < start then
             ()
