@@ -1192,13 +1192,13 @@ structure Blockchain :> BLOCKCHAIN =
 
 
       local
-         exception FoundIt of Transaction.tx * Bytestring.string
+         exception FoundIt of int * Transaction.tx * Bytestring.string
       
          fun findByNumber blstr i =
             (
             (* A little cheaper than parsing to a list and projecting it out. *)
             Block.traverseBlock
-               (fn (j, _, tx, txstr, ()) => if i = j then raise (FoundIt (tx, BS.string txstr)) else ())
+               (fn (j, _, tx, txstr, ()) => if i = j then raise (FoundIt (j, tx, BS.string txstr)) else ())
                ()
                blstr ;
    
@@ -1209,12 +1209,12 @@ structure Blockchain :> BLOCKCHAIN =
             (
             (* A little cheaper than parsing to a list and projecting it out. *)
             Block.traverseBlock
-               (fn (_, _, tx, txstr, ()) =>
+               (fn (j, _, tx, txstr, ()) =>
                    let
                       val txstr' = BS.string txstr
                    in
                       if B.eq (hash, SHA256.hashBytes (SHA256.hashBytes txstr')) then
-                         raise (FoundIt (tx, txstr'))
+                         raise (FoundIt (j, tx, txstr'))
                       else
                          ()
                    end)
@@ -1228,19 +1228,23 @@ structure Blockchain :> BLOCKCHAIN =
 
          fun txDataByNumber num i =
             findByNumber (dataByNumber num) i
-            handle FoundIt (_, str) => str
+            handle FoundIt (_, _, str) => str
 
          fun txByNumber num i =
             findByNumber (dataByNumber num) i
-            handle FoundIt (tx, _) => tx
+            handle FoundIt (_, tx, _) => tx
 
          fun txDataByNumberAndHash num hash =
             findByHash (dataByNumber num) hash
-            handle FoundIt (_, str) => str
+            handle FoundIt (_, _, str) => str
             
          fun txByNumberAndHash num hash =
             findByHash (dataByNumber num) hash
-            handle FoundIt (tx, _) => tx
+            handle FoundIt (_, tx, _) => tx
+
+         fun txIndexByNumberAndHash num hash =
+            findByHash (dataByNumber num) hash
+            handle FoundIt (j, _, _) => j
 
       end
 

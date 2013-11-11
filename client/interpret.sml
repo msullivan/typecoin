@@ -432,9 +432,9 @@ structure Interpret :> INTERPRET =
 
                        | S.Size =>
                             let
-                               val (v, stack') = dest stack
+                               val (v, _) = dest stack
                             in
-                               run' cont (intToValue (IntInf.fromInt (B.size v)) :: stack') altstack stksz (ops+1)
+                               run' cont (intToValue (IntInf.fromInt (B.size v)) :: stack) altstack (stksz+1) (ops+1)
                             end
      
                        | S.Invert =>

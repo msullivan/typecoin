@@ -56,6 +56,13 @@ signature UTXO =
       val processBlock : table -> pos -> int -> Bytestring.string -> unit
 
 
+      (* processBlockUpTo table pos blockNumber blockstr index
+         
+         As processBlock, but processes up to transaction index-1.
+      *)
+      val processBlockUpTo : table -> pos -> int -> Bytestring.string -> int -> unit
+
+
       val find : table -> hash -> pos option
 
       val writeTables : BinIO.outstream -> table -> unit

@@ -25,6 +25,7 @@ signature BLOCKCHAIN_RPC =
       val txByPosition : pos -> Transaction.tx
       val txDataByNumberAndHash : int -> hash -> Bytestring.string
       val txByNumberAndHash : int -> hash -> Transaction.tx
+      val txIndexByNumberAndHash : int -> hash -> int
    end
 
 
