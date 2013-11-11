@@ -45,6 +45,7 @@ signature BLOCKCHAIN =
       val txByPosition : pos -> Transaction.tx
       val txDataByNumberAndHash : int -> hash -> Bytestring.string
       val txByNumberAndHash : int -> hash -> Transaction.tx
+      val txIndexByNumberAndHash : int -> hash -> int
 
       (* Starts with verification suspended. *)
       val initialize : unit -> unit

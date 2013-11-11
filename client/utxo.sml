@@ -327,6 +327,28 @@ structure Utxo :> UTXO =
             blockstr
 
 
+      local exception Done in
+
+      fun processBlockUpTo table blockpos blocknumber blockstr index =
+         Block.traverseBlock
+            (fn (i, pos, {inputs, outputs, ...}, txstr, ()) =>
+                if i = 0 then
+                   (* Don't process the inputs for coinbase transactions. *)
+                   insertCoinbase table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs) blocknumber
+                else if i = index then
+                   raise Done
+                else
+                   let in
+                      app (fn {from, ...} => (spend table maxint from; ())) inputs;
+                      insert table (dhash txstr) (blockpos + Int64.fromInt pos) (length outputs)
+                   end)
+            ()
+            blockstr
+         handle Done => ()
+
+      end
+
+
       fun find table hash =
          (case T.find table hash of
              NONE => NONE
