@@ -29,7 +29,7 @@ structure RpcClient :> RPC_CLIENT =
       fun connect () =
          let
             val sock =
-               Network.connect (loopback, Constants.rpcPort)
+               Network.connect (loopback, !Constants.rpcPort)
                handle Network.NetworkException _ => raise RPC
 
             val sd = Socket.sockDesc sock

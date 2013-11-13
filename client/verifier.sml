@@ -85,7 +85,14 @@ structure Verifier :> VERIFIER =
 
       fun saveUtxo utxo i =
          let
+            val name =
+               if #testnet (!Chain.theChain) then
+                  "testutxo"
+               else
+                  "utxo"
+
             val path = OS.Path.concat (Constants.dataDirectory, "utxo" ^ Int.toString i)
+                  
             val outs = BinIO.openOut path
          in
             Utxo.writeTables outs utxo;
