@@ -103,7 +103,6 @@ structure Signature :> SIGNATURE =
                         List.nth (inputs, i)
                         handle Subscript => raise Munge
                   in
-                     Log.long (fn () => "Unusual: ANYONE_CAN_PAY");
                      [{from=from, script=prevScript, sequence=sequence}]
                   end
                else
@@ -133,10 +132,7 @@ structure Signature :> SIGNATURE =
                       (* For hash class NONE, we delete all the outputs.  This means that anyone
                          can change the transaction's outputs.  (Why would you ever want this?)
                       *)
-                      (
-                      Log.long (fn () => "Unusual: HASH_NONE");
                       []
-                      )
 
                  | HashSingle =>
                       (* For hash class SINGLE, we (in effect) delete all the outputs except the
@@ -148,10 +144,7 @@ structure Signature :> SIGNATURE =
                          simply deleted.  However, the outputs before i are set to "Null", where
                          "Null" is an empty script and amount = -1.
                       *)
-                      (
-                      Log.long (fn () => "Unusual: HASH_SINGLE");
-                      mungeOutputsSingle 0 outputs
-                      ))
+                      mungeOutputsSingle 0 outputs)
          in
             { version=version, inputs=inputs', outputs=outputs', lockTime=lockTime }
          end

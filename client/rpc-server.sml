@@ -133,7 +133,7 @@ structure RpcServer :> RPC_SERVER =
 
       fun initialize () =
          let
-            val insock = Network.listen Constants.rpcPort
+            val insock = Network.listen (!Constants.rpcPort)
          in
             theInsock := SOME insock;
             Scheduler.insertRead insock (fn () => answer insock)

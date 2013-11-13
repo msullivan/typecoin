@@ -186,7 +186,7 @@ structure Constants =
       (* RPC constants *)
 
       (* Do RPC over this port. *)
-      val rpcPort = 87678
+      val rpcPort = ref 87678
 
       (* Wait this long for an rpc response. *)
       val rpcTimeout = Time.fromSeconds 15

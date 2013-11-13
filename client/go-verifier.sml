@@ -10,6 +10,7 @@ structure Go =
       
       val flags =
          [A.full "-testnet" (A.exec (fn () => Chain.theChain := Chain.testnet)),
+          A.full "-rpcport" (A.assign Constants.rpcPort A.int),
           A.prefix' "-" (A.call (fn flag => (print ("Unknown option "^flag^"\n"); raise A.Usage)))]
       
       val parser =
@@ -26,7 +27,7 @@ structure Go =
          A.exec (fn () => Verifier.verifier first last logfile)
          )))
 
-      val usage = "Usage: verifier [-testnet] first-block last-block log-file\n"
+      val usage = "Usage: verifier [-testnet] [-rpcport <number>] first-block last-block log-file\n"
 
       val () =
          A.parse parser usage (CommandLine.arguments ())
