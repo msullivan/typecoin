@@ -46,15 +46,20 @@ structure Verifier :> VERIFIER =
       fun get i =
          SOME (BC.positionByNumber i)
          handle RPC.RPC => NONE
+              | RPC.RemoteError err =>
+                   (
+                   Log.long (fn () => "Remote error: "^ err);
+                   NONE
+                   )
 
          
       val empty : int * Pos.int Queue.queue = (0, Queue.empty)
 
       (* buffer begins at i *)
-      fun next i (buffer as (sz, _)) =
+      fun next i (buffer as (sz, _)) limit =
          let
             fun fill (buf as (sz, q)) =
-               if sz >= 30 then
+               if sz >= 30 orelse i+sz >= limit then
                   buf
                else
                   (case get (i+sz) of
@@ -78,7 +83,7 @@ structure Verifier :> VERIFIER =
             else
                (
                OS.Process.sleep (Time.fromSeconds 30);
-               next i buffer
+               next i buffer limit
                )
          end
 
@@ -204,7 +209,7 @@ structure Verifier :> VERIFIER =
             ()
          else 
             let
-               val (pos, buffer') = next i buffer
+               val (pos, buffer') = next i buffer j
             in
                if verify ins utxo i pos then
                   (
