@@ -666,7 +666,8 @@ structure Interpret :> INTERPRET =
                             end
 
                        | S.Sha1 =>
-                            raise (Fail "SHA1 unimplemented")
+                            (* SHA1 unimplemented *)
+                            raise Reject
 
                        | S.Hash256 => 
                             let
