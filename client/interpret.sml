@@ -666,8 +666,11 @@ structure Interpret :> INTERPRET =
                             end
 
                        | S.Sha1 =>
-                            (* SHA1 unimplemented *)
-                            raise Reject
+                            let
+                               val (v, stack') = dest stack
+                            in
+                               run' cont (SHA1.hashBytes v :: stack') altstack stksz (ops+1)
+                            end
 
                        | S.Hash256 => 
                             let
