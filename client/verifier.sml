@@ -59,7 +59,7 @@ structure Verifier :> VERIFIER =
       fun next i (buffer as (sz, _)) limit =
          let
             fun fill (buf as (sz, q)) =
-               if sz >= 30 orelse i+sz >= limit then
+               if sz >= 30 orelse i+sz > limit then
                   buf
                else
                   (case get (i+sz) of
