@@ -15,6 +15,9 @@ structure Network :> NETWORK =
       exception NetworkException of string * exn
 
 
+      fun close sock = Socket.close sock handle OS.SysErr _ => ()
+
+
       fun listen port =
          let
             val s : psock = INetSock.TCP.socket ()
@@ -41,7 +44,12 @@ structure Network :> NETWORK =
             val s : asock = INetSock.TCP.socket ()
          in
             Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
-            Socket.connect (s, saddr);
+            (Socket.connect (s, saddr)
+             handle exn =>
+                (
+                close s;
+                raise exn
+                ));
             s
          end handle exn => raise (NetworkException ("connect", exn))
 
@@ -54,9 +62,6 @@ structure Network :> NETWORK =
             Log.long (fn () => "Connecting to " ^ NetHostDB.toString addr);
             (s, Socket.connectNB (s, saddr))
          end handle exn => raise (NetworkException ("connectNB", exn))
-
-
-      fun close sock = Socket.close sock handle OS.SysErr _ => ()
 
 
       fun sendVec (sock, v) =
