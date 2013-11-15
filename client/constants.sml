@@ -142,6 +142,12 @@ structure Constants =
       (* Keep relayed transactions in the pool this long. *)
       val poolRetentionTime = Time.fromSeconds (10 * 60)          (* 10 minutes *)
 
+      (* Send a block inventory of this size. *)
+      val blockInventorySize = 100
+
+      (* Respond to Getblocks requests. *)
+      val answerGetblocks = ref true
+
 
 
       (*** Verification constants ***)

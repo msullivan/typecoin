@@ -37,6 +37,7 @@ structure Process :> PROCESS =
             you have that is on the main fork.  
 
          2. The remote peer responds with an Inv message containing 500 block hashes.
+            (We do a smaller one.)
 
          3. You send a Getdata message requesting those 500 blocks, and the remote sends you the
             blocks.
@@ -91,7 +92,7 @@ structure Process :> PROCESS =
       fun makeBlockInv conn curr =
          let
             val last = Blockchain.lastBlock ()
-            val stop = Int.min (curr+500, last)
+            val stop = Int.min (curr+Constants.blockInventorySize, last)
 
             fun invloop acc num =
                if num <= curr then
@@ -380,29 +381,34 @@ structure Process :> PROCESS =
            | M.Getblocks ({hashes, ...}:M.getblocks) =>
                 let
                    val () = Log.short "B"
-
-                   fun findPrimaryBlock l =
-                      (case l of
-                          nil =>
-                             0
-                        | hash :: rest =>
-                             if Blockchain.blockPrimary hash then
-                                Blockchain.blockNumber hash
-                             else
-                                findPrimaryBlock rest)
-                                
-                   (* First recognized block on their list, start with the next block in the chain. *)
-                   val first = findPrimaryBlock hashes
-
-                   val invs = makeBlockInv conn first
                 in
-                   (case invs of
-                       [] => ()
-                     | _ :: _ =>
-                          let in
-                             Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to "^ Address.toString (Peer.address (Commo.peer conn)));
-                             Commo.sendMessage conn (M.Inv invs)
-                          end)
+                   if !Constants.answerGetblocks then
+                      let
+                         fun findPrimaryBlock l =
+                            (case l of
+                                nil =>
+                                   0
+                              | hash :: rest =>
+                                   if Blockchain.blockPrimary hash then
+                                      Blockchain.blockNumber hash
+                                   else
+                                      findPrimaryBlock rest)
+                                      
+                         (* First recognized block on their list, start with the next block in the chain. *)
+                         val first = findPrimaryBlock hashes
+      
+                         val invs = makeBlockInv conn first
+                      in
+                         (case invs of
+                             [] => ()
+                           | _ :: _ =>
+                                let in
+                                   Log.long (fn () => "Sending "^ Int.toString (length invs) ^" blocks to "^ Address.toString (Peer.address (Commo.peer conn)));
+                                   Commo.sendMessage conn (M.Inv invs)
+                                end)
+                      end
+                   else
+                      ()
                 end
 
 
