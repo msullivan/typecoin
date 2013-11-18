@@ -185,10 +185,11 @@ struct
          | PConstrained (A, _) => thawedProp A
 
          (* Not totally sure about whether we want to permit these. *)
-         | POplus (A, B) => raise Frozen "oplus not supported"
-         | POne => raise Frozen "one is silly"
-         | PTop => raise Frozen "top is silly"
-         | PExists (_, _, A) => raise Frozen "exists not supported"
+         | POplus (A, B) => (thawedProp A; thawedProp B)
+         | PExists (_, t, A) => (TypeCheckLF.thawedType t; thawedProp A)
+         (* These are really silly, but they aren't wrong or anything.... *)
+         | POne => ()
+         | PTop => ()
 
          | PZero => raise Frozen "can't introduce rule for zero!"
          | PAffirms _ => raise Frozen "can't introduce rule for an affirmation!"
@@ -196,6 +197,7 @@ struct
 
 
   val mismatched_props_debug = ref (POne, POne)
+
 
   (* should we catch TypeErrors and raise proof errors? *)
   fun propEquality A A' =

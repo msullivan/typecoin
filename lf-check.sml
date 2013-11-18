@@ -167,7 +167,7 @@ in
   exception TypeError of string
 
 
-  (* XXX: do simple typechecking. *)
+  (* XXX: do simple typechecking! otherwise we can loop, right? *)
 
   fun requireKind exp =
       if exp = EKind then () else raise TypeError "expected kind"
