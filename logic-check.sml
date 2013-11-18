@@ -250,81 +250,6 @@ struct
     | projIdx R (_, x) = x
 
 
-
-  fun checkLargeElim sg checkProof checkBody (D as (ctx, res)) l =
-      let val checkProp = checkProp sg
-          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
-      in
-      (case l of
-           LTensorLet (M1, v1, v2, E2) =>
-           let val (A', res') = checkProof D M1
-               val (A1, A2) =
-                   (case A' of PTensor As => As
-                             | _ => raise ProofError "tensor let of non tensor")
-               val D' = addResource
-                            (addResource (ctx, res') v1 A1)
-                            v2 A2
-           in discharge v1
-              (discharge v2
-               (checkBody D' E2))
-           end
-
-         | LBangLet (M1, v, E2) =>
-           let val (bA1', res') = checkProof D M1
-               val A1' = (case bA1' of PBang A1' => A1'
-                                     | _ => raise ProofError "let bang of non bang")
-               val ctx' = Ctx.insert ctx v A1' true
-           in checkBody (ctx', res') E2 end
-
-         | LCase (M, v1, E1, v2, E2) =>
-           let val (A', res') = checkProof D M
-               val (A1, A2) =
-                   (case A' of POplus As => As
-                             | _ => raise ProofError "case of non oplus")
-
-               val D' = (ctx, res')
-               val (C1, res1) = discharge v1
-                                (checkBody (addResource D' v1 A1) E1)
-               val (C2, res2) = discharge v2
-                                (checkBody (addResource D' v2 A2) E2)
-               val () = requireResourceEquality res1 res2
-               val () = propEquality C1 C2
-           in (C1, res1) end
-
-         | LOneLet (M1, E2) =>
-           let val (A1, res') = checkProof D M1
-               val () = propEquality A1 POne
-           in checkBody (ctx, res') E2 end
-
-         | LUnpack (M1, _, v, E2) =>
-           let val (etA, res') = checkProof D M1
-               val (_, t, A) =
-                   (case etA of PExists x => x
-                              | _ => raise ProofError "unpack of non exists")
-               val ctx' = Ctx.extendLF ctx t
-               val D' = addResource (ctx', res') v A
-               val (C, res'') = checkBody D' E2
-
-               (* check that the result prop doesn't mention the variable *)
-               val () = checkProp ctx C
-           in (C, res'') end
-
-         | LBind (M1, v, E2) =>
-           let val (affkA, res') = checkProof D M1
-               val (k, A) =
-                   (case affkA of PAffirms x => x
-                                | _ => raise ProofError "bind of non affirms")
-               val D' = addResource (ctx, res') v A
-               val (affkB, res'') = discharge v (checkBody D' E2)
-               val (k', B) =
-                   (case affkB of PAffirms x => x
-                                | _ => raise ProofError "bind must result in affirms")
-               (* principals must match *)
-               val () = TypeCheckLF.exprEquality k k'
-           in (PAffirms (k, B), res'') end)
-      end
-
-
   fun checkProof sg (D as (ctx, res)) M =
       let val checkProof = checkProof sg
           val checkProp = checkProp sg
@@ -429,7 +354,72 @@ struct
                val (A, res') = checkProof D M
            in (PAffirms (k, A), res') end
 
-         | MLarge l => checkLargeElim sg checkProof checkProof D l
+         | MTensorLet (M1, v1, v2, E2) =>
+           let val (A', res') = checkProof D M1
+               val (A1, A2) =
+                   (case A' of PTensor As => As
+                             | _ => raise ProofError "tensor let of non tensor")
+               val D' = addResource
+                            (addResource (ctx, res') v1 A1)
+                            v2 A2
+           in discharge v1
+              (discharge v2
+               (checkProof D' E2))
+           end
+
+         | MBangLet (M1, v, E2) =>
+           let val (bA1', res') = checkProof D M1
+               val A1' = (case bA1' of PBang A1' => A1'
+                                     | _ => raise ProofError "let bang of non bang")
+               val ctx' = Ctx.insert ctx v A1' true
+           in checkProof (ctx', res') E2 end
+
+         | MCase (M, v1, E1, v2, E2) =>
+           let val (A', res') = checkProof D M
+               val (A1, A2) =
+                   (case A' of POplus As => As
+                             | _ => raise ProofError "case of non oplus")
+
+               val D' = (ctx, res')
+               val (C1, res1) = discharge v1
+                                (checkProof (addResource D' v1 A1) E1)
+               val (C2, res2) = discharge v2
+                                (checkProof (addResource D' v2 A2) E2)
+               val () = requireResourceEquality res1 res2
+               val () = propEquality C1 C2
+           in (C1, res1) end
+
+         | MOneLet (M1, E2) =>
+           let val (A1, res') = checkProof D M1
+               val () = propEquality A1 POne
+           in checkProof (ctx, res') E2 end
+
+         | MUnpack (M1, _, v, E2) =>
+           let val (etA, res') = checkProof D M1
+               val (_, t, A) =
+                   (case etA of PExists x => x
+                              | _ => raise ProofError "unpack of non exists")
+               val ctx' = Ctx.extendLF ctx t
+               val D' = addResource (ctx', res') v A
+               val (C, res'') = checkProof D' E2
+
+               (* check that the result prop doesn't mention the variable *)
+               val () = checkProp ctx C
+           in (C, res'') end
+
+         | MBind (M1, v, E2) =>
+           let val (affkA, res') = checkProof D M1
+               val (k, A) =
+                   (case affkA of PAffirms x => x
+                                | _ => raise ProofError "bind of non affirms")
+               val D' = addResource (ctx, res') v A
+               val (affkB, res'') = discharge v (checkProof D' E2)
+               val (k', B) =
+                   (case affkB of PAffirms x => x
+                                | _ => raise ProofError "bind must result in affirms")
+               (* principals must match *)
+               val () = TypeCheckLF.exprEquality k k'
+           in (PAffirms (k, B), res'') end
 
       )
 

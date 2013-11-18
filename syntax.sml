@@ -134,24 +134,6 @@ struct
 
   datatype idx = L | R
 
-  (* This is a bit annoying. We have to parameterize over 'proof and 'body,
-   * even though 'proof will always be proof, because interactions between
-   * the lack of polymorphic recursion and the mutual dependency between
-   * large_elim and proof. *)
-  datatype ('proof, 'body) large_elim =
-           LTensorLet of 'proof * var * var * 'body
-         | LBangLet of 'proof * var * 'body
-         | LOneLet of 'proof * 'body
-         | LCase of 'proof * var * 'body * var * 'body
-         (* Unpack is a bit funny inside expressions,
-          * because it means that our constraints contain variables,
-          * which would be bad.
-          * Eh, that's fine, though. It just fails the constraint check.
-          *)
-         | LUnpack of 'proof * LF.binding * var * 'body
-         | LBind of 'proof * var * 'body
-
-
   datatype proof = MRule of const
                  | MVar of var
                  | MBang of proof
@@ -174,34 +156,15 @@ struct
                  (* and affirmation stuff; proof terms are monadic *)
                  | MReturn of principal * proof
                  (* All large elims packed up in an MLarge. *)
-                 | MLarge of (proof, proof) large_elim
 
-  val MTensorLet = MLarge o LTensorLet
-  val MBangLet = MLarge o LBangLet
-  val MOneLet = MLarge o LOneLet
-  val MCase = MLarge o LCase
-  val MUnpack = MLarge o LUnpack
-  val MBind = MLarge o LBind
-(*
-  (* Proof expressions for the top level thing *)
-  datatype pexp =
-         (* Include regular proofs *)
-           ERet of proof
-         (* A sequencing operation for pexps. *)
-         | ELet of pexp * var * pexp
+                 (* Large elims *)
+                 | MTensorLet of proof * var * var * proof
+                 | MBangLet of proof * var * proof
+                 | MOneLet of proof * proof
+                 | MCase of proof * var * proof * var * proof
+                 | MUnpack of proof * LF.binding * var * proof
+                 | MBind of proof * var * proof
 
-         | EOpen of proof
-
-         (* Inclusion of all the large elim forms. *)
-         | ELarge of (proof, pexp) large_elim
-
-  val ETensorLet = ELarge o LTensorLet
-  val EBangLet = ELarge o LBangLet
-  val EOneLet = ELarge o LOneLet
-  val ECase = ELarge o LCase
-  val EUnpack = ELarge o LUnpack
-  val EBind = ELarge o LBind
-*)
   (* ????????????? *)
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring
