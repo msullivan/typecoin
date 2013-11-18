@@ -35,9 +35,10 @@ struct
   fun substPropMain skip substs lift loc' loc prop =
       let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc' loc
           val subst = substPropMain skip substs lift loc' loc
-
+(*
           fun substConstraint (CBefore e) = CBefore (lfsubst e)
             | substConstraint (CUnrevoked e) = CUnrevoked (lfsubst e)
+*)
       in
       (case prop of
            PAtom p => PAtom (lfsubst p)
@@ -56,9 +57,9 @@ struct
          | PExists (b, t, A) =>
            PExists (b, lfsubst t,
                     substPropMain (skip+1) substs lift loc' loc A)
-
+(*
          | PConstrained (A, cs) => PConstrained (subst A, map substConstraint cs)
-
+*)
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
          | PReceipt (k, A) =>
@@ -133,9 +134,10 @@ struct
       let val check = checkProp sg ctx
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
 
+(*
           fun checkConstraint (CBefore e) = checkLF e TypeCoinBasis.number
             | checkConstraint (CUnrevoked e) = checkLF e TypeCoinBasis.coord
-
+*)
 
       in
       (case prop of
@@ -155,11 +157,11 @@ struct
          | PExists (b, t, A) =>
            (checkLF t LF.EType;
             checkProp sg (Ctx.extendLF ctx t) A)
-
+(*
          | PConstrained (A, cs) =>
            (check A;
             app checkConstraint cs)
-
+*)
          | PAffirms (k, A) =>
            (checkLF k TypeCoinBasis.principal;
             check A)
@@ -182,7 +184,7 @@ struct
          | PTensor (A, B) => (thawedProp A; thawedProp B)
          | PWith (A, B) => (thawedProp A; thawedProp B)
          | PForall (_, _, A) => thawedProp A
-         | PConstrained (A, _) => thawedProp A
+(*         | PConstrained (A, _) => thawedProp A*)
 
          (* Not totally sure about whether we want to permit these. *)
          | POplus (A, B) => (thawedProp A; thawedProp B)
@@ -432,48 +434,14 @@ struct
       )
 
       end
-
+(*
   fun convertConstraint (CBefore e) =
       (RCBefore (TypeCoinBasis.lfNumToInt e)
        handle _ => raise ProofError "before constraint invalid")
     | convertConstraint (CUnrevoked e) =
       (RCUnrevoked (TypeCoinBasis.lfCoordToCoord e)
        handle _ => raise ProofError "unrevoked constraint invalid")
-
-
-  (* Most of these cases are annoying duplications of things in checkProof. *)
-  (* The handling of resources is more general that it needs to be, given
-   * the heavily restricted form of proof expressions. This is so that we could
-   * copy/paste the cases from checkProof.
-   * Oh, wait, no, I wound up adding a general pexp let, so we need it.
-   *
-   * Sigh. This is not elegant.
-   *)
-  fun checkProofExp checkConstraint sg (D as (ctx, res)) E =
-      let val checkProof = checkProof sg
-          val checkProofExp = checkProofExp checkConstraint sg
-          val checkProp = checkProp sg
-          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
-      in
-      (case E of
-           ERet M => checkProof D M
-         | ELet (E1, v, E2) =>
-           let val (A1', res') = checkProofExp D E1
-               val ctx' = Ctx.insert ctx v A1' true
-           in discharge v
-               (checkProofExp (ctx', res') E2)
-           end
-
-         | EOpen M =>
-           let val (A', res') = checkProof D M
-               val (A, cs) = (case A' of PConstrained xs => xs
-                                       | _ => raise ProofError "open of a non-constrained")
-               val () = app (checkConstraint o convertConstraint) cs
-           in (A, res') end
-
-         | ELarge l => checkLargeElim sg checkProof checkProofExp D l
-      )
-      end
+*)
 
   fun inferOuter checkFn sg G M =
       let val res = foldl (fn (v, res) => VarSet.insert res v)
@@ -485,7 +453,6 @@ struct
       in A end
 
   val inferProofOuter = inferOuter checkProof
-  fun inferExpOuter checkConstraint = inferOuter (checkProofExp checkConstraint)
 
   fun checkRuleSgEntry sg (id, prop) =
       (checkProp sg Ctx.empty prop;

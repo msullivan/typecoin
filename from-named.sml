@@ -28,8 +28,12 @@ struct
          | EApp (h, s) => EApp (convertHead G h, convertSpine G s))
   and convertSpine G s = LF.mapSpine (convertExp G) s
 
-  fun convertConstraint G (CBefore e) = CBefore (convertExp G e)
-    | convertConstraint G (CUnrevoked e) = CUnrevoked (convertExp G e)
+  fun convertCondition G (CBefore e) = CBefore (convertExp G e)
+    | convertCondition G (CSpent e) = CSpent (convertExp G e)
+    | convertCondition G CTrue = CTrue
+    | convertCondition G (CNot c) = CNot (convertCondition G c)
+    | convertCondition G (CAnd (c1, c2)) =
+      CAnd (convertCondition G c1, convertCondition G c2)
 
   fun convertProp G prop =
       let val convert = convertProp G
@@ -55,8 +59,8 @@ struct
 
          | PAffirms (k, A) =>
            PAffirms (lfconvert k, convert A)
-         | PConstrained (A, cs) =>
-           PConstrained (convert A, map (convertConstraint G) cs)
+(*         | PConstrained (A, cs) =>
+           PConstrained (convert A, map (convertConstraint G) cs)*)
          | PReceipt (k, A) =>
            PReceipt (lfconvert k, convert A))
       end
@@ -99,19 +103,6 @@ struct
          | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)
          | MReturn (k, M) => MReturn (lfconvert k, convert M)
          | MLarge l => MLarge (convertLargeElim G convertProof convertProof l)
-      )
-      end
-
-  fun convertProofExp G exp =
-      let val convertp = convertProof G
-          val convert = convertProofExp G
-          val lfconvert = convertExp G
-      in
-      (case exp of
-           ERet M => ERet (convertp M)
-         | ELet (E1, v, E2) => ELet (convert E1, v, convert E2)
-         | EOpen M => EOpen (convertp M)
-         | ELarge l => ELarge (convertLargeElim G convertProof convertProofExp l)
       )
       end
 

@@ -103,8 +103,12 @@ struct
   type const = Const.const
   type var = Variable.var
 
-  datatype constraint = CBefore of number
-                      | CUnrevoked of coord
+  datatype condition = CBefore of number
+                     | CSpent of coord
+                     | CTrue
+                     | CAnd of condition * condition
+                     | CNot of condition
+
 
   datatype prop = PAtom of atom
                 | PBang of prop
@@ -121,7 +125,7 @@ struct
 
                 | PAffirms of principal * prop
 
-                | PConstrained of prop * constraint list
+(*                | PConstrained of prop * constraint list*)
 
                 (* receipts don't have any rules; they are introduced by
                  * typecoin things *)
@@ -178,7 +182,7 @@ struct
   val MCase = MLarge o LCase
   val MUnpack = MLarge o LUnpack
   val MBind = MLarge o LBind
-
+(*
   (* Proof expressions for the top level thing *)
   datatype pexp =
          (* Include regular proofs *)
@@ -197,7 +201,7 @@ struct
   val ECase = ELarge o LCase
   val EUnpack = ELarge o LUnpack
   val EBind = ELarge o LBind
-
+*)
   (* ????????????? *)
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring
@@ -263,7 +267,7 @@ struct
             linear_sg: linear_sg,
             outputs: outputs,
             var: Variable.var,
-            proof_exp: Logic.pexp}
+            proof_term: Logic.proof}
   type txn = txnid * txn_body
 
   type chain = txn list

@@ -138,7 +138,7 @@ struct
        linear_sg = [],
        outputs = outputs,
        var = "z",
-       proof_exp = ERet proof_term}
+       proof_term = proof_term}
 
 
   val initial_auth_txnid =
@@ -206,7 +206,7 @@ struct
        linear_sg = linear_sg,
        outputs = outputs,
        var = "z",
-       proof_exp = ERet proof_term}
+       proof_term = proof_term}
 
   val charlie_auth_txnid =
       setup "c919d1f954d384e019e13bc5632ceb9e924362915d98f02a5218d3689cdcb6b2"
@@ -257,7 +257,7 @@ struct
        linear_sg = linear_sg,
        outputs = outputs,
        var = "z",
-       proof_exp = ERet proof_term}
+       proof_term = proof_term}
 
   val alice_auth_txnid =
       setup "b4ec90da38d8346b03c6fa769fcbff03488a532d6519403599b0faa8c778c7ba"
@@ -292,11 +292,10 @@ struct
     val sg = []
     val linear_sg = []
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
-    val proof_exp =
-         ETensorLet (z, "z1", "z2",
-         EOneLet (z2,
-         EBind (charlie_delegates_to_alice, "y",
-          ERet (
+    val proof_term =
+         MTensorLet (z, "z1", "z2",
+         MOneLet (z2,
+         MBind (charlie_delegates_to_alice, "y",
           MReturn (
            charlie,
            MApp (
@@ -305,7 +304,7 @@ struct
               use_access,
               test_resource),
              nonce),
-            MApp (y, z1)))))))
+            MApp (y, z1))))))
 
   in
   val bob_auth_txn = TxnBody
@@ -316,7 +315,7 @@ struct
        linear_sg = linear_sg,
        outputs = outputs,
        var = "z",
-       proof_exp = proof_exp}
+       proof_term = proof_term}
 
   val bob_auth_txnid =
       setup "4b827a45e03b6fe2145e1f24d63645d9826a9320836d3e560fa3eb1e2af2d1a2"
@@ -369,6 +368,7 @@ struct
   (* Alice is the president, or something. *)
   val president = alice
 
+(*
   val money_sg = FromNamed.convertLogicSg
         [(* Simple things about manipulating money. *)
          C (T, "money", num --> EProp),
@@ -396,7 +396,7 @@ struct
              PAffirms (K, issue' N) -@
              PConstrained (money' N, [CBefore Ti])))))
         ]
-
+*)
 
 
 end

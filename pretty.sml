@@ -115,7 +115,7 @@ struct
          | PZero => 0
          | PTop => 0
          | PReceipt _ => 5
-         | PConstrained _ => 5 (* XXX? *)
+(*         | PConstrained _ => 5 (* XXX? *)*)
          | PBang _ => 10
          | PAffirms _ => 50 (* XXX? *)
 
@@ -153,8 +153,10 @@ struct
       ((f e)
        handle _ => PrettyLF.toLayoutExp e)
 
+(*
   fun toLayoutConstraint (CBefore n) = &[$"before ", specialLFLayout toLayoutNumber n]
     | toLayoutConstraint (CUnrevoked c) = &[$"unrevoked ", specialLFLayout toLayoutCoord c]
+*)
 
   fun toLayoutProp A =
       (case A of
@@ -167,11 +169,12 @@ struct
              %[ specialLFLayout toLayoutAddress k, toLayoutProp A ],
              $")"
             ]
+(*
          | PConstrained (A', cs) =>
            &[ toLayoutHelp true A A',
               L.list (map toLayoutConstraint cs)
             ]
-
+*)
          | PBang A' => &[$"!", toLayoutPrefix A A']
          | PAffirms (K, A') => &[$"<", specialLFLayout toLayoutPrincipal K, $">",
                                  toLayoutPrefix A A']
