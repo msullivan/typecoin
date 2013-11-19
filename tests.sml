@@ -256,6 +256,28 @@ struct
           MSayBind (z, "z1", MSayReturn (n, z1))))))
 
 
+  val tests = [
+      (tensor_comm, true),
+      (uncurry, true),
+      (tensor_imp_bang, false),
+      (with_imp_tensor_bang_wrong, false),
+      (tensor_imp_with_bang2, true),
+      (with_imp_tensor_bang, true),
+      (tensor_imp_with_bang_wrong, false),
+      (tensor_imp_bang, false),
+      (one_lolli_a_equiv_a, true),
+      (oplus_comm, true),
+      (thing_with_zero, true),
+      (qcurry, true),
+      (top_thing, true),
+      (distrib_ex_and_1, true),
+      (distrib_ex_and_2, false),
+      (affirmation_fmap_specific, true),
+      (affirmation_fmap, true),
+      (affirmation_join, true),
+      (affirmation_unsafe_perform_io, false),
+      (affirmation_coerce, false)
+  ]
 
   (*******************************************************************************************)
 
@@ -263,6 +285,8 @@ struct
   (*****************************************************************)
 
   fun println s = print (s ^ "\n")
+
+  fun succeeded f x = (f x; true) handle _ => false
 
   fun check sg =
       (println "";
@@ -272,7 +296,7 @@ struct
       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
 
   fun checkProof sg M =
-      ((LogicCheck.inferProofOuter sg M)
+      ((LogicCheck.inferProofOuter sg LogicContext.empty M)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 
