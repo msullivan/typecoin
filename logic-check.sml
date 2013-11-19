@@ -419,11 +419,11 @@ struct
            in (C, res'') end
 
 
-         | MReturn (k, M) =>
+         | MSayReturn (k, M) =>
            let val () = checkLF k TypeCoinBasis.principal
                val (A, res') = checkProof D M
            in (PAffirms (k, A), res') end
-         | MBind (M1, v, E2) =>
+         | MSayBind (M1, v, E2) =>
            let val (affkA, res') = checkProof D M1
                val (k, A) =
                    (case affkA of PAffirms x => x

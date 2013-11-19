@@ -159,8 +159,8 @@ struct
                  | MUnpack of proof * LF.binding * var * proof
 
                  (* and affirmation stuff; proof terms are monadic *)
-                 | MReturn of principal * proof
-                 | MBind of proof * var * proof
+                 | MSayReturn of principal * proof
+                 | MSayBind of proof * var * proof
 
                  (* stuff for the if monad *)
                  | MIfReturn of condition * proof

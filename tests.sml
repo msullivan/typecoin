@@ -222,38 +222,38 @@ struct
   val affirmation_fmap_specific = FromNamed.convertProof []
       (MLam ("x", PLolli (A, B),
         MLam ("y", PAffirms (K, A),
-         MBind (y, "z",
-          MReturn (K, MApp (x, z))))))
+         MSayBind (y, "z",
+          MSayReturn (K, MApp (x, z))))))
 
   (* prove !k:principal. (A -o B) -o (<k>A -o <k>B) *)
   val affirmation_fmap = FromNamed.convertProof []
       (MForallLam ("k", TypeCoinBasis.principal,
         MLam ("x", PLolli (A, B),
          MLam ("y", PAffirms (k, A),
-          MBind (y, "z",
-           MReturn (k, MApp (x, z)))))))
+          MSayBind (y, "z",
+           MSayReturn (k, MApp (x, z)))))))
 
 
   (* prove !k:principal. <k><k>A -o <k>A *)
   val affirmation_join = FromNamed.convertProof []
       (MForallLam ("k", TypeCoinBasis.principal,
          MLam ("z", PAffirms (k, PAffirms (k, A)),
-          MBind (z, "z1",
-           MBind (z1, "z2",
-            MReturn (k, z2))))))
+          MSayBind (z, "z1",
+           MSayBind (z1, "z2",
+            MSayReturn (k, z2))))))
 
   (* fail to prove !k:principal. <k>A -o A *)
   val affirmation_unsafe_perform_io = FromNamed.convertProof []
       (MForallLam ("k", TypeCoinBasis.principal,
          MLam ("z", PAffirms (k, A),
-          MBind (z, "z1", z1))))
+          MSayBind (z, "z1", z1))))
 
   (* fail to prove !k, k':principal. <k>A -o <k'>A *)
   val affirmation_coerce = FromNamed.convertProof []
       (MForallLam ("k", TypeCoinBasis.principal,
         MForallLam ("n", TypeCoinBasis.principal,
          MLam ("z", PAffirms (k, A),
-          MBind (z, "z1", MReturn (n, z1))))))
+          MSayBind (z, "z1", MSayReturn (n, z1))))))
 
 
 

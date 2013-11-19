@@ -295,8 +295,8 @@ struct
     val proof_term =
          MTensorLet (z, "z1", "z2",
          MOneLet (z2,
-         MBind (charlie_delegates_to_alice, "y",
-          MReturn (
+         MSayBind (charlie_delegates_to_alice, "y",
+          MSayReturn (
            charlie,
            MApp (
             MForallApp (
