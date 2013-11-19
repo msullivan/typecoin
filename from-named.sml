@@ -57,10 +57,8 @@ struct
            PExists (b, lfconvert t,
                     convertProp (b :: G) A)
 
-         | PAffirms (k, A) =>
-           PAffirms (lfconvert k, convert A)
-(*         | PConstrained (A, cs) =>
-           PConstrained (convert A, map (convertConstraint G) cs)*)
+         | PAffirms (k, A) => PAffirms (lfconvert k, convert A)
+         | PIf (c, A) => PIf (convertCondition G c, convert A)
          | PReceipt (k, A) =>
            PReceipt (lfconvert k, convert A))
       end

@@ -125,7 +125,7 @@ struct
 
                 | PAffirms of principal * prop
 
-(*                | PConstrained of prop * constraint list*)
+                | PIf of condition * prop
 
                 (* receipts don't have any rules; they are introduced by
                  * typecoin things *)

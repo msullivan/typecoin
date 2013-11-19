@@ -115,7 +115,7 @@ struct
          | PZero => 0
          | PTop => 0
          | PReceipt _ => 5
-(*         | PConstrained _ => 5 (* XXX? *)*)
+         | PIf _ => 5 (* XXX? *)
          | PBang _ => 10
          | PAffirms _ => 50 (* XXX? *)
 
@@ -157,6 +157,19 @@ struct
   fun toLayoutConstraint (CBefore n) = &[$"before ", specialLFLayout toLayoutNumber n]
     | toLayoutConstraint (CUnrevoked c) = &[$"unrevoked ", specialLFLayout toLayoutCoord c]
 *)
+  fun toLayoutCondition c =
+      let fun toLayoutConditionParenAnd (c as CAnd _) = L.paren (toLayoutCondition c)
+            | toLayoutConditionParenAnd c = toLayoutCondition c
+      in
+          (case c of
+               CBefore n => &[$"before(", specialLFLayout toLayoutNumber n, $")"]
+             | CSpent c => &[$"spent(", specialLFLayout toLayoutCoord c, $")"]
+             | CTrue => $"T"
+             | CNot c => &[$"~", toLayoutConditionParenAnd c]
+             | CAnd (c1, c2) =>
+               % [&[toLayoutCondition c1, $" &"],
+                  toLayoutConditionParenAnd c2])
+      end
 
   fun toLayoutProp A =
       (case A of
@@ -166,15 +179,16 @@ struct
          | PTop => $"T"
          | PReceipt (k, A) =>
            &[$"Receipt(",
-             %[ specialLFLayout toLayoutAddress k, toLayoutProp A ],
+             % (L.separateRight ([ specialLFLayout toLayoutAddress k, toLayoutProp A ], ",")),
              $")"
             ]
-(*
-         | PConstrained (A', cs) =>
-           &[ toLayoutHelp true A A',
-              L.list (map toLayoutConstraint cs)
+
+         | PIf (c, A) =>
+           &[$"If(",
+             % (L.separateRight ([ toLayoutCondition c , toLayoutProp A ], ",")),
+             $")"
             ]
-*)
+
          | PBang A' => &[$"!", toLayoutPrefix A A']
          | PAffirms (K, A') => &[$"<", specialLFLayout toLayoutPrincipal K, $">",
                                  toLayoutPrefix A A']

@@ -35,10 +35,12 @@ struct
   fun substPropMain skip substs lift loc' loc prop =
       let val lfsubst = LFSubst.substAndReplaceExp skip substs lift loc' loc
           val subst = substPropMain skip substs lift loc' loc
-(*
-          fun substConstraint (CBefore e) = CBefore (lfsubst e)
-            | substConstraint (CUnrevoked e) = CUnrevoked (lfsubst e)
-*)
+
+          fun substCondition (CBefore e) = CBefore (lfsubst e)
+            | substCondition (CSpent e) = CSpent (lfsubst e)
+            | substCondition CTrue = CTrue
+            | substCondition (CNot c) = CNot (substCondition c)
+            | substCondition (CAnd (c1, c2)) = CAnd (substCondition c1, substCondition c2)
       in
       (case prop of
            PAtom p => PAtom (lfsubst p)
@@ -57,9 +59,9 @@ struct
          | PExists (b, t, A) =>
            PExists (b, lfsubst t,
                     substPropMain (skip+1) substs lift loc' loc A)
-(*
-         | PConstrained (A, cs) => PConstrained (subst A, map substConstraint cs)
-*)
+
+         | PIf (c, A) => PIf (substCondition c, subst A)
+
          | PAffirms (k, A) =>
            PAffirms (lfsubst k, subst A)
          | PReceipt (k, A) =>
@@ -134,10 +136,11 @@ struct
       let val check = checkProp sg ctx
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
 
-(*
-          fun checkConstraint (CBefore e) = checkLF e TypeCoinBasis.number
-            | checkConstraint (CUnrevoked e) = checkLF e TypeCoinBasis.coord
-*)
+          fun checkCondition (CBefore e) = checkLF e TypeCoinBasis.number
+            | checkCondition (CSpent e) = checkLF e TypeCoinBasis.coord
+            | checkCondition CTrue = ()
+            | checkCondition (CNot c) = checkCondition c
+            | checkCondition (CAnd (c1, c2)) = (checkCondition c1; checkCondition c2)
 
       in
       (case prop of
@@ -157,11 +160,9 @@ struct
          | PExists (b, t, A) =>
            (checkLF t LF.EType;
             checkProp sg (Ctx.extendLF ctx t) A)
-(*
-         | PConstrained (A, cs) =>
+         | PIf (c, A) =>
            (check A;
-            app checkConstraint cs)
-*)
+            checkCondition c)
          | PAffirms (k, A) =>
            (checkLF k TypeCoinBasis.principal;
             check A)
@@ -184,7 +185,7 @@ struct
          | PTensor (A, B) => (thawedProp A; thawedProp B)
          | PWith (A, B) => (thawedProp A; thawedProp B)
          | PForall (_, _, A) => thawedProp A
-(*         | PConstrained (A, _) => thawedProp A*)
+         | PIf (_, A) => thawedProp A
 
          (* Not totally sure about whether we want to permit these. *)
          | POplus (A, B) => (thawedProp A; thawedProp B)
