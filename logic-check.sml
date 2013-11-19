@@ -215,7 +215,40 @@ struct
            (conditionEquality c1 c1'; conditionEquality c2 c2')
          | _ => raise ProofError "conditions don't match")
 
-  fun conditionEntails cs cs' = raise Fail "unimplemented"
+  (* This isn't optimized or anything *)
+  fun condSearch lAtoms rAtoms (l::ls) rs =
+      (case l of
+           CTrue => condSearch lAtoms rAtoms ls rs
+         | CNot c => condSearch lAtoms rAtoms ls (c::rs)
+         | CAnd (c1, c2) => condSearch lAtoms rAtoms (c1::c2::ls) rs
+         | c => condSearch (c::lAtoms) rAtoms ls rs)
+    | condSearch lAtoms rAtoms [] (r::rs) =
+      (case r of
+           CTrue => true
+         | CNot c => condSearch lAtoms rAtoms [c] rs
+         | CAnd (c1, c2) => condSearch lAtoms rAtoms [] (c1::rs) andalso
+                            condSearch lAtoms rAtoms [] (c2::rs)
+         | c => condSearch lAtoms (c::rAtoms) [] rs)
+    | condSearch lAtoms rAtoms [] [] =
+      let fun lfIsEqual t1 t2 = (TypeCheckLF.exprEquality t1 t2; true)
+                                handle _ => false
+
+          fun timeLessThan t1 t2 =
+              (let val (n1, n2) = (TypeCoinBasis.lfNumToInt t1, TypeCoinBasis.lfNumToInt t2)
+               in n1 <= n2 end)
+              handle _ => false
+
+          fun atomEntails (CSpent t1) (CSpent t2) = lfIsEqual t1 t2
+            | atomEntails (CBefore t1) (CBefore t2) =
+              lfIsEqual t1 t2 orelse timeLessThan t1 t2
+            | atomEntails _ _ = false
+
+          fun contextEntailsAtom r = List.exists (fn x => atomEntails x r) lAtoms
+      in List.exists contextEntailsAtom rAtoms end
+
+  fun conditionEntails cs cs' =
+      if condSearch [] [] cs cs' then ()
+      else raise ProofError "condition entailment failed"
 
   (* should we catch TypeErrors and raise proof errors? *)
   fun propEquality A A' =
