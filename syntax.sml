@@ -137,13 +137,17 @@ struct
   datatype proof = MRule of const
                  | MVar of var
                  | MBang of proof
+                 | MBangLet of proof * var * proof
                  | MLam of var * prop * proof
                  | MApp of proof * proof
                  | MTensor of proof * proof
+                 | MTensorLet of proof * var * var * proof
                  | MWith of proof * proof
                  | MPi of idx * proof
                  | MInj of idx * proof * prop
+                 | MCase of proof * var * proof * var * proof
                  | MOne
+                 | MOneLet of proof * proof
 
                  (* annotated with what parts of the context are consumed. *)
                  | MAbort of proof * prop * var list
@@ -152,17 +156,10 @@ struct
                  | MForallLam of LF.binding * LF.exp * proof
                  | MForallApp of proof * LF.exp
                  | MPack of LF.exp * proof * prop
+                 | MUnpack of proof * LF.binding * var * proof
 
                  (* and affirmation stuff; proof terms are monadic *)
                  | MReturn of principal * proof
-                 (* All large elims packed up in an MLarge. *)
-
-                 (* Large elims *)
-                 | MTensorLet of proof * var * var * proof
-                 | MBangLet of proof * var * proof
-                 | MOneLet of proof * proof
-                 | MCase of proof * var * proof * var * proof
-                 | MUnpack of proof * LF.binding * var * proof
                  | MBind of proof * var * proof
 
   (* ????????????? *)

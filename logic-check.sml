@@ -268,6 +268,12 @@ struct
          | MBang M' =>
            let val (A, empty_res) = checkProof (ctx, VarSet.empty) M'
            in (PBang A, res) end
+         | MBangLet (M1, v, E2) =>
+           let val (bA1', res') = checkProof D M1
+               val A1' = (case bA1' of PBang A1' => A1'
+                                     | _ => raise ProofError "let bang of non bang")
+               val ctx' = Ctx.insert ctx v A1' true
+           in checkProof (ctx', res') E2 end
 
          | MLam (v, A, M) =>
            let val () = checkProp ctx A
@@ -288,6 +294,18 @@ struct
            let val (A1, res') = checkProof (ctx, res) M1
                val (A2, res'') = checkProof (ctx, res') M2
            in (PTensor (A1, A2), res'') end
+         | MTensorLet (M1, v1, v2, E2) =>
+           let val (A', res') = checkProof D M1
+               val (A1, A2) =
+                   (case A' of PTensor As => As
+                             | _ => raise ProofError "tensor let of non tensor")
+               val D' = addResource
+                            (addResource (ctx, res') v1 A1)
+                            v2 A2
+           in discharge v1
+              (discharge v2
+               (checkProof D' E2))
+           end
 
          | MWith (M1, M2) =>
            let val (A1, res1) = checkProof D M1
@@ -309,8 +327,26 @@ struct
                val (A', res') = checkProof D M
                val () = propEquality A' (projIdx idx As)
            in (POplus As, res') end
+         | MCase (M, v1, E1, v2, E2) =>
+           let val (A', res') = checkProof D M
+               val (A1, A2) =
+                   (case A' of POplus As => As
+                             | _ => raise ProofError "case of non oplus")
+
+               val D' = (ctx, res')
+               val (C1, res1) = discharge v1
+                                (checkProof (addResource D' v1 A1) E1)
+               val (C2, res2) = discharge v2
+                                (checkProof (addResource D' v2 A2) E2)
+               val () = requireResourceEquality res1 res2
+               val () = propEquality C1 C2
+           in (C1, res1) end
 
          | MOne => (POne, res)
+         | MOneLet (M1, E2) =>
+           let val (A1, res') = checkProof D M1
+               val () = propEquality A1 POne
+           in checkProof (ctx, res') E2 end
 
          | MAbort (M, C, consumed) =>
            let val res' = foldl (fn (v, res') => consumeResource res' v) res consumed
@@ -348,53 +384,6 @@ struct
                val (A''', res') = checkProof D M
                val () = propEquality A'' A'''
            in (A, res') end
-
-
-         | MReturn (k, M) =>
-           let val () = checkLF k TypeCoinBasis.principal
-               val (A, res') = checkProof D M
-           in (PAffirms (k, A), res') end
-
-         | MTensorLet (M1, v1, v2, E2) =>
-           let val (A', res') = checkProof D M1
-               val (A1, A2) =
-                   (case A' of PTensor As => As
-                             | _ => raise ProofError "tensor let of non tensor")
-               val D' = addResource
-                            (addResource (ctx, res') v1 A1)
-                            v2 A2
-           in discharge v1
-              (discharge v2
-               (checkProof D' E2))
-           end
-
-         | MBangLet (M1, v, E2) =>
-           let val (bA1', res') = checkProof D M1
-               val A1' = (case bA1' of PBang A1' => A1'
-                                     | _ => raise ProofError "let bang of non bang")
-               val ctx' = Ctx.insert ctx v A1' true
-           in checkProof (ctx', res') E2 end
-
-         | MCase (M, v1, E1, v2, E2) =>
-           let val (A', res') = checkProof D M
-               val (A1, A2) =
-                   (case A' of POplus As => As
-                             | _ => raise ProofError "case of non oplus")
-
-               val D' = (ctx, res')
-               val (C1, res1) = discharge v1
-                                (checkProof (addResource D' v1 A1) E1)
-               val (C2, res2) = discharge v2
-                                (checkProof (addResource D' v2 A2) E2)
-               val () = requireResourceEquality res1 res2
-               val () = propEquality C1 C2
-           in (C1, res1) end
-
-         | MOneLet (M1, E2) =>
-           let val (A1, res') = checkProof D M1
-               val () = propEquality A1 POne
-           in checkProof (ctx, res') E2 end
-
          | MUnpack (M1, _, v, E2) =>
            let val (etA, res') = checkProof D M1
                val (_, t, A) =
@@ -408,6 +397,11 @@ struct
                val () = checkProp ctx C
            in (C, res'') end
 
+
+         | MReturn (k, M) =>
+           let val () = checkLF k TypeCoinBasis.principal
+               val (A, res') = checkProof D M
+           in (PAffirms (k, A), res') end
          | MBind (M1, v, E2) =>
            let val (affkA, res') = checkProof D M1
                val (k, A) =
