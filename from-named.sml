@@ -48,7 +48,6 @@ struct
          | POplus (A, B) => POplus (convert A, convert B)
          | POne => POne
          | PZero => PZero
-         | PTop => PTop
 
          | PForall (b, t, A) =>
            PForall (b, lfconvert t,
@@ -82,9 +81,7 @@ struct
          | MInj (i, M, A) => MInj (i, convert M, convertProp G A)
          | MCase (M, v1, M1, v2, M2) => MCase (convert M, v1, convert M1, v2, convert M2)
          | MOne => MOne
-         | MOneLet (M1, M2) => MOneLet (convert M1, convert M2)
-         | MAbort (M, A, vs) => MAbort (convert M, convertProp G A, vs)
-         | MTop vs => MTop vs
+         | MAbort (M, A) => MAbort (convert M, convertProp G A)
          | MForallLam (x, t, M) => MForallLam (x, lfconvert t, convertProof (x::G) M)
          | MForallApp (M, t) => MForallApp (convert M, lfconvert t)
          | MPack (t, M, A) => MPack (lfconvert t, convert M, convertProp G A)

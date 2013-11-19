@@ -113,7 +113,6 @@ struct
            PAtom _ => 0
          | POne => 0
          | PZero => 0
-         | PTop => 0
          | PReceipt _ => 5
          | PIf _ => 5 (* XXX? *)
          | PBang _ => 10
@@ -176,7 +175,6 @@ struct
            PAtom e => PrettyLF.toLayoutExp e
          | POne => $"1"
          | PZero => $"0"
-         | PTop => $"T"
          | PReceipt (k, A) =>
            &[$"Receipt(",
              % (L.separateRight ([ specialLFLayout toLayoutAddress k, toLayoutProp A ], ",")),

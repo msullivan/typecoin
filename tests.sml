@@ -104,7 +104,7 @@ struct
         MTensorLet (z, "z1", "z2",
          MApp (MApp (y, z1), z2))))
 
-  (* don't prove A x B -o A & B *)
+  (* prove A x B -o A & B because no we are affine *)
   val tensor_imp_with =
       MLam ("z", PTensor (A, B),
             MTensorLet (z, "z1", "z2",
@@ -135,7 +135,7 @@ struct
        MBangLet (z, "y",
         MTensor (MBang (MPi (L, y)), MBang (MPi (R, y)))))
 
-  (* don't prove !(A x B) -o !(A & B) *)
+  (* prove !(A x B) -o !(A & B) now, because we are affine*)
   val tensor_imp_with_bang_wrong =
       MLam ("y", PBang (PTensor (A, B)),
        MBangLet (y, "z",
@@ -156,7 +156,7 @@ struct
             MApp (x, MOne)),
       MLam ("y", A,
             MLam ("z", POne,
-                  MOneLet (z, y))))
+                  y)))
 
   (* prove A + B -o B + A *)
   val oplus_comm =
@@ -171,7 +171,7 @@ struct
        MTensorLet (z, "z1", "z2",
         MCase (z2,
                "x", MTensor (z1, x),
-               "y", MAbort (y, PTensor (A, B), ["z1"]))))
+               "y", MAbort (y, PTensor (A, B)))))
 
 
   (* prove ((?x:i. P(x)) -o C) => (!x:i. P(x) -o C) *)
@@ -181,13 +181,6 @@ struct
          MLam ("y", P m,
           MApp (z,
                 MPack (m, y, PExists ("n", i, P n)))))))
-
-  (* prove A -o B -o T *)
-  val top_thing =
-      MLam ("y", A,
-       MLam ("z", B,
-        MTop ["y", "z"]))
-
 
 
   (* prove !(!x:t. A(x) & B(x)) -o (!x:t. A(x)) & (!x:t. B(x)) *)
@@ -259,17 +252,16 @@ struct
   val tests = [
       (tensor_comm, true),
       (uncurry, true),
-      (tensor_imp_bang, false),
+      (tensor_imp_bang, true),
       (with_imp_tensor_bang_wrong, false),
       (tensor_imp_with_bang2, true),
       (with_imp_tensor_bang, true),
       (tensor_imp_with_bang_wrong, false),
-      (tensor_imp_bang, false),
+      (tensor_imp_bang, true),
       (one_lolli_a_equiv_a, true),
       (oplus_comm, true),
       (thing_with_zero, true),
       (qcurry, true),
-      (top_thing, true),
       (distrib_ex_and_1, true),
       (distrib_ex_and_2, false),
       (affirmation_fmap_specific, true),

@@ -118,7 +118,6 @@ struct
                 | POplus of prop * prop
                 | POne
                 | PZero
-                | PTop
 
                 | PForall of LF.binding * LF.exp * prop
                 | PExists of LF.binding * LF.exp * prop
@@ -147,11 +146,8 @@ struct
                  | MInj of idx * proof * prop
                  | MCase of proof * var * proof * var * proof
                  | MOne
-                 | MOneLet of proof * proof
 
-                 (* annotated with what parts of the context are consumed. *)
-                 | MAbort of proof * prop * var list
-                 | MTop of var list
+                 | MAbort of proof * prop
 
                  | MForallLam of LF.binding * LF.exp * proof
                  | MForallApp of proof * LF.exp

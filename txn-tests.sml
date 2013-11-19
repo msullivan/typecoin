@@ -193,8 +193,7 @@ struct
     ]
     val proof_term =
          MTensorLet (z, "z1", "z2",
-          MOneLet (z1,
-            z2))
+            z2)
 
   in
 
@@ -244,8 +243,7 @@ struct
     ]
     val proof_term =
          MTensorLet (z, "z1", "z2",
-          MOneLet (z1,
-            z2))
+            z2)
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
@@ -294,7 +292,6 @@ struct
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
     val proof_term =
          MTensorLet (z, "z1", "z2",
-         MOneLet (z2,
          MSayBind (charlie_delegates_to_alice, "y",
           MSayReturn (
            charlie,
@@ -304,7 +301,7 @@ struct
               use_access,
               test_resource),
              nonce),
-            MApp (y, z1))))))
+            MApp (y, z1)))))
 
   in
   val bob_auth_txn = TxnBody

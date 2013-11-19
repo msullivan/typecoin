@@ -51,7 +51,6 @@ struct
          | POplus (A, B) => POplus (subst A, subst B)
          | POne => POne
          | PZero => PZero
-         | PTop => PTop
 
          | PForall (b, t, A) =>
            PForall (b, lfsubst t,
@@ -159,7 +158,6 @@ struct
          | POplus (A1, A2) => (check A1; check A2)
          | POne => ()
          | PZero => ()
-         | PTop => ()
 
          | PForall (b, t, A) =>
            (checkLF t LF.EType;
@@ -199,7 +197,6 @@ struct
          | PExists (_, t, A) => (TypeCheckLF.thawedType t; thawedProp A)
          (* These are really silly, but they aren't wrong or anything.... *)
          | POne => ()
-         | PTop => ()
 
          | PZero => raise Frozen "can't introduce rule for zero!"
          | PAffirms _ => raise Frozen "can't introduce rule for an affirmation!"
@@ -257,15 +254,8 @@ struct
   fun consumeResource res v =
       (requireResource res v; VarSet.remove res v)
 
-  fun requireResourceEquality res1 res2 =
-      if VarSet.eq (res1, res2) then () else
-      raise ProofError "used resources don't match"
-
   fun discharge v (A, res) =
-      (if VarSet.member res v then
-           raise ProofError ("resource not used: " ^ Var.toStr v)
-       else ();
-       (A, res))
+      (A, VarSet.remove res v)
 
   fun projIdx L (x, _) = x
     | projIdx R (_, x) = x
@@ -331,8 +321,8 @@ struct
          | MWith (M1, M2) =>
            let val (A1, res1) = checkProof D M1
                val (A2, res2) = checkProof D M2
-               val () = requireResourceEquality res1 res2
-           in (PWith (A1, A2), res1) end
+               val res' = VarSet.intersection res1 res2
+           in (PWith (A1, A2), res') end
          | MPi (idx, M) =>
            let val (A', res') = checkProof D M
                val As =
@@ -359,26 +349,17 @@ struct
                                 (checkProof (addResource D' v1 A1) E1)
                val (C2, res2) = discharge v2
                                 (checkProof (addResource D' v2 A2) E2)
-               val () = requireResourceEquality res1 res2
+               val res' = VarSet.intersection res1 res2
                val () = propEquality C1 C2
-           in (C1, res1) end
+           in (C1, res') end
 
          | MOne => (POne, res)
-         | MOneLet (M1, E2) =>
-           let val (A1, res') = checkProof D M1
-               val () = propEquality A1 POne
-           in checkProof (ctx, res') E2 end
 
-         | MAbort (M, C, consumed) =>
-           let val res' = foldl (fn (v, res') => consumeResource res' v) res consumed
-               val () = checkProp ctx C
-               val (A, res'') = checkProof (ctx, res') M
+         | MAbort (M, C) =>
+           let val () = checkProp ctx C
+               val (A, res') = checkProof D M
                val () = propEquality A PZero
-           in (C, res'') end
-         | MTop consumed =>
-           let val res' = foldl (fn (v, res') => consumeResource res' v) res consumed
-           in (PTop, res') end
-
+           in (C, res') end
 
          | MForallLam (b, t, M) =>
            let val () = checkLF t LF.EType
@@ -486,8 +467,6 @@ struct
                           VarSet.empty (LogicContext.getVariables G)
           val D = (G, res)
           val (A, res) = checkFn sg D M
-          val () = if VarSet.isEmpty res then () else
-                   raise ProofError "not all resources used"
       in A end
 
   val inferProofOuter = inferOuter checkProof
