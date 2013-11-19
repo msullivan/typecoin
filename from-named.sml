@@ -91,6 +91,11 @@ struct
          | MUnpack (M1, x, v, M2) => MUnpack (convert M1, x, v, convertProof (x::G) M2)
          | MReturn (k, M) => MReturn (lfconvert k, convert M)
          | MBind (M1, v, M2) => MBind (convert M1, v, convert M2)
+         | MIfReturn (c, M) => MIfReturn (convertCondition G c, convert M)
+         | MIfBind (M1, v, M2) => MIfBind (convert M1, v, convert M2)
+         | MIfWeaken (c, M) => MIfWeaken (convertCondition G c, convert M)
+         | MIfSay M => MIfSay (convert M)
+
       )
       end
 

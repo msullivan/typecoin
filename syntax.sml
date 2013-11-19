@@ -162,6 +162,12 @@ struct
                  | MReturn of principal * proof
                  | MBind of proof * var * proof
 
+                 (* stuff for the if monad *)
+                 | MIfReturn of condition * proof
+                 | MIfBind of proof * var * proof
+                 | MIfWeaken of condition * proof
+                 | MIfSay of proof
+
   (* ????????????? *)
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring

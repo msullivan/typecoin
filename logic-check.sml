@@ -132,15 +132,22 @@ struct
 
   exception ProofError of string
 
+  fun checkCondition sg ctx c =
+      let val check = checkCondition sg ctx
+          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+      in
+      (case c of
+           CBefore e => checkLF e TypeCoinBasis.number
+         | CSpent e => checkLF e TypeCoinBasis.coord
+         | CTrue => ()
+         | CNot c => check c
+         | CAnd (c1, c2) => (check c1; check c2)
+      )
+      end
+
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
-
-          fun checkCondition (CBefore e) = checkLF e TypeCoinBasis.number
-            | checkCondition (CSpent e) = checkLF e TypeCoinBasis.coord
-            | checkCondition CTrue = ()
-            | checkCondition (CNot c) = checkCondition c
-            | checkCondition (CAnd (c1, c2)) = (checkCondition c1; checkCondition c2)
 
       in
       (case prop of
@@ -162,7 +169,7 @@ struct
             checkProp sg (Ctx.extendLF ctx t) A)
          | PIf (c, A) =>
            (check A;
-            checkCondition c)
+            checkCondition sg ctx c)
          | PAffirms (k, A) =>
            (checkLF k TypeCoinBasis.principal;
             check A)
@@ -201,6 +208,17 @@ struct
 
   val mismatched_props_debug = ref (POne, POne)
 
+  fun conditionEquality c c' =
+      (case (c, c') of
+           (CTrue, CTrue) => ()
+         | (CBefore t, CBefore t') => TypeCheckLF.exprEquality t t'
+         | (CSpent t, CSpent t') => TypeCheckLF.exprEquality t t'
+         | (CNot c, CNot c') => conditionEquality c c'
+         | (CAnd (c1, c2), CAnd (c1', c2')) =>
+           (conditionEquality c1 c1'; conditionEquality c2 c2')
+         | _ => raise ProofError "conditions don't match")
+
+  fun conditionEntails cs cs' = raise Fail "unimplemented"
 
   (* should we catch TypeErrors and raise proof errors? *)
   fun propEquality A A' =
@@ -221,6 +239,8 @@ struct
            (propEquality A A'; TypeCheckLF.exprEquality t t')
          | (PReceipt (t, A), PReceipt (t', A'))  =>
            (propEquality A A'; TypeCheckLF.exprEquality t t')
+         | (PIf (c, A), PIf (c', A')) =>
+           (conditionEquality c c'; propEquality A A')
          | ps => (mismatched_props_debug := ps; raise ProofError "props don't match")
       )
 
@@ -255,6 +275,7 @@ struct
       let val checkProof = checkProof sg
           val checkProp = checkProp sg
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+          val checkCondition = checkCondition sg ctx
       in
       (case M of
            MRule c => (Signature.lookup_rule sg c, res)
@@ -416,6 +437,38 @@ struct
                val () = TypeCheckLF.exprEquality k k'
            in (PAffirms (k, B), res'') end
 
+         | MIfReturn (c, M) =>
+           let val () = checkCondition c
+               val (A, res') = checkProof D M
+           in (PIf (c, A), res') end
+         | MIfBind (M1, v, E2) =>
+           let val (ifcA, res') = checkProof D M1
+               val (c, A) =
+                   (case ifcA of PIf x => x
+                               | _ => raise ProofError "ifbind of non If")
+               val D' = addResource (ctx, res') v A
+               val (ifcB, res'') = discharge v (checkProof D' E2)
+               val (c', B) =
+                   (case ifcB of PIf x => x
+                               | _ => raise ProofError "ifbind must result in If")
+               (* conditions must match *)
+               val () = conditionEquality c c'
+           in (PIf (c, B), res'') end
+
+         | MIfWeaken (c, M) =>
+           let val () = checkCondition c
+               val (ifcA, res') = checkProof D M
+               val (c', A) =
+                   (case ifcA of PIf x => x
+                               | _ => raise ProofError "ifweaken of non If")
+               val () = conditionEntails [c] [c']
+           in (PIf (c, A), res') end
+         | MIfSay M =>
+           let val (affKifcA, res') = checkProof D M
+               val (K, c, A) =
+                   (case affKifcA of PAffirms (K, PIf (c, A)) => (K, c, A)
+                                   | _ => raise ProofError "bogus if/say")
+           in (PIf (c, PAffirms (K, A)), res') end
       )
 
       end
