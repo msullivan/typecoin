@@ -180,7 +180,7 @@ struct
       lfPosToInt bs * 2 + lfBitToInt b
     | lfPosToInt _ = raise Fail "not a closed $.pos"
   (* Turn a closed LF $.number into an int *)
-  fun lfNumToInt (EApp (HConst (LId "$", "zero"), SNil)) = 1
+  fun lfNumToInt (EApp (HConst (LId "$", "zero"), SNil)) = 0
     | lfNumToInt (EApp (HConst (LId "$", "pos_num"), SApp (n, SNil))) = lfPosToInt n
     | lfNumToInt _ = raise Fail "not a closed $.number"
 
