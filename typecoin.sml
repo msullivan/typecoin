@@ -19,9 +19,9 @@ struct
       (Output {prop = renameProp name' name prop,
                dest = dest, needs_receipt = needs_receipt, amount = amount})
 
-  fun renameAffirmation name' name {prop, principal, crypto_sig} =
+  fun renameAffirmation name' name {prop, persistent, principal, crypto_sig} =
       {prop = renameProp name' name prop,
-       principal = principal, crypto_sig = crypto_sig}
+       persistent = persistent, principal = principal, crypto_sig = crypto_sig}
 
   fun renameSgEntry name' name entry =
       (case entry of
@@ -142,8 +142,15 @@ struct
           val input_prop = build_tensor (input_props @ linear_sg_props @ receipt_props)
           val output_prop = build_tensor output_props
 
+          (* Build a digest of the transaction for affirmation checking *)
+          val txn_ident = TypeCoinCrypto.buildTxnIdentifier inputs outputs
+
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferProofOuter sg' LogicContext.empty proof_term
+          val actual_prop = LogicCheck.inferProofOuter
+                                txn_ident
+                                sg'
+                                LogicContext.empty
+                                proof_term
           val (actual_input, actual_output, condition) =
               (case actual_prop of
                    PLolli (A, PIf (c, B)) => (A, B, c)

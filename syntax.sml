@@ -133,6 +133,21 @@ struct
 
   datatype idx = L | R
 
+
+  (* ????????????? *)
+  type bytestring = Word8Vector.vector
+  type crypto_sig = bytestring
+  type crypto_address = bytestring
+  (* Here the principal is the entire public key. *)
+  type crypto_principal = bytestring
+
+  type signed_affirmation =
+       {persistent: bool,
+        principal: crypto_principal,
+        prop: prop,
+        crypto_sig: crypto_sig}
+
+
   datatype proof = MRule of const
                  | MVar of var
                  | MBang of proof
@@ -164,21 +179,8 @@ struct
                  | MIfWeaken of condition * proof
                  | MIfSay of proof
 
-  (* ????????????? *)
-  type bytestring = Word8Vector.vector
-  type crypto_sig = bytestring
-  type crypto_address = bytestring
-  (* Here the principal is the entire public key. *)
-  type crypto_principal = bytestring
-
-
-  datatype real_constraint = RCBefore of int
-                           | RCUnrevoked of bytestring * int
-
-  type signed_affirmation =
-       {principal: crypto_principal,
-        prop: prop,
-        crypto_sig: crypto_sig}
+                 (* Cryptographic affirmation *)
+                 | MAffirmation of signed_affirmation
 
   datatype sg_entry = SRule of Const.id * prop
                     | SConst of LFSyntax.sg_entry

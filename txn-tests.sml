@@ -29,7 +29,8 @@ struct
 
   fun affirmationProp pubkey prop =
       LogicCheck.affirmationToProp
-          {principal = Encoding.encodePubkey (param, pubkey),
+          {persistent = false,
+           principal = Encoding.encodePubkey (param, pubkey),
            prop = prop,
            crypto_sig = Bytestring.null}
 
@@ -168,7 +169,9 @@ struct
    * then Charlie says that.
    * He also gives himself a persistent token giving himself
    * access. He doesn't *really* need this, but it means less
-   * signing. *)
+   * signing.
+   * It is mostly just silly, though.
+   *)
   local
     val inputs = [Input {source = (charlie_input_txid, 1), prop = POne}]
     val self_persistent_access_prop =
@@ -178,11 +181,11 @@ struct
 
 
     val delegate_to_alice =
-        TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
+        TypeCoinCrypto.makeAffirmation NONE charlie_keypair
         (PLolli (PAffirms (alice, PAtom (can_access test_resource)),
                  PAtom (can_access test_resource)))
     val self_persistent_access =
-        TypeCoinCrypto.makeAffirmation charlie_keypair txn_ident
+        TypeCoinCrypto.makeAffirmation (SOME txn_ident) charlie_keypair
         (PBang (PAtom (can_access test_resource)))
 
     val sg = [
@@ -234,7 +237,7 @@ struct
 
 
     val alice_says_can_access =
-        TypeCoinCrypto.makeAffirmation alice_keypair txn_ident
+        TypeCoinCrypto.makeAffirmation (SOME txn_ident) alice_keypair
         (PAtom (can_access test_resource))
 
     val sg = []

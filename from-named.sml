@@ -63,6 +63,12 @@ struct
       end
 
 
+  fun convertAffirmation G {persistent, principal, prop, crypto_sig} =
+      {persistent = persistent,
+       principal = principal,
+       crypto_sig = crypto_sig,
+       prop = convertProp G prop}
+
   fun convertProof G proof =
       let val convert = convertProof G
           val lfconvert = convertExp G
@@ -93,26 +99,23 @@ struct
          | MIfWeaken (c, M) => MIfWeaken (convertCondition G c, convert M)
          | MIfSay M => MIfSay (convert M)
 
+         | MAffirmation aff => MAffirmation (convertAffirmation G aff)
       )
       end
 
   fun convertSg sg =
       map (fn (d, c, e) => (d, c, convertExp [] e)) sg
 
-  fun convertAffirmation {principal, prop, crypto_sig} =
-      {principal = principal,
-       crypto_sig = crypto_sig,
-       prop = convertProp [] prop}
 
   fun convertLogicSgEntry (SRule (i, prop)) = SRule (i, convertProp [] prop)
     | convertLogicSgEntry (SConst (d, c, e)) = SConst (d, c, convertExp [] e)
     | convertLogicSgEntry (SSignedAffirmation (id, affirmation)) =
-      SSignedAffirmation (id, convertAffirmation affirmation)
+      SSignedAffirmation (id, convertAffirmation [] affirmation)
   fun convertLogicSg sg = map convertLogicSgEntry sg
 
   fun convertLinearSgEntry (LSResource prop) = LSResource (convertProp [] prop)
     | convertLinearSgEntry (LSSignedAffirmation affirmation) =
-      LSSignedAffirmation (convertAffirmation affirmation)
+      LSSignedAffirmation (convertAffirmation [] affirmation)
   fun convertLinearSg sg = map convertLinearSgEntry sg
 
 

@@ -15,7 +15,7 @@ struct
   fun hashKey key = RIPEMD160.hashBytes (SHA256.hashBytes key)
   fun hash data = SHA256.hashBytes (SHA256.hashBytes data)
 
-  (* We need affirmations to be signed relative to the transaction
+  (* We need linear affirmations to be signed relative to the transaction
    * they are in, because we don't want it to be possible to pick up
    * a linear affirmation used in one transaction and introduce it in
    * a new one. (This would make linearity of them meaningless).
@@ -37,6 +37,9 @@ struct
    * pretty reasonable, though.
    *
    * I really hope this is right. Should we include the principal in the data?
+   *
+   * For persistent affirmations, this isn't true. There we just sign
+   * hash(prop).
    *)
 
   (* From the inputs/outputs of a transaction, produce some identifying data
@@ -47,24 +50,31 @@ struct
             IOTypes.writeToVector TypeCoinTxn.writeOutputs outputs
       ])
 
-  fun buildAffirmationData txnId prop =
+  fun buildAffirmationData txnIdOpt prop =
       let val propData = IOTypes.writeToVector Logic.writeProp prop
-          val data = Bytestring.concat [txnId, propData]
+          val data = (case txnIdOpt of
+                          SOME txnId => Bytestring.concat [txnId, propData]
+                        | NONE => propData)
       in hash data end
 
-  fun checkAffirmation txnId {principal, prop, crypto_sig} =
-      let val data = buildAffirmationData txnId prop
+  fun checkAffirmation txnId {persistent, principal, prop, crypto_sig} =
+      let val txnIdOpt = if persistent then NONE else SOME txnId
+          val data = buildAffirmationData txnIdOpt prop
           val principal = Encoding.decodePubkey (param, principal)
           val crypto_sig = Encoding.decodeSg crypto_sig
           val ok = Signing.verify (param, principal, data, crypto_sig)
       in ok end
 
-  fun makeAffirmation (pubkey, privkey) txnId prop =
-      let val data = buildAffirmationData txnId prop
+  fun makeAffirmation txnIdOpt (pubkey, privkey) prop =
+      let val data = buildAffirmationData txnIdOpt prop
           val crypto_sig = Signing.sign (param, privkey, data)
           val principal = Encoding.encodePubkey (param, pubkey)
           val crypto_sig = Encoding.encodeSg crypto_sig
-      in {principal = principal, prop = prop, crypto_sig = crypto_sig} end
+      in {persistent = not (isSome txnIdOpt),
+          principal = principal,
+          prop = prop,
+          crypto_sig = crypto_sig}
+      end
 
   (* OK, yeah, we'll do the bitcoin stuff here too. *)
   (* What our default quantity of bitcoin we use to represent a resource is. *)

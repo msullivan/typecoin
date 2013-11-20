@@ -288,7 +288,7 @@ struct
       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
 
   fun checkProof sg M =
-      ((LogicCheck.inferProofOuter sg LogicContext.empty M)
+      ((LogicCheck.inferProofOuter Bytestring.null sg LogicContext.empty M)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 

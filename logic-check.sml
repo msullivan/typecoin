@@ -294,8 +294,14 @@ struct
     | projIdx R (_, x) = x
 
 
-  fun checkProof sg (D as (ctx, res)) M =
-      let val checkProof = checkProof sg
+  fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
+      let val hashed_key = TypeCoinCrypto.hashKey principal
+          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
+      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
+
+
+  fun checkProof T sg (D as (ctx, res)) M =
+      let val checkProof = checkProof T sg
           val checkProp = checkProp sg
           val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
           val checkCondition = checkCondition sg ctx
@@ -483,23 +489,25 @@ struct
                    (case affKifcA of PAffirms (K, PIf (c, A)) => (K, c, A)
                                    | _ => raise ProofError "bogus if/say")
            in (PIf (c, PAffirms (K, A)), res') end
+
+
+         | MAffirmation affirmation =>
+           let
+               val () = if TypeCoinCrypto.checkAffirmation T affirmation then ()
+                        else raise ProofError "affirmation signature failure"
+               val A = affirmationToProp affirmation
+               (* Do we want to allow it to reference things in the context? *)
+               val () = checkProp ctx A
+           in (A, res) end
       )
 
       end
-(*
-  fun convertConstraint (CBefore e) =
-      (RCBefore (TypeCoinBasis.lfNumToInt e)
-       handle _ => raise ProofError "before constraint invalid")
-    | convertConstraint (CUnrevoked e) =
-      (RCUnrevoked (TypeCoinBasis.lfCoordToCoord e)
-       handle _ => raise ProofError "unrevoked constraint invalid")
-*)
 
-  fun inferProofOuter sg G M =
+  fun inferProofOuter T sg G M =
       let val res = foldl (fn (v, res) => VarSet.insert res v)
                           VarSet.empty (LogicContext.getVariables G)
           val D = (G, res)
-          val (A, res) = checkProof sg D M
+          val (A, res) = checkProof T sg D M
       in A end
 
   fun checkRuleSgEntry sg (id, prop) =
@@ -507,10 +515,6 @@ struct
        thawedProp prop;
        Signature.insert_rule sg (Const.LThis, id) prop)
 
-  fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
-      let val hashed_key = TypeCoinCrypto.hashKey principal
-          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
-      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
 
   fun checkSignedAffirmationSgEntry sg (id, affirm) =
       let val prop' = affirmationToProp affirm
