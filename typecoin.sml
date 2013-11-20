@@ -41,13 +41,12 @@ struct
 
   fun renameTxnBody name' name
       (TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term,
-                var, name=txnname, metadata}) =
+                name=txnname, metadata}) =
       TxnBody {inputs = map (renameInput name' name) inputs,
                outputs = map (renameOutput name' name) outputs,
                linear_sg = map (renameLinearSgEntry name' name) linear_sg,
                persistent_sg = map (renameSgEntry name' name) persistent_sg,
                proof_term = renameProof proof_term,
-               var = var,
                name = txnname,
                metadata = metadata}
 
@@ -127,7 +126,7 @@ struct
 
   fun checkTransaction sg tr
                        (txnid,
-                        TxnBody {inputs, persistent_sg, linear_sg, outputs, var, proof_term,
+                        TxnBody {inputs, persistent_sg, linear_sg, outputs, proof_term,
                                  name, ...}) =
       let val () = print ("checking " ^ txnid ^ "/" ^ name ^ "\n")
 
@@ -143,12 +142,12 @@ struct
           val input_prop = build_tensor (input_props @ linear_sg_props @ receipt_props)
           val output_prop = build_tensor output_props
 
-          val ctx = LogicContext.insert LogicContext.empty var input_prop false
+          val expected_prop = PLolli (input_prop, output_prop)
 
           (* Moment of truth: check the proof term. *)
-          val actual_prop = LogicCheck.inferProofOuter sg' ctx proof_term
+          val actual_prop = LogicCheck.inferProofOuter sg' LogicContext.empty proof_term
           val () = debug_prop_pair := (actual_prop, output_prop)
-          val () = LogicCheck.propEquality actual_prop output_prop
+          val () = LogicCheck.propEquality actual_prop expected_prop
 
           (* Ok. Everything checks out! Now we just need to update the
            * data structures. *)

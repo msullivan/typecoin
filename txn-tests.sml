@@ -126,7 +126,7 @@ struct
         ]
   (* This transaction just establishes the rules. No useful outputs. *)
   val outputs = [StdOutput {dest = charlie_hash, prop = POne}]
-  val proof_term = z
+  val proof_term = MLam ("z", POne, z)
 
   in
 
@@ -137,7 +137,6 @@ struct
        persistent_sg = auth_sg,
        linear_sg = [],
        outputs = outputs,
-       var = "z",
        proof_term = proof_term}
 
 
@@ -192,8 +191,9 @@ struct
         LSSignedAffirmation self_persistent_access
     ]
     val proof_term =
+        MLam ("z", PTensor (POne, self_persistent_access_prop),
          MTensorLet (z, "z1", "z2",
-            z2)
+            z2))
 
   in
 
@@ -204,7 +204,6 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
-       var = "z",
        proof_term = proof_term}
 
   val charlie_auth_txnid =
@@ -242,8 +241,9 @@ struct
         LSSignedAffirmation alice_says_can_access
     ]
     val proof_term =
+        MLam ("z", PTensor (POne, alice_says_can_access_prop),
          MTensorLet (z, "z1", "z2",
-            z2)
+            z2))
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
@@ -254,7 +254,6 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
-       var = "z",
        proof_term = proof_term}
 
   val alice_auth_txnid =
@@ -291,6 +290,7 @@ struct
     val linear_sg = []
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
     val proof_term =
+        MLam ("z", PTensor (alice_says_can_access_prop, POne),
          MTensorLet (z, "z1", "z2",
          MSayBind (charlie_delegates_to_alice, "y",
           MSayReturn (
@@ -301,7 +301,7 @@ struct
               use_access,
               test_resource),
              nonce),
-            MApp (y, z1)))))
+            MApp (y, z1))))))
 
   in
   val bob_auth_txn = TxnBody
@@ -311,7 +311,6 @@ struct
        persistent_sg = sg,
        linear_sg = linear_sg,
        outputs = outputs,
-       var = "z",
        proof_term = proof_term}
 
   val bob_auth_txnid =
@@ -365,7 +364,6 @@ struct
   (* Alice is the president, or something. *)
   val president = alice
 
-(*
   val money_sg = FromNamed.convertLogicSg
         [(* Simple things about manipulating money. *)
          C (T, "money", num --> EProp),
@@ -391,9 +389,8 @@ struct
             PForall ("K", principal, PForall ("Ti", time, PForall ("N", num,
              PAtom (c_app "is_banker" [K, Ti]) -@
              PAffirms (K, issue' N) -@
-             PConstrained (money' N, [CBefore Ti])))))
+             PIf (CBefore Ti, money' N)))))
         ]
-*)
 
 
 end

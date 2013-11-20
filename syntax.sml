@@ -228,7 +228,6 @@ struct
             persistent_sg: persistent_sg,
             linear_sg: linear_sg,
             outputs: outputs,
-            var: Variable.var,
             proof_term: Logic.proof}
   type txn = txnid * txn_body
 
