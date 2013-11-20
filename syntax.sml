@@ -184,7 +184,6 @@ struct
 
   datatype sg_entry = SRule of Const.id * prop
                     | SConst of LFSyntax.sg_entry
-                    | SSignedAffirmation of Const.id * signed_affirmation
 
 
 end
@@ -217,10 +216,8 @@ struct
 
   type persistent_sg = Logic.sg_entry list
 
-  datatype linear_sg_entry =
-           LSResource of Logic.prop
-         | LSSignedAffirmation of Logic.signed_affirmation
-  type linear_sg = linear_sg_entry list
+  (* This is a list, even though the formalism calls it a single prop. *)
+  type linear_grant = Logic.prop list
 
 
   datatype txn_body = TxnBody of
@@ -228,7 +225,7 @@ struct
             metadata: string list,
             inputs: inputs,
             persistent_sg: persistent_sg,
-            linear_sg: linear_sg,
+            linear_grant: linear_grant,
             outputs: outputs,
             proof_term: Logic.proof}
   type txn = txnid * txn_body

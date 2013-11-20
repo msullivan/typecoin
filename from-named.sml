@@ -109,14 +109,9 @@ struct
 
   fun convertLogicSgEntry (SRule (i, prop)) = SRule (i, convertProp [] prop)
     | convertLogicSgEntry (SConst (d, c, e)) = SConst (d, c, convertExp [] e)
-    | convertLogicSgEntry (SSignedAffirmation (id, affirmation)) =
-      SSignedAffirmation (id, convertAffirmation [] affirmation)
   fun convertLogicSg sg = map convertLogicSgEntry sg
 
-  fun convertLinearSgEntry (LSResource prop) = LSResource (convertProp [] prop)
-    | convertLinearSgEntry (LSSignedAffirmation affirmation) =
-      LSSignedAffirmation (convertAffirmation [] affirmation)
-  fun convertLinearSg sg = map convertLinearSgEntry sg
+  fun convertLinearGrant sg = map (convertProp []) sg
 
 
   end

@@ -240,7 +240,6 @@ struct
 
 
   fun prettyDecl (SRule (c, A)) = fmt (&[$c, $": ", toLayoutTop A , $"."])
-    | prettyDecl (SSignedAffirmation (c, aff)) = prettyDecl (SRule (c, affirmationToProp aff))
     | prettyDecl (SConst d) = PrettyLF.prettyDecl d
 
 

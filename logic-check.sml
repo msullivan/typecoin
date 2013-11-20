@@ -523,7 +523,6 @@ struct
       in Signature.insert_rule sg (Const.LThis, id) prop' end
 
   fun checkSgEntry sg (SRule entry) = checkRuleSgEntry sg entry
-    | checkSgEntry sg (SSignedAffirmation entry) = checkSignedAffirmationSgEntry sg entry
     | checkSgEntry sg (SConst entry) = TypeCheckLF.checkSgEntry sg entry
 
   fun checkSignature sg decls =
@@ -538,10 +537,6 @@ struct
     | installSgEntry sg ns (SConst (_, id, e)) =
       let val e' = LFSubst.replaceThisExp (Const.LId ns) e
       in Signature.insert sg (Const.LId ns, id) e' end
-    | installSgEntry sg ns (SSignedAffirmation (id, affirm)) =
-      let val prop' = LogicSubst.replaceThisProp (Const.LId ns) (affirmationToProp affirm)
-      in Signature.insert_rule sg (Const.LId ns, id) prop' end
-
 
 
   fun installSignature sg ns decls =
