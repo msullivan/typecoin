@@ -137,7 +137,7 @@ struct
        metadata = [],
        inputs = inputs,
        persistent_sg = auth_sg,
-       linear_sg = [],
+       linear_grant = [],
        outputs = outputs,
        proof_term = proof_term}
 
@@ -188,16 +188,11 @@ struct
         TypeCoinCrypto.makeAffirmation (SOME txn_ident) charlie_keypair
         (PBang (PAtom (can_access test_resource)))
 
-    val sg = [
-        SSignedAffirmation ("charlie_delegates_to_alice", delegate_to_alice)
-    ]
-    val linear_sg = [
-        LSSignedAffirmation self_persistent_access
-    ]
+    val sg = []
+    val linear_grant = []
     val proof_term =
-        MLam ("z", PTensor (POne, self_persistent_access_prop),
-         MTensorLet (z, "z1", "z2",
-            ifret z2))
+        MLam ("z", POne,
+              ifret (MAffirmation self_persistent_access))
 
   in
 
@@ -206,7 +201,7 @@ struct
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
-       linear_sg = linear_sg,
+       linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}
 
@@ -222,7 +217,7 @@ struct
           })
 
   val charlie_delegates_to_alice =
-      MRule (Const.LId charlie_auth_txnid, "charlie_delegates_to_alice")
+      MAffirmation delegate_to_alice
 
   end
 
@@ -241,13 +236,10 @@ struct
         (PAtom (can_access test_resource))
 
     val sg = []
-    val linear_sg = [
-        LSSignedAffirmation alice_says_can_access
-    ]
+    val linear_grant = []
     val proof_term =
-        MLam ("z", PTensor (POne, alice_says_can_access_prop),
-         MTensorLet (z, "z1", "z2",
-            ifret z2))
+        MLam ("z", POne,
+              ifret (MAffirmation alice_says_can_access))
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
@@ -256,7 +248,7 @@ struct
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
-       linear_sg = linear_sg,
+       linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}
 
@@ -291,7 +283,7 @@ struct
 
     val outputs = [StdOutput {dest = bob_hash, prop = charlie_says_can_access_nonce}]
     val sg = []
-    val linear_sg = []
+    val linear_grant = []
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
     val proof_term =
         MLam ("z", PTensor (alice_says_can_access_prop, POne),
@@ -314,7 +306,7 @@ struct
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
-       linear_sg = linear_sg,
+       linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}
 
