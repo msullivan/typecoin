@@ -102,6 +102,7 @@ struct
 
   infixr -->
 
+  fun ifret M = MIfReturn (CTrue, M)
 
   local
     val input_txid = initial_input_txid
@@ -126,7 +127,7 @@ struct
         ]
   (* This transaction just establishes the rules. No useful outputs. *)
   val outputs = [StdOutput {dest = charlie_hash, prop = POne}]
-  val proof_term = MLam ("z", POne, z)
+  val proof_term = MLam ("z", POne, ifret z)
 
   in
 
@@ -193,7 +194,7 @@ struct
     val proof_term =
         MLam ("z", PTensor (POne, self_persistent_access_prop),
          MTensorLet (z, "z1", "z2",
-            z2))
+            ifret z2))
 
   in
 
@@ -243,7 +244,7 @@ struct
     val proof_term =
         MLam ("z", PTensor (POne, alice_says_can_access_prop),
          MTensorLet (z, "z1", "z2",
-            z2))
+            ifret z2))
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
@@ -291,17 +292,18 @@ struct
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
     val proof_term =
         MLam ("z", PTensor (alice_says_can_access_prop, POne),
-         MTensorLet (z, "z1", "z2",
-         MSayBind (charlie_delegates_to_alice, "y",
-          MSayReturn (
-           charlie,
-           MApp (
-            MForallApp (
+         ifret (
+          MTensorLet (z, "z1", "z2",
+          MSayBind (charlie_delegates_to_alice, "y",
+           MSayReturn (
+            charlie,
+            MApp (
              MForallApp (
-              use_access,
-              test_resource),
-             nonce),
-            MApp (y, z1))))))
+              MForallApp (
+               use_access,
+               test_resource),
+              nonce),
+             MApp (y, z1)))))))
 
   in
   val bob_auth_txn = TxnBody

@@ -142,12 +142,25 @@ struct
           val input_prop = build_tensor (input_props @ linear_sg_props @ receipt_props)
           val output_prop = build_tensor output_props
 
-          val expected_prop = PLolli (input_prop, output_prop)
-
           (* Moment of truth: check the proof term. *)
           val actual_prop = LogicCheck.inferProofOuter sg' LogicContext.empty proof_term
-          val () = debug_prop_pair := (actual_prop, output_prop)
-          val () = LogicCheck.propEquality actual_prop expected_prop
+          val (actual_input, actual_output, condition) =
+              (case actual_prop of
+                   PLolli (A, PIf (c, B)) => (A, B, c)
+                 | _ => raise TypeCoinError "proof term has bogus type")
+
+          val () = debug_prop_pair := (actual_input, input_prop)
+          val () = LogicCheck.propEquality actual_input input_prop
+          val () = debug_prop_pair := (actual_output, output_prop)
+          val () = LogicCheck.propEquality actual_output output_prop
+
+          (* TODO: check the condition! *)
+(*
+          val () = print (
+                   Layout.tostring (
+                   Layout.seq [Layout.str "assuming condition: ",
+                               PrettyLogic.toLayoutCondition condition]) ^ "\n")
+*)
 
           (* Ok. Everything checks out! Now we just need to update the
            * data structures. *)

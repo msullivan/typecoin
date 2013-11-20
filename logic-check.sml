@@ -495,14 +495,12 @@ struct
        handle _ => raise ProofError "unrevoked constraint invalid")
 *)
 
-  fun inferOuter checkFn sg G M =
+  fun inferProofOuter sg G M =
       let val res = foldl (fn (v, res) => VarSet.insert res v)
                           VarSet.empty (LogicContext.getVariables G)
           val D = (G, res)
-          val (A, res) = checkFn sg D M
+          val (A, res) = checkProof sg D M
       in A end
-
-  val inferProofOuter = inferOuter checkProof
 
   fun checkRuleSgEntry sg (id, prop) =
       (checkProp sg Ctx.empty prop;
