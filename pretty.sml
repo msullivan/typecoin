@@ -16,11 +16,16 @@ struct
 
   val look_good_but_be_wrong = true
 
+  fun prettyConst (Const.LThis, s) = s
+    | prettyConst (Const.LId "$", s) = "$." ^ s
+    | prettyConst (Const.LId n, s) =
+      if look_good_but_be_wrong then "%." ^ s
+      else n ^ "." ^ s
 
   fun toLayoutHead (HVar (i, s)) =
       if look_good_but_be_wrong then $s
       else $(s ^ "/" ^ Int.toString i)
-    | toLayoutHead (HConst s) = $(Const.toStr s)
+    | toLayoutHead (HConst s) = $(prettyConst s)
   fun toLayoutExp e =
       (case e of
            EKind => $"kind"
@@ -201,10 +206,7 @@ struct
          | PLolli As => toLayoutBinop "-o" A As
          | PWith As => toLayoutBinop "&" A As
          | POplus As => toLayoutBinop "+" A As
-
-
       )
-
   and toLayoutHelp associate A_outer A =
       let val cmp = if associate then (op >) else (op >=)
           val needParens = cmp (precedence A, precedence A_outer)
@@ -216,8 +218,58 @@ struct
           % [&[toLayoutHelp (not rightAssoc) A_outer A1, $(" " ^ sep)],
               toLayoutHelp rightAssoc A_outer A2]
       end
-
   and toLayoutPrefix A_outer A = toLayoutHelp true A_outer A
+
+
+  (* We just do a really bad layout for proofs *)
+  fun toLayoutProof M =
+      let fun help s [] = $s
+            | help s xs = %%[$s, L.listexFree "(" ")" "," xs]
+
+          val lproof = toLayoutProof
+          val lprop = toLayoutProp
+          fun lvar v = $(Variable.toStr v)
+          fun lbinding v = $v
+          val lcond = toLayoutCondition
+          val llf = PrettyLF.toLayoutExp
+          fun laff _ = $"..."
+          fun lidx L = $"L"
+            | lidx R = $"R"
+
+      in
+      (case M of
+           MRule c => help "MRule" [$(PrettyLF.prettyConst c)]
+         | MVar v => help "MVar" [lvar v]
+         | MBang M => help "MBang" [lproof M]
+         | MBangLet (M1, v, M2) => help "MBangLet" [lproof M1, lvar v, lproof M2]
+         | MLam (v, A, M) => help "MLam" [lvar v, lprop A, lproof M]
+         | MApp (M1, M2) => help "MApp" [lproof M1, lproof M2]
+         | MTensor (M1, M2) => help "MTensor" [lproof M1, lproof M2]
+         | MTensorLet (M1, v1, v2, M2) => help "MTensorLet" [lproof M1, lvar v1, lvar v2, lproof M2]
+         | MWith (M1, M2) => help "MWith" [lproof M1, lproof M2]
+         | MPi (i, M) => help "MPi" [lidx i, lproof M]
+         | MInj (i, M, A) => help "MInj" [lidx i, lproof M, lprop A]
+         | MCase (M, v1, M1, v2, M2) => help "MCase" [lproof M, lvar v1, lproof M1, lvar v2, lproof M2]
+         | MOne => help "MOne" []
+         | MAbort (M, A) => help "MAbort" [lproof M, lprop A]
+         | MForallLam (x, t, M) => help "MForallLam" [lbinding x, llf t, lproof M]
+         | MForallApp (M, t) => help "MForallApp" [lproof M, llf t]
+         | MPack (t, M, A) => help "MPack" [llf t, lproof M, lprop A]
+         | MUnpack (M1, x, v, M2) => help "MUnpack" [lproof M1, lbinding x, lvar v, lproof M2]
+         | MSayReturn (k, M) => help "MSayReturn" [llf k, lproof M]
+         | MSayBind (M1, v, M2) => help "MSayBind" [lproof M1, lvar v, lproof M2]
+         | MIfReturn (c, M) => help "MIfReturn" [lcond c, lproof M]
+         | MIfBind (M1, v, M2) => help "MIfBind" [lproof M1, lvar v, lproof M2]
+         | MIfWeaken (c, M) => help "MIfWeaken" [lcond c, lproof M]
+         | MIfSay M => help "MIfSay" [lproof M]
+
+         | MAffirmation aff => help "MAffirmation" [laff aff]
+
+      )
+      end
+
+
+
 
   (* Another try that doesn't screw over ->s ?? *)
   fun toLayoutTop2 A =
@@ -242,9 +294,10 @@ struct
   fun prettyDecl (SRule (c, A)) = fmt (&[$c, $": ", toLayoutTop A , $"."])
     | prettyDecl (SConst d) = PrettyLF.prettyDecl d
 
-
   fun prettySg sg =
       String.concatWith "\n" (map prettyDecl sg)
+
+  fun prettyProof M = fmt (toLayoutProof M)
 
   end
 

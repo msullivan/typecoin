@@ -310,6 +310,7 @@ struct
        outputs = outputs,
        proof_term = proof_term}
 
+  val bob_proof_term = proof_term
   val bob_auth_txnid =
       setup "4b827a45e03b6fe2145e1f24d63645d9826a9320836d3e560fa3eb1e2af2d1a2"
       (fn _ =>

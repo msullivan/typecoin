@@ -304,9 +304,12 @@ struct
     local
         fun sequence (start, finish, sep) ts =
             seq [str start, mayAlign (separateRight (ts, sep)), str finish]
+        fun sequenceFree (start, finish, sep) ts =
+            seq [str start, freeStyleAlign (separateRight (ts, sep)), str finish]
     in
         val list = sequence ("[", "]", ",")
         fun listex start finish sep = sequence (start, finish, sep)
+        fun listexFree start finish sep = sequenceFree (start, finish, sep)
         val schemeList = sequence ("(", ")", " ")
         val tuple = sequence ("(", ")", ",")
         fun record fts =

@@ -34,6 +34,8 @@ signature LAYOUT =
       val list: layout list -> layout
       (* give open, close, sep *)
       val listex : string -> string -> string -> layout list -> layout
+      (* give open, close, sep *)
+      val listexFree : string -> string -> string -> layout list -> layout
 
 
 (* (* what is this? *)
