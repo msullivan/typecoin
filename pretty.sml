@@ -221,10 +221,32 @@ struct
   and toLayoutPrefix A_outer A = toLayoutHelp true A_outer A
 
 
+  (* A hacky little function for formatting a string followed
+   * by some layout, and partially indenting the layout if we
+   * have to linebreak, but not putting in extra spaces
+   * otherwise.
+   *
+   * This could be more general if Layout allowed breaking
+   * layout without implicit spaces.
+   *
+   * This works by splitting the string across two layout
+   * elements.
+   *)
+  fun partialIndent indentAmount s l =
+      if size s < indentAmount then &[$s, $" ", l] else
+      let val s1 = String.substring (s, 0, indentAmount)
+          val s2 = String.substring (s, indentAmount, size s - indentAmount)
+      in &[$s1, % [$s2, l] ] end
+
+
   (* We just do a really bad layout for proofs *)
   fun toLayoutProof M =
-      let fun help s [] = $s
-            | help s xs = %%[$s, L.listexFree "(" ")" "," xs]
+      let
+          val freeTuple = L.listexFree "(" ")" ","
+
+          val indentAmount = 2
+          fun help s [] = $s
+            | help s xs = partialIndent indentAmount s (freeTuple xs)
 
           val lproof = toLayoutProof
           val lprop = toLayoutProp
@@ -238,8 +260,8 @@ struct
 
       in
       (case M of
-           MRule c => help "MRule" [$(PrettyLF.prettyConst c)]
-         | MVar v => help "MVar" [lvar v]
+           MRule c => &[$"MRule ", $(PrettyLF.prettyConst c)]
+         | MVar v => &[$"MVar ", lvar v]
          | MBang M => help "MBang" [lproof M]
          | MBangLet (M1, v, M2) => help "MBangLet" [lproof M1, lvar v, lproof M2]
          | MLam (v, A, M) => help "MLam" [lvar v, lprop A, lproof M]
@@ -256,7 +278,7 @@ struct
          | MForallApp (M, t) => help "MForallApp" [lproof M, llf t]
          | MPack (t, M, A) => help "MPack" [llf t, lproof M, lprop A]
          | MUnpack (M1, x, v, M2) => help "MUnpack" [lproof M1, lbinding x, lvar v, lproof M2]
-         | MSayReturn (k, M) => help "MSayReturn" [llf k, lproof M]
+         | MSayReturn (k, M) => help "MSayReturn" [specialLFLayout toLayoutPrincipal k, lproof M]
          | MSayBind (M1, v, M2) => help "MSayBind" [lproof M1, lvar v, lproof M2]
          | MIfReturn (c, M) => help "MIfReturn" [lcond c, lproof M]
          | MIfBind (M1, v, M2) => help "MIfBind" [lproof M1, lvar v, lproof M2]
