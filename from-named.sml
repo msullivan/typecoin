@@ -1,7 +1,25 @@
+signature FROM_NAMED =
+sig
+  type ctx = LF.binding list
+
+  val convertSg : LF.sg -> LF.sg
+  val convertLogicSg : Logic.sg -> Logic.sg
+
+  val convertExp : ctx -> LF.exp -> LF.exp
+  val convertHead : ctx -> LF.head -> LF.head
+  val convertSpine : ctx -> LF.spine -> LF.spine
+  val convertProp : ctx -> Logic.prop -> Logic.prop
+  val convertAffirmation : ctx -> Logic.signed_affirmation -> Logic.signed_affirmation
+  val convertCondition : ctx -> Logic.condition -> Logic.condition
+  val convertProof : ctx -> Logic.proof -> Logic.proof
+
+end
+
 (* Do a conversion from named to de bruijn.
  * Both use the same syntax but named variables have ~1 as index. *)
-structure FromNamed =
+structure FromNamed : FROM_NAMED =
 struct
+  type ctx = LF.binding list
 
   local
       open LF Logic TypeCoinTxn

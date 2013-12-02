@@ -74,6 +74,7 @@ struct
 
   datatype entry_type = SgFamilyDecl | SgObjectDecl
   type sg_entry = entry_type * Const.id * exp
+  type sg = sg_entry list
 
   val listToSpine = foldr SApp SNil
   fun spineToList SNil = nil
@@ -138,7 +139,6 @@ struct
   type bytestring = Word8Vector.vector
   type crypto_sig = bytestring
   type crypto_address = bytestring
-  (* Here the principal is the entire public key. *)
   type crypto_principal = bytestring
 
   type signed_affirmation =
@@ -184,7 +184,7 @@ struct
 
   datatype sg_entry = SRule of Const.id * prop
                     | SConst of LFSyntax.sg_entry
-
+  type sg = sg_entry list
 
 end
 

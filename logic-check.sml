@@ -120,7 +120,33 @@ struct
             persistent))
 end
 
-structure LogicCheck =
+signature LOGIC_CHECK =
+sig
+  exception ProofError of string
+
+
+  val propEquality : Logic.prop -> Logic.prop -> unit
+  val checkProp : Signature.sg -> LogicContext.ctx -> Logic.prop -> unit
+
+  (* Bad name. *)
+  val inferProofOuter : Logic.bytestring -> Signature.sg -> LogicContext.ctx -> Logic.proof ->
+                        Logic.prop
+
+  val thawedProp : Logic.prop -> unit
+
+  val checkSignature : Signature.sg -> Logic.sg -> Signature.sg
+  val installSignature : Signature.sg -> Const.namespace -> Logic.sg -> Signature.sg
+
+  val basis_sg : Signature.sg
+
+  (* Hm. Maybe not. *)
+  val affirmationToProp : Logic.signed_affirmation -> Logic.prop
+
+end
+
+
+
+structure LogicCheck : LOGIC_CHECK =
 struct
 
   local
@@ -133,7 +159,7 @@ struct
 
   fun checkCondition sg ctx c =
       let val check = checkCondition sg ctx
-          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
       in
       (case c of
            CBefore e => checkLF e TypeCoinBasis.number
@@ -146,7 +172,7 @@ struct
 
   fun checkProp sg ctx prop =
       let val check = checkProp sg ctx
-          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
 
       in
       (case prop of
@@ -208,8 +234,8 @@ struct
   fun conditionEquality c c' =
       (case (c, c') of
            (CTrue, CTrue) => ()
-         | (CBefore t, CBefore t') => TypeCheckLF.exprEquality t t'
-         | (CSpent t, CSpent t') => TypeCheckLF.exprEquality t t'
+         | (CBefore t, CBefore t') => TypeCheckLF.expEquality t t'
+         | (CSpent t, CSpent t') => TypeCheckLF.expEquality t t'
          | (CNot c, CNot c') => conditionEquality c c'
          | (CAnd (c1, c2), CAnd (c1', c2')) =>
            (conditionEquality c1 c1'; conditionEquality c2 c2')
@@ -230,7 +256,7 @@ struct
                             condSearch lAtoms rAtoms [] (c2::rs)
          | c => condSearch lAtoms (c::rAtoms) [] rs)
     | condSearch lAtoms rAtoms [] [] =
-      let fun lfIsEqual t1 t2 = (TypeCheckLF.exprEquality t1 t2; true)
+      let fun lfIsEqual t1 t2 = (TypeCheckLF.expEquality t1 t2; true)
                                 handle _ => false
 
           fun timeLessThan t1 t2 =
@@ -253,7 +279,7 @@ struct
   (* should we catch TypeErrors and raise proof errors? *)
   fun propEquality A A' =
       (case (A, A') of
-           (PAtom t, PAtom t') => TypeCheckLF.exprEquality t t'
+           (PAtom t, PAtom t') => TypeCheckLF.expEquality t t'
          | (PBang A, PBang A') => propEquality A A'
          | (PLolli (A1, A2), PLolli (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
          | (PTensor (A1, A2), PTensor (A1', A2')) => (propEquality A1 A1'; propEquality A2 A2')
@@ -262,13 +288,13 @@ struct
          | (POne, POne) => ()
          | (PZero, PZero) => ()
          | (PForall (_, t, A), PForall (_, t', A'))  =>
-           (propEquality A A'; TypeCheckLF.exprEquality t t')
+           (propEquality A A'; TypeCheckLF.expEquality t t')
          | (PExists (_, t, A), PExists (_, t', A'))  =>
-           (propEquality A A'; TypeCheckLF.exprEquality t t')
+           (propEquality A A'; TypeCheckLF.expEquality t t')
          | (PAffirms (t, A), PAffirms (t', A'))  =>
-           (propEquality A A'; TypeCheckLF.exprEquality t t')
+           (propEquality A A'; TypeCheckLF.expEquality t t')
          | (PReceipt (t, A), PReceipt (t', A'))  =>
-           (propEquality A A'; TypeCheckLF.exprEquality t t')
+           (propEquality A A'; TypeCheckLF.expEquality t t')
          | (PIf (c, A), PIf (c', A')) =>
            (conditionEquality c c'; propEquality A A')
          | ps => (mismatched_props_debug := ps; raise ProofError "props don't match")
@@ -303,7 +329,7 @@ struct
   fun checkProof T sg (D as (ctx, res)) M =
       let val checkProof = checkProof T sg
           val checkProp = checkProp sg
-          val checkLF = TypeCheckLF.checkExpr sg (Ctx.lfContext ctx)
+          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
           val checkCondition = checkCondition sg ctx
       in
       (case M of
@@ -454,7 +480,7 @@ struct
                    (case affkB of PAffirms x => x
                                 | _ => raise ProofError "bind must result in affirms")
                (* principals must match *)
-               val () = TypeCheckLF.exprEquality k k'
+               val () = TypeCheckLF.expEquality k k'
            in (PAffirms (k, B), res'') end
 
          | MIfReturn (c, M) =>
