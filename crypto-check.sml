@@ -175,5 +175,14 @@ struct
 
       in () end
 
+  fun checkCondition t c =
+      (case c of
+           Logic.CTrue => true
+         | Logic.CAnd (c1, c2) => checkCondition t c1 andalso checkCondition t c2
+         | Logic.CNot c => not (checkCondition t c)
+         | Logic.CBefore t' => t < TypeCoinBasis.lfNumToInt t'
+         | Logic.CSpent c => raise Fail "unimplemented"
+      )
+
 
 end
