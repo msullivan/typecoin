@@ -20,5 +20,5 @@ Group is
 	txn-tests.sml
 
         (* stuff copied and modified from tom-lib *)
-        layout.sml
-        layout.sig
+        lib/layout.sml
+        lib/layout.sig
