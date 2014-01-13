@@ -22,3 +22,6 @@ Group is
         (* stuff copied and modified from tom-lib *)
         lib/layout.sml
         lib/layout.sig
+	lib/http-downloader.sig
+	lib/curl-lib.sml
+	lib/fsutil.sml
