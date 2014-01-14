@@ -326,10 +326,10 @@ struct
 
 
   val auth_test_chain =
-      [(initial_auth_txnid, initial_auth_txn),
-       (charlie_auth_txnid, charlie_auth_txn),
-       (alice_auth_txnid, alice_auth_txn),
-       (bob_auth_txnid, bob_auth_txn)]
+      [(NONE, initial_auth_txnid, initial_auth_txn),
+       (NONE, charlie_auth_txnid, charlie_auth_txn),
+       (NONE, alice_auth_txnid, alice_auth_txn),
+       (NONE, bob_auth_txnid, bob_auth_txn)]
 
   fun submit () = List.app (fn (_, tx) => RPC.Process.inject tx) (rev (!pending))
 

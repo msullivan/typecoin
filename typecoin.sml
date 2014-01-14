@@ -60,7 +60,8 @@ struct
   val debug_prop_pair = ref (POne, POne)
 
   fun checkTransaction sg tr
-                       (txnid,
+                       (block,
+                        txnid,
                         TxnBody {inputs, persistent_sg, linear_grant, outputs, proof_term,
                                  name, ...}) =
       let val () = print ("checking " ^ txnid ^ "/" ^ name ^ "\n")
@@ -103,6 +104,13 @@ struct
                    Layout.seq [Layout.str "assuming condition: ",
                                PrettyLogic.toLayoutCondition condition]) ^ "\n")
 *)
+          (* If we don't have a particular block number, we'll just assume the current
+           * one for checking purposes. *)
+          val block_num = (case block of NONE => RPC.Blockchain.lastBlock () | SOME n => n)
+          val meets_condition = TypeCoinCrypto.checkCondition block_num condition
+          val () = if meets_condition then () else
+                   raise TypeCoinError "condition does not hold"
+
 
           (* Ok. Everything checks out! Now we just need to update the
            * data structures. *)

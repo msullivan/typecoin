@@ -228,7 +228,7 @@ struct
             linear_grant: linear_grant,
             outputs: outputs,
             proof_term: Logic.proof}
-  type txn = txnid * txn_body
+  type txn = int option * txnid * txn_body
 
   type chain = txn list
 
