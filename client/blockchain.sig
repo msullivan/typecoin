@@ -47,6 +47,8 @@ signature BLOCKCHAIN =
       val txByNumberAndHash : int -> hash -> Transaction.tx
       val txIndexByNumberAndHash : int -> hash -> int
 
+      val isUnspent : Transaction.coord -> bool
+
       (* Starts with verification suspended. *)
       val initialize : unit -> unit
 

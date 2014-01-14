@@ -88,6 +88,11 @@ structure RpcAction :> RPC_ACTION =
                 (* Blockchain.txIndexByNumberAndHash *)
                 Int (Blockchain.txIndexByNumberAndHash i hash)
 
+           | (0w27, Cons (Bytestring hash, Int i)) =>
+                (* Blockchain.isUnspent *)
+                Bool (Blockchain.isUnspent (hash, i))
+
+
            | _ =>
                 Method)
 

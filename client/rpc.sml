@@ -122,6 +122,10 @@ structure RPC :> RPC =
             fun txIndexByNumberAndHash i hash =
                fromInt (rpc (0w26, Cons (Int i, Bytestring hash)))
 
+            fun isUnspent (hash, i) =
+               fromBool (rpc (0w27, Cons (Bytestring hash, Int i)))
+
+
          end
 
       structure Process =

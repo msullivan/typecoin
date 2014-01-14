@@ -1190,6 +1190,8 @@ structure Blockchain :> BLOCKCHAIN =
 
       fun tx hash = txWithUtxo (currentUtxo ()) hash
 
+      fun isUnspent coord = Utxo.unspent (currentUtxo ()) (valOf (Int.maxInt)) coord
+
 
       local
          exception FoundIt of int * Transaction.tx * Bytestring.string
