@@ -38,7 +38,7 @@ struct
                                        needs_receipt = false, amount = NONE}
 
   fun makeTxnId real_txn =
-      Bytestring.toStringHex (Bytestring.rev (TypeCoinCrypto.hash (Transaction.writeTx real_txn)))
+      TypeCoinTxn.toHexId (TypeCoinCrypto.hash (Transaction.writeTx real_txn))
 
   type keypair = ECDSAp.pubkey * ECDSAp.privkey
 

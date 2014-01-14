@@ -99,8 +99,6 @@ struct
         hashTxnBody typecoin_txn
       ]
 
-  fun fromHexId id = Bytestring.rev (valOf (Bytestring.fromStringHex id))
-
   (* txns is a list of transactions that we might want to reference
    * that haven't landed yet *)
   fun createTxn txns
@@ -123,7 +121,7 @@ struct
           val outputs' = map convertOutput outputs
 
           fun lookup id =
-              (case List.find (fn (id', _) => fromHexId id' = id) txns of
+              (case List.find (fn (id', _) => TypeCoinTxn.fromHexId id' = id) txns of
                    SOME (_, txn) => SOME txn
                  (* if we don't have it, do an rpc lookup *)
                  | NONE => RPC.Blockchain.tx id)
@@ -153,7 +151,7 @@ struct
 
           fun checkInput (TypeCoinTxn.Input {source=(txnid, n), ...},
                           {from=(txnid', n'), ...} : Transaction.txin) =
-              if fromHexId txnid = txnid' andalso n = n' then () else
+              if TypeCoinTxn.fromHexId txnid = txnid' andalso n = n' then () else
               raise Error "transaction inputs don't match"
 
           val () = ListPair.appEq checkInput (tcInputs, realInputs)
@@ -181,7 +179,15 @@ struct
          | Logic.CAnd (c1, c2) => checkCondition t c1 andalso checkCondition t c2
          | Logic.CNot c => not (checkCondition t c)
          | Logic.CBefore t' => t < TypeCoinBasis.lfNumToInt t'
-         | Logic.CSpent c => raise Fail "unimplemented"
+         | Logic.CSpent c =>
+           let val coord = TypeCoinBasis.lfCoordToCoord c
+           in not (RPC.Blockchain.isUnspent coord) andalso
+              let val (txid, block) = valOf (BlockExplorer.getSpendingTxAndBlock coord)
+                      handle _ => raise Fail "looking up spending block failed"
+                  (* TODO: actually check that this transaction happened ourselves
+                   * instead of relying on blockexplorer *)
+              in block < t end
+           end
       )
 
 

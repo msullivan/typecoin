@@ -232,4 +232,8 @@ struct
 
   type chain = txn list
 
+
+  fun fromHexId id = Bytestring.rev (valOf (Bytestring.fromStringHex id))
+  fun toHexId id = Bytestring.toStringHex (Bytestring.rev id)
+
 end
