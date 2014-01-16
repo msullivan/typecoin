@@ -132,14 +132,14 @@ struct
 
   in
 
-  val initial_auth_txn = TxnBody
+  val initial_auth_txn = [TxnBody
       {name = "initial-auth",
        metadata = [],
        inputs = inputs,
        persistent_sg = auth_sg,
        linear_grant = [],
        outputs = outputs,
-       proof_term = proof_term}
+       proof_term = proof_term}]
 
 
   val initial_auth_txnid =
@@ -196,14 +196,14 @@ struct
 
   in
 
-  val charlie_auth_txn = TxnBody
+  val charlie_auth_txn = [TxnBody
       {name = "charlie-auth",
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
        linear_grant = linear_grant,
        outputs = outputs,
-       proof_term = proof_term}
+       proof_term = proof_term}]
 
   val charlie_auth_txnid =
       setup "c919d1f954d384e019e13bc5632ceb9e924362915d98f02a5218d3689cdcb6b2"
@@ -243,14 +243,14 @@ struct
 
   in
   val alice_says_can_access_prop = alice_says_can_access_prop
-  val alice_auth_txn = TxnBody
+  val alice_auth_txn = [TxnBody
       {name = "alice-auth",
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
        linear_grant = linear_grant,
        outputs = outputs,
-       proof_term = proof_term}
+       proof_term = proof_term}]
 
   val alice_auth_txnid =
       setup "b4ec90da38d8346b03c6fa769fcbff03488a532d6519403599b0faa8c778c7ba"
@@ -301,14 +301,14 @@ struct
              MApp (y, z1)))))))
 
   in
-  val bob_auth_txn = TxnBody
+  val bob_auth_txn = [TxnBody
       {name = "bob-auth",
        metadata = [],
        inputs = inputs,
        persistent_sg = sg,
        linear_grant = linear_grant,
        outputs = outputs,
-       proof_term = proof_term}
+       proof_term = proof_term}]
 
   val bob_proof_term = proof_term
   val bob_auth_txnid =

@@ -59,7 +59,7 @@ struct
 
   val debug_prop_pair = ref (POne, POne)
 
-  fun checkTransaction sg tr
+  fun checkTransaction' sg tr
                        (block,
                         txnid,
                         TxnBody {inputs, persistent_sg, linear_grant, outputs, proof_term,
@@ -122,6 +122,18 @@ struct
       in
           (sg'', tr')
       end
+
+  fun checkTransaction sg tr (block, txnid, [tx]) =
+      (* If there is only one, don't catch the errors *)
+      checkTransaction' sg tr (block, txnid, tx)
+    | checkTransaction sg tr (block, txnid, tx :: txs) =
+      (* I am really sloppy about exceptions... *)
+      (checkTransaction' sg tr (block, txnid, tx)
+       handle BlockExplorer.ExplorerError => raise BlockExplorer.ExplorerError
+            | _ => checkTransaction sg tr (block, txnid, txs))
+    | checkTransaction _ _ (_, _, []) =
+      raise TypeCoinError "empty transaction"
+
 
   fun checkChain sg tr txns =
       foldl (fn (txn, (sg, tr)) => checkTransaction sg tr txn) (sg, tr) txns

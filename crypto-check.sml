@@ -81,14 +81,14 @@ struct
   (* 0.001 btc *)
   val baseAmount: LargeInt.int = 100000
   type txn_specifier =
-       {typecoin_txn: TypeCoinTxn.txn_body,
+       {typecoin_txn: TypeCoinTxn.txn_bodies,
         keys: Signing.privkey list,
         fee: LargeInt.int,
         recovery_pubkey: Signing.pubkey,
         recovery_amount: LargeInt.int}
 
-  fun hashTxnBody txnBody =
-      hash (IOTypes.writeToVector TypeCoinTxn.writeTxn_body txnBody)
+  fun hashTxnBodies txnBody =
+      hash (IOTypes.writeToVector TypeCoinTxn.writeTxn_bodies txnBody)
 
   (* Tau in UTF-8 *)
   val magicNumber = Bytestring.implode [0wxCF, 0wx84]
@@ -96,7 +96,7 @@ struct
   fun makeFakePubkey typecoin_txn =
       Bytestring.concat [
         magicNumber,
-        hashTxnBody typecoin_txn
+        hashTxnBodies typecoin_txn
       ]
 
   (* txns is a list of transactions that we might want to reference
@@ -104,7 +104,7 @@ struct
   fun createTxn txns
                 (txn: txn_specifier as
                  {typecoin_txn, keys, fee, recovery_pubkey, recovery_amount}) =
-      let val (TypeCoinTxn.TxnBody {inputs, outputs, ...}) = typecoin_txn
+      let val (TypeCoinTxn.TxnBody {inputs, outputs, ...}) = hd typecoin_txn
 
           fun convertInput (TypeCoinTxn.Input {source = (txnid, i), ...}) =
               (Bytestring.rev (valOf (Bytestring.fromStringHex txnid)), i)
@@ -137,7 +137,7 @@ struct
   (* Checks a typecoin transaction against a bitcoin transaction *)
   fun checkTxn tcTxn (realTxn: Transaction.tx) =
       let val {inputs=realInputs, outputs=realOutputs, ...} = realTxn
-          val (TypeCoinTxn.TxnBody {inputs=tcInputs, outputs=tcOutputs, ...}) = tcTxn
+          val (TypeCoinTxn.TxnBody {inputs=tcInputs, outputs=tcOutputs, ...}) = hd tcTxn
 
           val (hashTxout :: revTxouts) = rev realOutputs
           val regularTxouts = rev revTxouts
