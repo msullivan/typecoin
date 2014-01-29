@@ -152,7 +152,7 @@ struct
   val length = List.length
   fun sub G n =
       let val t = List.nth (G, n)
-      in LFSubst.liftExp (n+1) (*XXX?*) t end
+      in LFSubst.liftExp (n+1) t end
   fun extend G t = t :: G
 end
 
@@ -184,8 +184,6 @@ in
 
   exception TypeError of string
 
-
-  (* XXX: do simple typechecking! otherwise we can loop, right? *)
 
   fun requireKind exp =
       if exp = EKind then () else raise TypeError "expected kind"

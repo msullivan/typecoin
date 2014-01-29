@@ -97,7 +97,6 @@ struct
           val () = debug_prop_pair := (actual_output, output_prop)
           val () = LogicCheck.propEquality actual_output output_prop
 
-          (* TODO: check the condition! *)
 (*
           val () = print (
                    Layout.tostring (

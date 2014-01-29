@@ -173,6 +173,13 @@ struct
 
       in () end
 
+  (* Verify that `txid' in `block' actually spent the output `coord' *)
+  (* We get this data from blockexplorer, but "trust but verify" *)
+  (* TODO: actually do this check *)
+  fun verifySpending coord txid block = ()
+
+  (* A nice thing to do would be to collect *why* a condition
+   * didn't hold for error message purposes. *)
   fun checkCondition t c =
       (case c of
            Logic.CTrue => true
@@ -184,8 +191,7 @@ struct
            in not (RPC.Blockchain.isUnspent coord) andalso
               let val (txid, block) = valOf (BlockExplorer.getSpendingTxAndBlock coord)
                       handle _ => raise Fail "looking up spending block failed"
-                  (* TODO: actually check that this transaction happened ourselves
-                   * instead of relying on blockexplorer *)
+                  val () = verifySpending coord txid block
               in block < t end
            end
       )
