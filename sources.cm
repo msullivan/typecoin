@@ -8,6 +8,9 @@ Group is
         vector-stream.sml
 
         pretty.sml
+        signature.sml
+        lf-util.sml
+        logic-util.sml
         lf-check.sml
         logic-check.sml
         from-named.sml
