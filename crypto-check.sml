@@ -1,13 +1,55 @@
 
+signature TYPE_COIN_CRYPTO =
+sig
+    structure Signing : ECDSA
+
+    type txn_identifier = Bytestring.string
+
+    val hashKey : Bytestring.string -> Bytestring.string
+    val hash : Bytestring.string -> Bytestring.string
+
+    val buildTxnIdentifier : TypeCoinTxn.inputs -> TypeCoinTxn.outputs ->
+                             txn_identifier
+
+    val checkAffirmation : txn_identifier
+                           -> Logic.signed_affirmation
+                           -> bool
+
+    (* If the txn_identifier argument is NONE, produces a persistent affirmation *)
+    val makeAffirmation : txn_identifier option
+                          -> Signing.pubkey * Signing.privkey
+                          -> Logic.prop
+                          -> Logic.signed_affirmation
+
+    val baseAmount : IntInf.int
+
+    type txn_specifier =
+         {typecoin_txn: TypeCoinTxn.txn_bodies,
+          keys: Signing.privkey list,
+          fee: LargeInt.int,
+          recovery_pubkey: Signing.pubkey,
+          recovery_amount: LargeInt.int}
+
+
+    val createTxn : (TypeCoinTxn.txnid * Transaction.tx) list
+                    -> txn_specifier -> Transaction.tx
+    val checkTxn : TypeCoinTxn.txn_body list -> Transaction.tx -> unit
+
+    val checkCondition : int -> Logic.condition -> bool
+end
+
+
 (* Checking of affirmations in transactions and other crypto stuff. *)
 (* I am not super comfortable that I got this crypto stuff right.
  * I am not a crypto person... *)
 
-structure TypeCoinCrypto =
+structure TypeCoinCrypto : TYPE_COIN_CRYPTO =
 struct
   structure Signing = ECDSAp
   structure Encoding = ECDERp
   val param = EllipticCurveParams.secp256k1
+
+  type txn_identifier = Bytestring.string
 
   val Error = Fail
 
