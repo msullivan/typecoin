@@ -1,5 +1,5 @@
 .cm/
 *~
 syntax-io.ioml
-syntax-io.sml
+#syntax-io.sml # :( :( that this is generated and not ignored, but...
 data

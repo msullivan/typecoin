@@ -1,7 +1,7 @@
 Group is
         $CMLIB/cmlib.cm
         $smlnj-tdp/back-trace.cm
-        ../ktypecoin/client/sources.cm
+        ../client/sources.cm
 
         iotype-lib.sml
         syntax-io.sml
