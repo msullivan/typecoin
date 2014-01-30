@@ -1,0 +1,54 @@
+
+%Security-typed programming within dependently typed programming
+%% https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=5&ved=0CE0QFjAE&url=http%3A%2F%2Fdl.acm.org%2Fcitation.cfm%3Fid%3D1863569&ei=l_s4UvmBNqb94APV74HYCg&usg=AFQjCNHFDShIddUF0OorIMB-JfECWkKapA&sig2=LDgqDF3QnC5HpR-ZzpmjnA&bvm=bv.52288139,d.dmg
+%% Morgenstern and Licata
+
+% Typecoin statics
+
+prin: type.
+sully: prin.
+rob: prin.
+karl: prin.
+chris: prin.
+frank: prin.
+deb: prin.
+
+ty: type.
+one: ty.
+tensor: ty -> ty -> ty.
+zero: ty.
+or: ty -> ty -> ty.
+imp: ty -> ty -> ty.
+bang: ty -> ty.
+
+tm: ty -> type.
+unit: tm one.
+pair: tm A -o tm B -o tm (tensor A B).
+letpair: tm (tensor A B) -o (tm A -o tm B -o tm C) -o tm C.
+abort: tm zero -o tm C.
+inl: tm A -o tm (or A B).
+inr: tm B -o tm (or A B).
+case: tm (or A B) -o ((tm A -o tm C) & (tm B -o tm C)) -o tm C.
+lam: (tm A -o tm B) -o tm (imp A B).
+app: tm (imp A B) -o tm A -o tm B.
+bang: tm A -> tm (bang A).
+letbang: tm (bang A) -o (tm A -> tm C) -o tm C.
+
+exp: type.
+
+
+% Typecoin dynamics
+
+
+res: prin -> ty -> type.
+prog: prin -> exp -> type.
+
+trans: res P A -o prog P (M: tm A -o tm B) -o {res P B}.
+break: res P A -o prog P (M: tm A -o tm (tensor B C)) -o {res P B * res P
+C}.
+join: res P A -o res P B -o prog P (M:
+
+% The transition rule that fires when someone enters an office
+gain_entry: res P (says deb (can_enter_office P ROOM_NUMBER))
+            prog P (access_office ROOM_NUMBER)
+             -o {1}.

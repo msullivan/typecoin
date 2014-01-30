@@ -1,0 +1,32 @@
+Group is
+        $CMLIB/cmlib.cm
+        $smlnj-tdp/back-trace.cm
+        ../ktypecoin/client/sources.cm
+
+        iotype-lib.sml
+        syntax-io.sml
+        vector-stream.sml
+
+        pretty.sml
+        signature.sml
+        lf-util.sml
+        logic-util.sml
+        lf-check.sml
+        logic-check.sml
+        from-named.sml
+        typecoin-basis.sml
+        typecoin.sml
+        crypto-check.sml
+
+        test-util.sml
+        tests.sml
+        txn-tests.sml
+
+        block-explorer.sml
+
+        (* stuff copied and modified from tom-lib *)
+        lib/layout.sml
+        lib/layout.sig
+        lib/http-downloader.sig
+        lib/curl-lib.sml
+        lib/fsutil.sml
