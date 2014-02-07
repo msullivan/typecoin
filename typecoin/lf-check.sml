@@ -3,12 +3,12 @@ sig
   exception TypeError of string
 
   val expEquality : LF.exp -> LF.exp -> unit
-  val checkExp : Signature.sg -> LFContext.ctx -> LF.exp -> LF.exp -> unit
+  val checkExp : Basis.basis -> LFContext.ctx -> LF.exp -> LF.exp -> unit
 
   val thawedType : LF.exp -> unit
-  val checkSgEntry : Signature.sg -> LF.sg_entry -> Signature.sg
+  val checkBasisEntry : Basis.basis -> LF.basis_entry -> Basis.basis
 
-  val checkSignature : LF.sg -> Signature.sg
+  val checkBasis : LF.basis -> Basis.basis
 
 end
 
@@ -19,7 +19,7 @@ struct
 local
   open LFSyntax
   structure Ctx = LFContext
-  structure Sig = Signature
+  structure Sig = Basis
 in
 
   exception TypeError of string
@@ -73,40 +73,40 @@ in
           PrettyLF.prettyMsg2 "expected: " t ","  "got: " t' ^ "\n" ^
           PrettyLF.prettyMsg "while checking: " e))
 
-  fun checkExp sg ctx exp typ =
+  fun checkExp basis ctx exp typ =
       ((*print (PrettyLF.prettyMsg2 "checking: " exp "," "at: " typ ^ "\n");*)
        case exp of
            EKind => raise TypeError "kind is no classifier"
          | EType => requireKind typ
          | EProp => requireKind typ
          | EPi (b, e1, e2) =>
-           (checkExp sg ctx e1 EType;
-            checkExp sg (Ctx.extend ctx e1) e2 typ)
+           (checkExp basis ctx e1 EType;
+            checkExp basis (Ctx.extend ctx e1) e2 typ)
 
          | ELam (b, e) =>
            let val (t1, t2) =
                (case typ of EPi (_, t1, t2) => (t1, t2)
                           | _ => raise TypeError "lambda must have pi type")
-           in checkExp sg (Ctx.extend ctx t1) e t2 end
+           in checkExp basis (Ctx.extend ctx t1) e t2 end
 
          | EApp (h, spine) =>
-           let val t = checkHead sg ctx h
+           let val t = checkHead basis ctx h
                (*val () = print (PrettyLF.prettyMsg "head has type: " t ^ "\n")*)
-               val t' = checkSpine sg ctx t spine
+               val t' = checkSpine basis ctx t spine
                val () = requireAtomic t'
            in expEquality' exp typ t' end)
   and checkHead _ ctx (HVar (n, _)) = Ctx.sub ctx n
-    | checkHead sg _ (HConst c) = Sig.lookup sg c
-  and checkSpine sg ctx typ SNil = typ
-    | checkSpine sg ctx typ (SApp (e, s)) =
+    | checkHead basis _ (HConst c) = Sig.lookup basis c
+  and checkSpine basis ctx typ SNil = typ
+    | checkSpine basis ctx typ (SApp (e, s)) =
       let (*val () = print (PrettyLF.prettyMsg "checking at: " typ ^ "\n")*)
           val (t1, t2) =
                (case typ of EPi (_, t1, t2) => (t1, t2)
                           | _ => raise TypeError "lhs of app must be pi")
-          val () = checkExp sg ctx e t1
+          val () = checkExp basis ctx e t1
           (* We could probably arrange to do one big substitution. *)
           val t2' = LFSubst.substExp 0 [e] 0 t2
-      in checkSpine sg ctx t2' s end
+      in checkSpine basis ctx t2' s end
 
   (* Check that we aren't creating ways to build things of
    * types declared in other namespaces. *)
@@ -118,17 +118,17 @@ in
            raise TypeError ("cannot introduce type from txn " ^ s)
          | _ => raise Fail "bogus type")
 
-  fun checkSgEntry sg ((entry_type, c, exp): LF.sg_entry) =
+  fun checkBasisEntry basis ((entry_type, c, exp): LF.basis_entry) =
       let val classifier =
-              (case entry_type of SgFamilyDecl => EKind
-                                | SgObjectDecl => EType)
-          val () = checkExp sg Ctx.empty exp classifier
-          val () = (case entry_type of SgFamilyDecl => ()
-                                     | SgObjectDecl => thawedType exp)
-      in Sig.insert sg (Const.LThis, c) exp end
+              (case entry_type of BasisFamilyDecl => EKind
+                                | BasisObjectDecl => EType)
+          val () = checkExp basis Ctx.empty exp classifier
+          val () = (case entry_type of BasisFamilyDecl => ()
+                                     | BasisObjectDecl => thawedType exp)
+      in Sig.insert basis (Const.LThis, c) exp end
 
-  fun checkSignature decls =
-      foldl (fn (e, sg) => checkSgEntry sg e) Sig.empty decls
+  fun checkBasis decls =
+      foldl (fn (e, basis) => checkBasisEntry basis e) Sig.empty decls
 
 end
 end

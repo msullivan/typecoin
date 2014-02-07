@@ -227,9 +227,9 @@ struct
            Logic.CTrue => true
          | Logic.CAnd (c1, c2) => checkCondition t c1 andalso checkCondition t c2
          | Logic.CNot c => not (checkCondition t c)
-         | Logic.CBefore t' => t < TypeCoinBasis.lfNumToInt t'
+         | Logic.CBefore t' => t < TypeCoinStdlib.lfNumToInt t'
          | Logic.CSpent c =>
-           let val coord = TypeCoinBasis.lfCoordToCoord c
+           let val coord = TypeCoinStdlib.lfCoordToCoord c
            in not (RPC.Blockchain.isUnspent coord) andalso
               let val (txid, block) = valOf (BlockExplorer.getSpendingTxAndBlock coord)
                       handle _ => raise Fail "looking up spending block failed"

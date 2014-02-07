@@ -72,9 +72,9 @@ struct
        and spine = SNil
                  | SApp of exp * spine
 
-  datatype entry_type = SgFamilyDecl | SgObjectDecl
-  type sg_entry = entry_type * Const.id * exp
-  type sg = sg_entry list
+  datatype entry_type = BasisFamilyDecl | BasisObjectDecl
+  type basis_entry = entry_type * Const.id * exp
+  type basis = basis_entry list
 
   val listToSpine = foldr SApp SNil
   fun spineToList SNil = nil
@@ -182,9 +182,9 @@ struct
                  (* Cryptographic affirmation *)
                  | MAffirmation of signed_affirmation
 
-  datatype sg_entry = SRule of Const.id * prop
-                    | SConst of LFSyntax.sg_entry
-  type sg = sg_entry list
+  datatype basis_entry = SRule of Const.id * prop
+                       | SConst of LFSyntax.basis_entry
+  type basis = basis_entry list
 
 end
 
@@ -214,7 +214,7 @@ struct
            }
   type outputs = output list
 
-  type persistent_sg = Logic.sg_entry list
+  type basis = Logic.basis_entry list
 
   (* This is a list, even though the formalism calls it a single prop. *)
   type linear_grant = Logic.prop list
@@ -224,7 +224,7 @@ struct
            {name: string,
             metadata: string list,
             inputs: inputs,
-            persistent_sg: persistent_sg,
+            basis: basis,
             linear_grant: linear_grant,
             outputs: outputs,
             proof_term: Logic.proof}

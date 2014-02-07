@@ -2,8 +2,8 @@ signature FROM_NAMED =
 sig
   type ctx = LF.binding list
 
-  val convertSg : LF.sg -> LF.sg
-  val convertLogicSg : Logic.sg -> Logic.sg
+  val convertBasis : LF.basis -> LF.basis
+  val convertLogicBasis : Logic.basis -> Logic.basis
 
   val convertExp : ctx -> LF.exp -> LF.exp
   val convertHead : ctx -> LF.head -> LF.head
@@ -121,15 +121,15 @@ struct
       )
       end
 
-  fun convertSg sg =
-      map (fn (d, c, e) => (d, c, convertExp [] e)) sg
+  fun convertBasis basis =
+      map (fn (d, c, e) => (d, c, convertExp [] e)) basis
 
 
-  fun convertLogicSgEntry (SRule (i, prop)) = SRule (i, convertProp [] prop)
-    | convertLogicSgEntry (SConst (d, c, e)) = SConst (d, c, convertExp [] e)
-  fun convertLogicSg sg = map convertLogicSgEntry sg
+  fun convertLogicBasisEntry (SRule (i, prop)) = SRule (i, convertProp [] prop)
+    | convertLogicBasisEntry (SConst (d, c, e)) = SConst (d, c, convertExp [] e)
+  fun convertLogicBasis basis = map convertLogicBasisEntry basis
 
-  fun convertLinearGrant sg = map (convertProp []) sg
+  fun convertLinearGrant basis = map (convertProp []) basis
 
 
   end

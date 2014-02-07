@@ -4,18 +4,18 @@ sig
 
 
   val propEquality : Logic.prop -> Logic.prop -> unit
-  val checkProp : Signature.sg -> LogicContext.ctx -> Logic.prop -> unit
+  val checkProp : Basis.basis -> LogicContext.ctx -> Logic.prop -> unit
 
   (* Bad name. *)
-  val inferProofOuter : Logic.bytestring -> Signature.sg -> LogicContext.ctx -> Logic.proof ->
+  val inferProofOuter : Logic.bytestring -> Basis.basis -> LogicContext.ctx -> Logic.proof ->
                         Logic.prop
 
   val thawedProp : Logic.prop -> unit
 
-  val checkSignature : Signature.sg -> Logic.sg -> Signature.sg
-  val installSignature : Signature.sg -> Const.namespace -> Logic.sg -> Signature.sg
+  val checkBasis : Basis.basis -> Logic.basis -> Basis.basis
+  val installBasis : Basis.basis -> Const.namespace -> Logic.basis -> Basis.basis
 
-  val basis_sg : Signature.sg
+  val stdlib_basis : Basis.basis
 
   (* Hm. Maybe not. *)
   val affirmationToProp : Logic.signed_affirmation -> Logic.prop
@@ -35,22 +35,22 @@ struct
 
   exception ProofError of string
 
-  fun checkCondition sg ctx c =
-      let val check = checkCondition sg ctx
-          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
+  fun checkCondition basis ctx c =
+      let val check = checkCondition basis ctx
+          val checkLF = TypeCheckLF.checkExp basis (Ctx.lfContext ctx)
       in
       (case c of
-           CBefore e => checkLF e TypeCoinBasis.number
-         | CSpent e => checkLF e TypeCoinBasis.coord
+           CBefore e => checkLF e TypeCoinStdlib.number
+         | CSpent e => checkLF e TypeCoinStdlib.coord
          | CTrue => ()
          | CNot c => check c
          | CAnd (c1, c2) => (check c1; check c2)
       )
       end
 
-  fun checkProp sg ctx prop =
-      let val check = checkProp sg ctx
-          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
+  fun checkProp basis ctx prop =
+      let val check = checkProp basis ctx
+          val checkLF = TypeCheckLF.checkExp basis (Ctx.lfContext ctx)
 
       in
       (case prop of
@@ -65,18 +65,18 @@ struct
 
          | PForall (b, t, A) =>
            (checkLF t LF.EType;
-            checkProp sg (Ctx.extendLF ctx t) A)
+            checkProp basis (Ctx.extendLF ctx t) A)
          | PExists (b, t, A) =>
            (checkLF t LF.EType;
-            checkProp sg (Ctx.extendLF ctx t) A)
+            checkProp basis (Ctx.extendLF ctx t) A)
          | PIf (c, A) =>
            (check A;
-            checkCondition sg ctx c)
+            checkCondition basis ctx c)
          | PAffirms (k, A) =>
-           (checkLF k TypeCoinBasis.principal;
+           (checkLF k TypeCoinStdlib.principal;
             check A)
          | PReceipt (k, A) =>
-           (checkLF k TypeCoinBasis.address;
+           (checkLF k TypeCoinStdlib.address;
             check A))
       end
 
@@ -138,7 +138,7 @@ struct
                                 handle _ => false
 
           fun timeLessThan t1 t2 =
-              (let val (n1, n2) = (TypeCoinBasis.lfNumToInt t1, TypeCoinBasis.lfNumToInt t2)
+              (let val (n1, n2) = (TypeCoinStdlib.lfNumToInt t1, TypeCoinStdlib.lfNumToInt t2)
                in n1 <= n2 end)
               handle _ => false
 
@@ -200,18 +200,18 @@ struct
 
   fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
       let val hashed_key = TypeCoinCrypto.hashKey principal
-          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
-      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
+          val lf_hash = TypeCoinStdlib.hashBytestringToHashObj hashed_key
+      in PAffirms (TypeCoinStdlib.principal_hash lf_hash, prop) end
 
 
-  fun checkProof T sg (D as (ctx, res)) M =
-      let val checkProof = checkProof T sg
-          val checkProp = checkProp sg
-          val checkLF = TypeCheckLF.checkExp sg (Ctx.lfContext ctx)
-          val checkCondition = checkCondition sg ctx
+  fun checkProof T basis (D as (ctx, res)) M =
+      let val checkProof = checkProof T basis
+          val checkProp = checkProp basis
+          val checkLF = TypeCheckLF.checkExp basis (Ctx.lfContext ctx)
+          val checkCondition = checkCondition basis ctx
       in
       (case M of
-           MRule c => (Signature.lookup_rule sg c, res)
+           MRule c => (Basis.lookup_rule basis c, res)
          | MVar v =>
            let val (A, persistent) = Ctx.lookup ctx v
                val res' =
@@ -344,7 +344,7 @@ struct
 
 
          | MSayReturn (k, M) =>
-           let val () = checkLF k TypeCoinBasis.principal
+           let val () = checkLF k TypeCoinStdlib.principal
                val (A, res') = checkProof D M
            in (PAffirms (k, A), res') end
          | MSayBind (M1, v, E2) =>
@@ -407,49 +407,49 @@ struct
 
       end
 
-  fun inferProofOuter T sg G M =
+  fun inferProofOuter T basis G M =
       let val res = foldl (fn (v, res) => VarSet.insert res v)
                           VarSet.empty (LogicContext.getVariables G)
           val D = (G, res)
-          val (A, res) = checkProof T sg D M
+          val (A, res) = checkProof T basis D M
       in A end
 
-  fun checkRuleSgEntry sg (id, prop) =
-      (checkProp sg Ctx.empty prop;
+  fun checkRuleBasisEntry basis (id, prop) =
+      (checkProp basis Ctx.empty prop;
        thawedProp prop;
-       Signature.insert_rule sg (Const.LThis, id) prop)
+       Basis.insert_rule basis (Const.LThis, id) prop)
 
 
-  fun checkSignedAffirmationSgEntry sg (id, affirm) =
+  fun checkSignedAffirmationBasisEntry basis (id, affirm) =
       let val prop' = affirmationToProp affirm
-          val () = checkProp sg Ctx.empty prop'
+          val () = checkProp basis Ctx.empty prop'
       (* crypto is checked in checkCrypto *)
-      in Signature.insert_rule sg (Const.LThis, id) prop' end
+      in Basis.insert_rule basis (Const.LThis, id) prop' end
 
-  fun checkSgEntry sg (SRule entry) = checkRuleSgEntry sg entry
-    | checkSgEntry sg (SConst entry) = TypeCheckLF.checkSgEntry sg entry
+  fun checkBasisEntry basis (SRule entry) = checkRuleBasisEntry basis entry
+    | checkBasisEntry basis (SConst entry) = TypeCheckLF.checkBasisEntry basis entry
 
-  fun checkSignature sg decls =
-      foldl (fn (e, sg) => checkSgEntry sg e) sg decls
+  fun checkBasis basis decls =
+      foldl (fn (e, basis) => checkBasisEntry basis e) basis decls
 
 
   (* Install a declaration in the signature at a certain namespace.
    * Should have already been checked. *)
-  fun installSgEntry sg ns (SRule (id, prop)) =
+  fun installBasisEntry basis ns (SRule (id, prop)) =
       let val prop' = LogicSubst.replaceThisProp (Const.LId ns) prop
-      in Signature.insert_rule sg (Const.LId ns, id) prop' end
-    | installSgEntry sg ns (SConst (_, id, e)) =
+      in Basis.insert_rule basis (Const.LId ns, id) prop' end
+    | installBasisEntry basis ns (SConst (_, id, e)) =
       let val e' = LFSubst.replaceThisExp (Const.LId ns) e
-      in Signature.insert sg (Const.LId ns, id) e' end
+      in Basis.insert basis (Const.LId ns, id) e' end
 
 
-  fun installSignature sg ns decls =
-      foldl (fn (decl, sg) => installSgEntry sg ns decl) sg decls
+  fun installBasis basis ns decls =
+      foldl (fn (decl, basis) => installBasisEntry basis ns decl) basis decls
 
-  (* Make a signature containing the basis *)
-  val basis_sg =
-      (checkSignature Signature.empty TypeCoinBasis.basis;
-       installSignature Signature.empty "$" TypeCoinBasis.basis)
+  (* Make a basis containing the stdlib *)
+  val stdlib_basis =
+      (checkBasis Basis.empty TypeCoinStdlib.stdlib;
+       installBasis Basis.empty "$" TypeCoinStdlib.stdlib)
 
 end
 

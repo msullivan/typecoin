@@ -87,7 +87,7 @@ struct
 
   fun prettyDecl (_, c, e) = fmt (&[$c, $": ", toLayoutTop e, $"."])
 
-  fun prettySg sg =
+  fun prettyBasis sg =
       String.concatWith "\n" (map prettyDecl sg)
 
   end
@@ -144,13 +144,13 @@ struct
       in String.substring (text, 0, 6) ^ "..." end
 
   fun toLayoutPrincipal k =
-      $ (abbrevHash (TypeCoinBasis.lfPrincipalToBytestring k))
+      $ (abbrevHash (TypeCoinStdlib.lfPrincipalToBytestring k))
   fun toLayoutAddress k =
-      $ (abbrevHash (TypeCoinBasis.lfAddressToBytestring k))
+      $ (abbrevHash (TypeCoinStdlib.lfAddressToBytestring k))
   fun toLayoutNumber n =
-      $ (Int.toString (TypeCoinBasis.lfNumToInt n))
+      $ (Int.toString (TypeCoinStdlib.lfNumToInt n))
   fun toLayoutCoord c =
-      let val (a, i) = TypeCoinBasis.lfCoordToCoord c
+      let val (a, i) = TypeCoinStdlib.lfCoordToCoord c
       in L.tuple [$(abbrevHash a), $(Int.toString i)] end
 
   fun specialLFLayout f e =
@@ -309,8 +309,8 @@ struct
   (* GRRRRR. Where does this belong. *)
   fun affirmationToProp ({principal, prop, ...} : Logic.signed_affirmation) =
       let val hashed_key = TypeCoinCrypto.hashKey principal
-          val lf_hash = TypeCoinBasis.hashBytestringToHashObj hashed_key
-      in PAffirms (TypeCoinBasis.principal_hash lf_hash, prop) end
+          val lf_hash = TypeCoinStdlib.hashBytestringToHashObj hashed_key
+      in PAffirms (TypeCoinStdlib.principal_hash lf_hash, prop) end
 
 
   fun prettyDecl (SRule (c, A)) = fmt (&[$c, $": ", toLayoutTop A , $"."])

@@ -15,7 +15,7 @@ struct
   val [n, m, p, A, B, e, e', D, k, r] =
       map var ["n", "m", "p", "A", "B", "e", "e'", "D", "k", "r"]
 
-  val a_test = FromNamed.convertSg
+  val a_test = FromNamed.convertBasis
       [(T, "nat", EType),
        (O, "z", nat),
        (O, "s", arrow nat nat),
@@ -56,7 +56,7 @@ struct
   fun eapp t1 t2 = c_app "app" [t1, t2]
   fun eof e A = c_app "of" [e, A]
 
-  val lambda_test = FromNamed.convertSg
+  val lambda_test = FromNamed.convertBasis
       [(T, "tp", EType),
        (O, "base", tp),
        (O, "arr", tp --> tp --> tp),
@@ -75,7 +75,7 @@ struct
 
 
   val i = c_app "i" []
-  val logic_test_lf_part = FromNamed.convertSg
+  val logic_test_lf_part = FromNamed.convertBasis
       [(T, "A", EProp), (T, "B", EProp), (T, "C", EProp),
        (T, "i", EType),
        (T, "P", i --> EProp), (T, "Q", i --> EProp), (T, "R", i --> EProp)]
@@ -210,7 +210,7 @@ struct
                  PExists ("n", i, PWith (P n, Q n))))))))))
 
 
-  val K = TypeCoinBasis.principal_hash (TypeCoinBasis.test_hash)
+  val K = TypeCoinStdlib.principal_hash (TypeCoinStdlib.test_hash)
   (* prove (A -o B) -o (<K>A -o <K>B) *)
   val affirmation_fmap_specific = FromNamed.convertProof []
       (MLam ("x", PLolli (A, B),
@@ -220,7 +220,7 @@ struct
 
   (* prove !k:principal. (A -o B) -o (<k>A -o <k>B) *)
   val affirmation_fmap = FromNamed.convertProof []
-      (MForallLam ("k", TypeCoinBasis.principal,
+      (MForallLam ("k", TypeCoinStdlib.principal,
         MLam ("x", PLolli (A, B),
          MLam ("y", PAffirms (k, A),
           MSayBind (y, "z",
@@ -229,7 +229,7 @@ struct
 
   (* prove !k:principal. <k><k>A -o <k>A *)
   val affirmation_join = FromNamed.convertProof []
-      (MForallLam ("k", TypeCoinBasis.principal,
+      (MForallLam ("k", TypeCoinStdlib.principal,
          MLam ("z", PAffirms (k, PAffirms (k, A)),
           MSayBind (z, "z1",
            MSayBind (z1, "z2",
@@ -237,14 +237,14 @@ struct
 
   (* fail to prove !k:principal. <k>A -o A *)
   val affirmation_unsafe_perform_io = FromNamed.convertProof []
-      (MForallLam ("k", TypeCoinBasis.principal,
+      (MForallLam ("k", TypeCoinStdlib.principal,
          MLam ("z", PAffirms (k, A),
           MSayBind (z, "z1", z1))))
 
   (* fail to prove !k, k':principal. <k>A -o <k'>A *)
   val affirmation_coerce = FromNamed.convertProof []
-      (MForallLam ("k", TypeCoinBasis.principal,
-        MForallLam ("n", TypeCoinBasis.principal,
+      (MForallLam ("k", TypeCoinStdlib.principal,
+        MForallLam ("n", TypeCoinStdlib.principal,
          MLam ("z", PAffirms (k, A),
           MSayBind (z, "z1", MSayReturn (n, z1))))))
 
@@ -280,25 +280,25 @@ struct
 
   fun succeeded f x = (f x; true) handle _ => false
 
-  fun check sg =
+  fun check basis =
       (println "";
-       println (PrettyLF.prettySg sg);
-       ignore (TypeCheckLF.checkSignature sg);
+       println (PrettyLF.prettyBasis basis);
+       ignore (TypeCheckLF.checkBasis basis);
        println "")
       handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
 
-  fun checkProof sg M =
-      ((LogicCheck.inferProofOuter Bytestring.null sg LogicContext.empty M)
+  fun checkProof basis M =
+      ((LogicCheck.inferProofOuter Bytestring.null basis LogicContext.empty M)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 
-  fun checkSignature sg =
-      ((LogicCheck.checkSignature LogicCheck.basis_sg sg)
+  fun checkBasis basis =
+      ((LogicCheck.checkBasis LogicCheck.stdlib_basis basis)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 
   fun checkChain chain =
-      ((TypeCoinCheck.checkChain LogicCheck.basis_sg TxnDict.empty chain)
+      ((TypeCoinCheck.checkChain LogicCheck.stdlib_basis TxnDict.empty chain)
        handle (e as TypeCheckLF.TypeError s) => (println s; raise e)
             | (e as LogicCheck.ProofError s) => (println s; raise e))
 

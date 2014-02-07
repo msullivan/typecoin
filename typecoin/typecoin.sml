@@ -6,10 +6,10 @@ sig
   type type_record = Logic.prop vector TypeCoinTxn.TxnDict.dict
 
 
-  val checkTransaction : Signature.sg -> type_record -> TypeCoinTxn.txn ->
-                         (Signature.sg * type_record)
-  val checkChain : Signature.sg -> type_record -> TypeCoinTxn.chain ->
-                   (Signature.sg * type_record)
+  val checkTransaction : Basis.basis -> type_record -> TypeCoinTxn.txn ->
+                         (Basis.basis * type_record)
+  val checkChain : Basis.basis -> type_record -> TypeCoinTxn.chain ->
+                   (Basis.basis * type_record)
 end
 
 
@@ -38,40 +38,40 @@ struct
 
   fun checkInputs tr inputs = map (checkInput tr) inputs
 
-  fun checkOutput sg (Output {dest, prop, needs_receipt, ...}) =
-      let val () = LogicCheck.checkProp sg LogicContext.empty prop
-          val lf_hash = TypeCoinBasis.hashBytestringToHashObj dest
+  fun checkOutput basis (Output {dest, prop, needs_receipt, ...}) =
+      let val () = LogicCheck.checkProp basis LogicContext.empty prop
+          val lf_hash = TypeCoinStdlib.hashBytestringToHashObj dest
           val receipt =
               if needs_receipt then
-                  SOME (PReceipt (TypeCoinBasis.address_hash lf_hash,
+                  SOME (PReceipt (TypeCoinStdlib.address_hash lf_hash,
                                   prop))
               else NONE
       in (prop, receipt) end
 
-  fun checkOutputs sg outputs = ListPair.unzip (map (checkOutput sg) outputs)
+  fun checkOutputs basis outputs = ListPair.unzip (map (checkOutput basis) outputs)
 
-  fun checkLinearGrantEntry sg prop =
-      (LogicCheck.checkProp sg LogicContext.empty prop;
+  fun checkLinearGrantEntry basis prop =
+      (LogicCheck.checkProp basis LogicContext.empty prop;
        LogicCheck.thawedProp prop;
        prop)
 
-  fun checkLinearGrant sg linear_grant = map (checkLinearGrantEntry sg) linear_grant
+  fun checkLinearGrant basis linear_grant = map (checkLinearGrantEntry basis) linear_grant
 
   val debug_prop_pair = ref (POne, POne)
 
-  fun checkTransaction' sg tr
+  fun checkTransaction' basis tr
                        (block,
                         txnid,
-                        TxnBody {inputs, persistent_sg, linear_grant, outputs, proof_term,
+                        TxnBody {inputs, basis=persistent_basis, linear_grant, outputs, proof_term,
                                  name, ...}) =
       let val () = print ("checking " ^ txnid ^ "/" ^ name ^ "\n")
 
           (* Check the inputs and the outputs and the signatures and build up
            * the data structures we need to check the proof term. *)
           val input_props = checkInputs tr inputs
-          val sg' = LogicCheck.checkSignature sg persistent_sg
-          val linear_grant_props = checkLinearGrant sg' linear_grant
-          val (output_props, receipt_props) = checkOutputs sg' outputs
+          val basis' = LogicCheck.checkBasis basis persistent_basis
+          val linear_grant_props = checkLinearGrant basis' linear_grant
+          val (output_props, receipt_props) = checkOutputs basis' outputs
           val receipt_props = List.mapPartial (fn x => x) receipt_props
 
           (* Build up the prop that we need to prove. *)
@@ -84,7 +84,7 @@ struct
           (* Moment of truth: check the proof term. *)
           val actual_prop = LogicCheck.inferProofOuter
                                 txn_ident
-                                sg'
+                                basis'
                                 LogicContext.empty
                                 proof_term
           val (actual_input, actual_output, condition) =
@@ -113,29 +113,29 @@ struct
 
           (* Ok. Everything checks out! Now we just need to update the
            * data structures. *)
-          val sg'' = LogicCheck.installSignature sg txnid persistent_sg
+          val basis'' = LogicCheck.installBasis basis txnid persistent_basis
           (* Fix up this references in the output props *)
           val output_props' = map (LogicSubst.replaceThisProp (Const.LId txnid)) output_props
           val tr' = TxnDict.insert tr txnid (Vector.fromList output_props')
 
       in
-          (sg'', tr')
+          (basis'', tr')
       end
 
-  fun checkTransaction sg tr (block, txnid, [tx]) =
+  fun checkTransaction basis tr (block, txnid, [tx]) =
       (* If there is only one, don't catch the errors *)
-      checkTransaction' sg tr (block, txnid, tx)
-    | checkTransaction sg tr (block, txnid, tx :: txs) =
+      checkTransaction' basis tr (block, txnid, tx)
+    | checkTransaction basis tr (block, txnid, tx :: txs) =
       (* I am really sloppy about exceptions... *)
-      (checkTransaction' sg tr (block, txnid, tx)
+      (checkTransaction' basis tr (block, txnid, tx)
        handle BlockExplorer.ExplorerError => raise BlockExplorer.ExplorerError
-            | _ => checkTransaction sg tr (block, txnid, txs))
+            | _ => checkTransaction basis tr (block, txnid, txs))
     | checkTransaction _ _ (_, _, []) =
       raise TypeCoinError "empty transaction"
 
 
-  fun checkChain sg tr txns =
-      foldl (fn (txn, (sg, tr)) => checkTransaction sg tr txn) (sg, tr) txns
+  fun checkChain basis tr txns =
+      foldl (fn (txn, (basis, tr)) => checkTransaction basis tr txn) (basis, tr) txns
 
   end
 
@@ -167,7 +167,7 @@ struct
       {prop = renameProp name' name prop,
        persistent = persistent, principal = principal, crypto_sig = crypto_sig}
 
-  fun renameSgEntry name' name entry =
+  fun renameBasisEntry name' name entry =
       (case entry of
            SRule (i, prop) => SRule (i, renameProp name' name prop)
          | SConst (c, i, e) => SConst (c, i,
@@ -177,12 +177,12 @@ struct
   fun renameProof _ = raise Fail "unimplemented. sigh"
 
   fun renameTxnBody name' name
-      (TxnBody {inputs, persistent_sg, linear_grant, outputs, proof_term,
+      (TxnBody {inputs, basis, linear_grant, outputs, proof_term,
                 name=txnname, metadata}) =
       TxnBody {inputs = map (renameInput name' name) inputs,
                outputs = map (renameOutput name' name) outputs,
                linear_grant = map (renameProp name' name) linear_grant,
-               persistent_sg = map (renameSgEntry name' name) persistent_sg,
+               basis = map (renameBasisEntry name' name) basis,
                proof_term = renameProof proof_term,
                name = txnname,
                metadata = metadata}

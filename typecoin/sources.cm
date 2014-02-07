@@ -8,7 +8,7 @@ Group is
         vector-stream.sml
 
         pretty.sml
-        signature.sml
+        basis.sml
         lf-util.sml
         logic-util.sml
         lf-check.sml

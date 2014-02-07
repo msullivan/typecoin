@@ -380,40 +380,40 @@
 (*#line 75.14 "syntax-io.ioml"*)datatype 
 (*#line 75.14 "syntax-io.ioml"*)
 (*#line 75.14 "syntax-io.ioml"*)entry_type  = 
-(*#line 75.27 "syntax-io.ioml"*)SgFamilyDecl | 
-(*#line 75.42 "syntax-io.ioml"*)SgObjectDecl 
-(*#line 385.33 "syntax-io.sml"*)fun writeEntry_type (p , x ) = case x of SgFamilyDecl  => IOTypes.writeInt (p , 0 ) | SgObjectDecl  => IOTypes.writeInt (p , 1 )fun readEntry_type p  = case IOTypes.readInt p of SOME 0  => SOME SgFamilyDecl  | SOME 1  => SOME SgObjectDecl  | _  => NONE 
+(*#line 75.27 "syntax-io.ioml"*)BasisFamilyDecl | 
+(*#line 75.45 "syntax-io.ioml"*)BasisObjectDecl 
+(*#line 385.33 "syntax-io.sml"*)fun writeEntry_type (p , x ) = case x of BasisFamilyDecl  => IOTypes.writeInt (p , 0 ) | BasisObjectDecl  => IOTypes.writeInt (p , 1 )fun readEntry_type p  = case IOTypes.readInt p of SOME 0  => SOME BasisFamilyDecl  | SOME 1  => SOME BasisObjectDecl  | _  => NONE 
 (*#line 76.3 "syntax-io.ioml"*)
 (*#line 76.3 "syntax-io.ioml"*)
 (*#line 76.3 "syntax-io.ioml"*)
 (*#line 76.3 "syntax-io.ioml"*)type 
 (*#line 76.10 "syntax-io.ioml"*)
-(*#line 76.10 "syntax-io.ioml"*)sg_entry  = 
-(*#line 76.21 "syntax-io.ioml"*)(
-(*#line 76.21 "syntax-io.ioml"*)entry_type   * 
-(*#line 76.34 "syntax-io.ioml"*)Const.id   * 
-(*#line 76.45 "syntax-io.ioml"*)exp  )
-(*#line 396.33 "syntax-io.sml"*)fun writeSg_entry (p , x : sg_entry  ) = ((fn x  => writeEntry_type (p , x ))(# 1 x ); 
-(*#line 76.34 "syntax-io.ioml"*)
-(*#line 76.34 "syntax-io.ioml"*)(
-(*#line 76.34 "syntax-io.ioml"*)fn 
-(*#line 76.34 "syntax-io.ioml"*)
+(*#line 76.10 "syntax-io.ioml"*)basis_entry  = 
+(*#line 76.24 "syntax-io.ioml"*)(
+(*#line 76.24 "syntax-io.ioml"*)entry_type   * 
+(*#line 76.37 "syntax-io.ioml"*)Const.id   * 
+(*#line 76.48 "syntax-io.ioml"*)exp  )
+(*#line 396.33 "syntax-io.sml"*)fun writeBasis_entry (p , x : basis_entry  ) = ((fn x  => writeEntry_type (p , x ))(# 1 x ); 
+(*#line 76.37 "syntax-io.ioml"*)
+(*#line 76.37 "syntax-io.ioml"*)(
+(*#line 76.37 "syntax-io.ioml"*)fn 
+(*#line 76.37 "syntax-io.ioml"*)
 (*#line 401.33 "syntax-io.sml"*)x  => 
-(*#line 76.34 "syntax-io.ioml"*)
-(*#line 76.34 "syntax-io.ioml"*)Const.writeId 
-(*#line 404.33 "syntax-io.sml"*)(p , x ))(# 2 x ); (fn x  => writeExp (p , x ))(# 3 x ))fun readSg_entry p  = case readEntry_type p of NONE  => NONE  | SOME y0  => (case 
-(*#line 76.34 "syntax-io.ioml"*)
-(*#line 76.34 "syntax-io.ioml"*)Const.readId 
+(*#line 76.37 "syntax-io.ioml"*)
+(*#line 76.37 "syntax-io.ioml"*)Const.writeId 
+(*#line 404.33 "syntax-io.sml"*)(p , x ))(# 2 x ); (fn x  => writeExp (p , x ))(# 3 x ))fun readBasis_entry p  = case readEntry_type p of NONE  => NONE  | SOME y0  => (case 
+(*#line 76.37 "syntax-io.ioml"*)
+(*#line 76.37 "syntax-io.ioml"*)Const.readId 
 (*#line 407.33 "syntax-io.sml"*)p of NONE  => NONE  | SOME y1  => (case readExp p of NONE  => NONE  | SOME y2  => (SOME (y0 , y1 , y2 ))))
 (*#line 77.3 "syntax-io.ioml"*)
 (*#line 77.3 "syntax-io.ioml"*)
 (*#line 77.3 "syntax-io.ioml"*)
 (*#line 77.3 "syntax-io.ioml"*)type 
 (*#line 77.10 "syntax-io.ioml"*)
-(*#line 77.10 "syntax-io.ioml"*)sg  = 
-(*#line 77.15 "syntax-io.ioml"*)
-(*#line 77.15 "syntax-io.ioml"*)sg_entry   list  
-(*#line 416.33 "syntax-io.sml"*)fun writeSg (p , x : sg  ) = IOTypes.writeList (writeSg_entry )(p , x )fun readSg p  = IOTypes.readList (readSg_entry )p 
+(*#line 77.10 "syntax-io.ioml"*)basis  = 
+(*#line 77.18 "syntax-io.ioml"*)
+(*#line 77.18 "syntax-io.ioml"*)basis_entry   list  
+(*#line 416.33 "syntax-io.sml"*)fun writeBasis (p , x : basis  ) = IOTypes.writeList (writeBasis_entry )(p , x )fun readBasis p  = IOTypes.readList (readBasis_entry )p 
 (*#line 79.3 "syntax-io.ioml"*)
 (*#line 79.3 "syntax-io.ioml"*)
 (*#line 79.3 "syntax-io.ioml"*)val 
@@ -909,42 +909,42 @@
 (*#line 185.14 "syntax-io.ioml"*)
 (*#line 185.14 "syntax-io.ioml"*)datatype 
 (*#line 185.14 "syntax-io.ioml"*)
-(*#line 185.14 "syntax-io.ioml"*)sg_entry  = 
-(*#line 185.25 "syntax-io.ioml"*)SRule of 
-(*#line 185.34 "syntax-io.ioml"*)(
-(*#line 185.34 "syntax-io.ioml"*)Const.id   * 
-(*#line 185.45 "syntax-io.ioml"*)prop  )| 
-(*#line 186.23 "syntax-io.ioml"*)SConst of 
-(*#line 186.33 "syntax-io.ioml"*)LFSyntax.sg_entry  
-(*#line 919.33 "syntax-io.sml"*)fun writeSg_entry (p , x ) = case x of SRule x  => (IOTypes.writeInt (p , 0 ); (
-(*#line 185.34 "syntax-io.ioml"*)
-(*#line 185.34 "syntax-io.ioml"*)(
-(*#line 185.34 "syntax-io.ioml"*)fn 
-(*#line 185.34 "syntax-io.ioml"*)
+(*#line 185.14 "syntax-io.ioml"*)basis_entry  = 
+(*#line 185.28 "syntax-io.ioml"*)SRule of 
+(*#line 185.37 "syntax-io.ioml"*)(
+(*#line 185.37 "syntax-io.ioml"*)Const.id   * 
+(*#line 185.48 "syntax-io.ioml"*)prop  )| 
+(*#line 186.26 "syntax-io.ioml"*)SConst of 
+(*#line 186.36 "syntax-io.ioml"*)LFSyntax.basis_entry  
+(*#line 919.33 "syntax-io.sml"*)fun writeBasis_entry (p , x ) = case x of SRule x  => (IOTypes.writeInt (p , 0 ); (
+(*#line 185.37 "syntax-io.ioml"*)
+(*#line 185.37 "syntax-io.ioml"*)(
+(*#line 185.37 "syntax-io.ioml"*)fn 
+(*#line 185.37 "syntax-io.ioml"*)
 (*#line 924.33 "syntax-io.sml"*)x  => 
-(*#line 185.34 "syntax-io.ioml"*)
-(*#line 185.34 "syntax-io.ioml"*)Const.writeId 
+(*#line 185.37 "syntax-io.ioml"*)
+(*#line 185.37 "syntax-io.ioml"*)Const.writeId 
 (*#line 927.33 "syntax-io.sml"*)(p , x ))(# 1 x ); (fn x  => writeProp (p , x ))(# 2 x ))) | SConst x  => 
-(*#line 186.33 "syntax-io.ioml"*)(
+(*#line 186.36 "syntax-io.ioml"*)(
 (*#line 929.33 "syntax-io.sml"*)IOTypes.writeInt (p , 1 ); 
-(*#line 186.33 "syntax-io.ioml"*)
-(*#line 186.33 "syntax-io.ioml"*)LFSyntax.writeSg_entry 
-(*#line 932.33 "syntax-io.sml"*)(p , x ))fun readSg_entry p  = case IOTypes.readInt p of SOME 0  => (case case 
-(*#line 185.34 "syntax-io.ioml"*)
-(*#line 185.34 "syntax-io.ioml"*)Const.readId 
+(*#line 186.36 "syntax-io.ioml"*)
+(*#line 186.36 "syntax-io.ioml"*)LFSyntax.writeBasis_entry 
+(*#line 932.33 "syntax-io.sml"*)(p , x ))fun readBasis_entry p  = case IOTypes.readInt p of SOME 0  => (case case 
+(*#line 185.37 "syntax-io.ioml"*)
+(*#line 185.37 "syntax-io.ioml"*)Const.readId 
 (*#line 935.33 "syntax-io.sml"*)p of NONE  => NONE  | SOME y0  => (case readProp p of NONE  => NONE  | SOME y1  => (SOME (y0 , y1 )))of NONE  => NONE  | SOME x  => SOME (SRule x )) | SOME 1  => (case 
-(*#line 186.33 "syntax-io.ioml"*)
-(*#line 186.33 "syntax-io.ioml"*)LFSyntax.readSg_entry 
+(*#line 186.36 "syntax-io.ioml"*)
+(*#line 186.36 "syntax-io.ioml"*)LFSyntax.readBasis_entry 
 (*#line 938.33 "syntax-io.sml"*)p of NONE  => NONE  | SOME x  => SOME (SConst x )) | _  => NONE 
 (*#line 187.3 "syntax-io.ioml"*)
 (*#line 187.3 "syntax-io.ioml"*)
 (*#line 187.3 "syntax-io.ioml"*)
 (*#line 187.3 "syntax-io.ioml"*)type 
 (*#line 187.10 "syntax-io.ioml"*)
-(*#line 187.10 "syntax-io.ioml"*)sg  = 
-(*#line 187.15 "syntax-io.ioml"*)
-(*#line 187.15 "syntax-io.ioml"*)sg_entry   list  
-(*#line 947.33 "syntax-io.sml"*)fun writeSg (p , x : sg  ) = IOTypes.writeList (writeSg_entry )(p , x )fun readSg p  = IOTypes.readList (readSg_entry )p 
+(*#line 187.10 "syntax-io.ioml"*)basis  = 
+(*#line 187.18 "syntax-io.ioml"*)
+(*#line 187.18 "syntax-io.ioml"*)basis_entry   list  
+(*#line 947.33 "syntax-io.sml"*)fun writeBasis (p , x : basis  ) = IOTypes.writeList (writeBasis_entry )(p , x )fun readBasis p  = IOTypes.readList (readBasis_entry )p 
 (*#line 189.1 "syntax-io.ioml"*)end 
 (*#line 191.1 "syntax-io.ioml"*)
 (*#line 191.1 "syntax-io.ioml"*)structure TypeCoinTxn = 
@@ -1096,21 +1096,21 @@
 (*#line 217.3 "syntax-io.ioml"*)
 (*#line 217.3 "syntax-io.ioml"*)type 
 (*#line 217.10 "syntax-io.ioml"*)
-(*#line 217.10 "syntax-io.ioml"*)persistent_sg  = 
-(*#line 217.26 "syntax-io.ioml"*)
-(*#line 217.26 "syntax-io.ioml"*)Logic.sg_entry   list  
-(*#line 1102.34 "syntax-io.sml"*)fun writePersistent_sg (p , x : persistent_sg  ) = 
-(*#line 217.26 "syntax-io.ioml"*)
-(*#line 217.26 "syntax-io.ioml"*)
+(*#line 217.10 "syntax-io.ioml"*)basis  = 
+(*#line 217.18 "syntax-io.ioml"*)
+(*#line 217.18 "syntax-io.ioml"*)Logic.basis_entry   list  
+(*#line 1102.34 "syntax-io.sml"*)fun writeBasis (p , x : basis  ) = 
+(*#line 217.18 "syntax-io.ioml"*)
+(*#line 217.18 "syntax-io.ioml"*)
 (*#line 1105.34 "syntax-io.sml"*)IOTypes.writeList 
-(*#line 217.26 "syntax-io.ioml"*)(
-(*#line 217.26 "syntax-io.ioml"*)Logic.writeSg_entry )
-(*#line 1108.34 "syntax-io.sml"*)(p , x )fun readPersistent_sg p  = 
-(*#line 217.26 "syntax-io.ioml"*)
-(*#line 217.26 "syntax-io.ioml"*)
+(*#line 217.18 "syntax-io.ioml"*)(
+(*#line 217.18 "syntax-io.ioml"*)Logic.writeBasis_entry )
+(*#line 1108.34 "syntax-io.sml"*)(p , x )fun readBasis p  = 
+(*#line 217.18 "syntax-io.ioml"*)
+(*#line 217.18 "syntax-io.ioml"*)
 (*#line 1111.34 "syntax-io.sml"*)IOTypes.readList 
-(*#line 217.26 "syntax-io.ioml"*)(
-(*#line 217.26 "syntax-io.ioml"*)Logic.readSg_entry )
+(*#line 217.18 "syntax-io.ioml"*)(
+(*#line 217.18 "syntax-io.ioml"*)Logic.readBasis_entry )
 (*#line 1114.34 "syntax-io.sml"*)p 
 (*#line 220.3 "syntax-io.ioml"*)
 (*#line 220.3 "syntax-io.ioml"*)
@@ -1145,12 +1145,12 @@
 (*#line 224.19 "syntax-io.ioml"*)string  , metadata : 
 (*#line 225.23 "syntax-io.ioml"*)
 (*#line 225.23 "syntax-io.ioml"*)string   list  , inputs : 
-(*#line 226.21 "syntax-io.ioml"*)inputs  , persistent_sg : 
-(*#line 227.28 "syntax-io.ioml"*)persistent_sg  , linear_grant : 
+(*#line 226.21 "syntax-io.ioml"*)inputs  , basis : 
+(*#line 227.20 "syntax-io.ioml"*)basis  , linear_grant : 
 (*#line 228.27 "syntax-io.ioml"*)linear_grant  , outputs : 
 (*#line 229.22 "syntax-io.ioml"*)outputs  , proof_term : 
 (*#line 230.25 "syntax-io.ioml"*)Logic.proof  }
-(*#line 1153.34 "syntax-io.sml"*)fun writeTxn_body (p , x ) = case x of TxnBody x  => (IOTypes.writeInt (p , 0 ); ((fn x  => IOTypes.writeString (p , x ))(# name x ); (fn x  => IOTypes.writeList (IOTypes.writeString )(p , x ))(# metadata x ); (fn x  => writeInputs (p , x ))(# inputs x ); (fn x  => writePersistent_sg (p , x ))(# persistent_sg x ); (fn x  => writeLinear_grant (p , x ))(# linear_grant x ); (fn x  => writeOutputs (p , x ))(# outputs x ); 
+(*#line 1153.34 "syntax-io.sml"*)fun writeTxn_body (p , x ) = case x of TxnBody x  => (IOTypes.writeInt (p , 0 ); ((fn x  => IOTypes.writeString (p , x ))(# name x ); (fn x  => IOTypes.writeList (IOTypes.writeString )(p , x ))(# metadata x ); (fn x  => writeInputs (p , x ))(# inputs x ); (fn x  => writeBasis (p , x ))(# basis x ); (fn x  => writeLinear_grant (p , x ))(# linear_grant x ); (fn x  => writeOutputs (p , x ))(# outputs x ); 
 (*#line 230.25 "syntax-io.ioml"*)
 (*#line 230.25 "syntax-io.ioml"*)(
 (*#line 230.25 "syntax-io.ioml"*)fn 
@@ -1158,10 +1158,10 @@
 (*#line 1158.34 "syntax-io.sml"*)x  => 
 (*#line 230.25 "syntax-io.ioml"*)
 (*#line 230.25 "syntax-io.ioml"*)Logic.writeProof 
-(*#line 1161.34 "syntax-io.sml"*)(p , x ))(# proof_term x )))fun readTxn_body p  = case IOTypes.readInt p of SOME 0  => (case case IOTypes.readString p of NONE  => NONE  | SOME yname  => (case IOTypes.readList (IOTypes.readString )p of NONE  => NONE  | SOME ymetadata  => (case readInputs p of NONE  => NONE  | SOME yinputs  => (case readPersistent_sg p of NONE  => NONE  | SOME ypersistent_sg  => (case readLinear_grant p of NONE  => NONE  | SOME ylinear_grant  => (case readOutputs p of NONE  => NONE  | SOME youtputs  => (case 
+(*#line 1161.34 "syntax-io.sml"*)(p , x ))(# proof_term x )))fun readTxn_body p  = case IOTypes.readInt p of SOME 0  => (case case IOTypes.readString p of NONE  => NONE  | SOME yname  => (case IOTypes.readList (IOTypes.readString )p of NONE  => NONE  | SOME ymetadata  => (case readInputs p of NONE  => NONE  | SOME yinputs  => (case readBasis p of NONE  => NONE  | SOME ybasis  => (case readLinear_grant p of NONE  => NONE  | SOME ylinear_grant  => (case readOutputs p of NONE  => NONE  | SOME youtputs  => (case 
 (*#line 230.25 "syntax-io.ioml"*)
 (*#line 230.25 "syntax-io.ioml"*)Logic.readProof 
-(*#line 1164.34 "syntax-io.sml"*)p of NONE  => NONE  | SOME yproof_term  => (SOME {name = yname , metadata = ymetadata , inputs = yinputs , persistent_sg = ypersistent_sg , linear_grant = ylinear_grant , outputs = youtputs , proof_term = yproof_term })))))))of NONE  => NONE  | SOME x  => SOME (TxnBody x )) | _  => NONE 
+(*#line 1164.34 "syntax-io.sml"*)p of NONE  => NONE  | SOME yproof_term  => (SOME {name = yname , metadata = ymetadata , inputs = yinputs , basis = ybasis , linear_grant = ylinear_grant , outputs = youtputs , proof_term = yproof_term })))))))of NONE  => NONE  | SOME x  => SOME (TxnBody x )) | _  => NONE 
 (*#line 231.3 "syntax-io.ioml"*)
 (*#line 231.3 "syntax-io.ioml"*)
 (*#line 231.3 "syntax-io.ioml"*)

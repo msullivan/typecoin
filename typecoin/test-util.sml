@@ -4,8 +4,8 @@ struct
       open LF Logic
   in
 
-  val T = SgFamilyDecl
-  val O = SgObjectDecl
+  val T = BasisFamilyDecl
+  val O = BasisObjectDecl
 
   (* This depends on the bullshit we are doing. *)
   fun arrow t1 t2 = EPi ("_", t1, t2)

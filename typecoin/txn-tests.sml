@@ -16,7 +16,7 @@ struct
   val [N, M, Q, N', M', K, Ti] =
       map var ["N", "M", "Q", "N", "M", "K", "Ti"]
 
-  structure TB = TypeCoinBasis
+  structure TB = TypeCoinStdlib
 
 
 
@@ -111,7 +111,7 @@ struct
     val inputs = [Input {source = (input_txid, 0), prop = POne}]
     val resource' = c_app "resource" []
     val nonce = TB.hash256
-    val auth_sg = FromNamed.convertLogicSg
+    val auth_basis = FromNamed.convertLogicBasis
         [(* Resources named by bytestrings *)
          C (T, "resource", EType),
          C (O, "resource_named", TB.bytestring --> resource'),
@@ -136,7 +136,7 @@ struct
       {name = "initial-auth",
        metadata = [],
        inputs = inputs,
-       persistent_sg = auth_sg,
+       basis = auth_basis,
        linear_grant = [],
        outputs = outputs,
        proof_term = proof_term}]
@@ -188,7 +188,7 @@ struct
         TypeCoinCrypto.makeAffirmation (SOME txn_ident) charlie_keypair
         (PBang (PAtom (can_access test_resource)))
 
-    val sg = []
+    val basis = []
     val linear_grant = []
     val proof_term =
         MLam ("z", POne,
@@ -200,7 +200,7 @@ struct
       {name = "charlie-auth",
        metadata = [],
        inputs = inputs,
-       persistent_sg = sg,
+       basis = basis,
        linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}]
@@ -235,7 +235,7 @@ struct
         TypeCoinCrypto.makeAffirmation (SOME txn_ident) alice_keypair
         (PAtom (can_access test_resource))
 
-    val sg = []
+    val basis = []
     val linear_grant = []
     val proof_term =
         MLam ("z", POne,
@@ -247,7 +247,7 @@ struct
       {name = "alice-auth",
        metadata = [],
        inputs = inputs,
-       persistent_sg = sg,
+       basis = basis,
        linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}]
@@ -268,7 +268,7 @@ struct
   (* Now Bob proves he can access it. *)
   local
     val nonce_s = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
-    val nonce = TypeCoinBasis.hashStringToHashObj nonce_s
+    val nonce = TypeCoinStdlib.hashStringToHashObj nonce_s
 
     val can_access_nonce =
         (PAtom (can_access_nonce test_resource nonce))
@@ -282,7 +282,7 @@ struct
                          prop = POne}]
 
     val outputs = [StdOutput {dest = bob_hash, prop = charlie_says_can_access_nonce}]
-    val sg = []
+    val basis = []
     val linear_grant = []
     (* This doesn't need to be done as a proof exp but I figured at least one should be. *)
     val proof_term =
@@ -305,7 +305,7 @@ struct
       {name = "bob-auth",
        metadata = [],
        inputs = inputs,
-       persistent_sg = sg,
+       basis = basis,
        linear_grant = linear_grant,
        outputs = outputs,
        proof_term = proof_term}]
@@ -350,10 +350,10 @@ struct
 
   fun nus e = PExists ("_", e, POne)
 
-  val num = TypeCoinBasis.number
-  val time = TypeCoinBasis.number
-  val plus = TypeCoinBasis.plus
-  val principal = TypeCoinBasis.principal
+  val num = TypeCoinStdlib.number
+  val time = TypeCoinStdlib.number
+  val plus = TypeCoinStdlib.plus
+  val principal = TypeCoinStdlib.principal
 
   fun money' n = PAtom (c_app "money" [n])
   fun issue' n = PAtom (c_app "issue" [n])
@@ -362,10 +362,10 @@ struct
   (* Alice is the president, or something. *)
   val president = alice
 
-  val money_sg = FromNamed.convertLogicSg
+  val money_basis = FromNamed.convertLogicBasis
         [(* Simple things about manipulating money. *)
          C (T, "money", num --> EProp),
-         P ("zero_money", money' (TypeCoinBasis.intToLFNumber 0)),
+         P ("zero_money", money' (TypeCoinStdlib.intToLFNumber 0)),
          P ("redistribute",
             PForall ("N", num, PForall ("M", num,
             PForall ("N'", num, PForall ("M'", num,

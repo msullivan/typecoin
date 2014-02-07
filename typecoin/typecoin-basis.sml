@@ -1,4 +1,4 @@
-structure TypeCoinBasis =
+structure TypeCoinStdlib =
 struct
 
   local
@@ -7,7 +7,7 @@ struct
       infixr --> infix <--
 
 
-  (**** "The Basis" ****)
+  (**** "The Stdlib" ****)
   val byte' = c_app "byte" []
   val hash160' = c_app "hash160" []
   val hash256' = c_app "hash256" []
@@ -43,7 +43,7 @@ struct
       map var ["N", "M", "P", "Q"]
 
 
-  val basis_lf = FromNamed.convertSg (
+  val stdlib_lf = FromNamed.convertBasis (
       [(T, "byte", EType)] @
       List.tabulate (256, fn i => (O, "b"^ byteFmt (Word8.fromInt i), byte')) @
       [(T, "hash160", EType),
@@ -127,7 +127,7 @@ struct
 
        (T, "void", EType)
       ])
-  val basis = map SConst basis_lf
+  val stdlib = map SConst stdlib_lf
 
   in
 
@@ -227,8 +227,8 @@ struct
   val test_hash_str = "1badd00ddeadbeefcafef00d0123456789abcdef"
   val test_hash = hashStringToHashObj test_hash_str
 
-  val basis_lf = basis_lf
-  val basis = basis
+  val stdlib_lf = stdlib_lf
+  val stdlib = stdlib
 
   end
 
