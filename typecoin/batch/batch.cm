@@ -1,0 +1,10 @@
+ Group is
+        $CMLIB/cmlib.cm
+        ../../client/sources.cm
+        ../typecoin.cm
+
+        $SMACKAGE/stilts/v1/db/sqlite/sqlite.cm
+        $SMACKAGE/stilts/v1/db/squall/squall-tool.cm : tool
+
+        batch.squall
+        batch-store.sml

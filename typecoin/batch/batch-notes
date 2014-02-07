@@ -1,0 +1,72 @@
+Huh. I sort of wish we had a versioning system or something for the things
+so we can update the protocol. Meh.
+
+
+----
+
+* Need to have some method of authentication, security. Probably
+  will not really bother initially.
+
+* Batch server needs to maintain its own notion of identification of
+  resources and its own notion of destinations
+
+* Need to have a method for despositing: was going to say that depositing
+  can probably just be a transaction, but that's not true, because
+  the depositor needs to sign anything going in.
+* Withdrawing a resouce could possibly just be a transaction that
+  outputs to an actual address instead of an internal one but I think
+  that isn't how we will do it. It is a minor simplification in some
+  ways to have withdrawing be its own thing.
+
+* Need to restrict conditionals. If we replace any atoms that can no
+  longer change with their values and the condition holds (is entailed
+  by nothing), then we can keep use the condition, because it can't
+  become false.
+
+* Batching together typecoin transaction is actually somewhat interesting.
+
+* Need on disk storage formats and shit. Hm.... Could use a real db? Do we want
+  atomicity and stuff.
+
+* Disallow bases, grants, receipts.
+  (Bases and grants could probably be done, but would require more
+  screwing around than I like).
+
+* There are a lot of restrictions on things in batch mode -- the single
+  user mode honestly *can't* be directly viewed as a one user batch server
+  unless we generalize things specifically to support that claim (which I
+  don't want to do.)
+
+* When withdrawing, collect a topo sorted list of the upstream transactions
+  (based on sources of inputs), build a transaction where inputs are the
+  real inputs
+
+* Just treat sources as resids, index needs to be zero. Output addresses are
+  ids of users on the batch server.
+
+* When you submit a transaction, you get given this resids of the outputs.
+
+* Need to do network stuff. Can probably reuse a bunch of Karl's code.
+
+*** What do we need to be able to look up:
+* resid -> who owns it, where it lives (batch txn output vs. actual txout)
+* user id -> list of resids that they own
+* some way to look up a transaction by id
+
+*** Updates that need to be done
+* new resources created on inserts
+* new transactions added, new resources created when transactions done
+* resources removed when redeemed
+* resources switched to different locations
+
+* We could use a real database or something
+* Some sort of transaction support would be nice.
+* Relational could be handy but not *that* handy. (Mostly only useful for mapping user ids -> list of resids)
+* Could just have a log structured thing that we replay on load?
+
+
+
+* Might want to be able to output all of the upstream transactions
+  from before the things hit the batch server.
+
+-----

@@ -1,0 +1,43 @@
+engine: sqlite
+
+# Lookups
+
+--- lookupTxn : int -> blob
+
+select txn_body from txn where id = ?
+
+--- lookupResource : int -> {origin: blob, owner: blob, resource: blob}
+
+select origin, owner, resource  from resource where id = ?
+
+--- getUserResources : blob -> {id: int} list
+
+select id from resource where owner = ?
+
+
+# Modification
+
+--- insertTxn : blob -> insert_id
+
+insert into txn (txn_body) values (?)
+
+--- insertResource : {origin: blob, owner: blob, resource: blob} -> insert_id
+
+insert into resource (origin, owner, resource) values (?, ?, ?)
+
+--- removeResource : int -> unit
+
+delete from resource where id = ?
+
+--- moveResource : {origin: blob, id: int} -> unit
+
+update resource set origin = ? where id = ?
+
+# Transactions!
+
+--- beginSqlTransaction : unit -> unit
+begin
+--- commitSqlTransaction : unit -> unit
+commit
+--- rollbackSqlTransaction : unit -> unit
+rollback
