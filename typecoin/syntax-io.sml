@@ -1218,3 +1218,45 @@
 (*#line 238.44 "syntax-io.ioml"*)Bytestring.rev 
 (*#line 238.59 "syntax-io.ioml"*)id )
 (*#line 240.1 "syntax-io.ioml"*)end 
+(*#line 245.1 "syntax-io.ioml"*)
+(*#line 245.1 "syntax-io.ioml"*)structure BatchData = 
+(*#line 246.1 "syntax-io.ioml"*)struct 
+(*#line 247.3 "syntax-io.ioml"*)
+(*#line 247.3 "syntax-io.ioml"*)
+(*#line 247.3 "syntax-io.ioml"*)
+(*#line 247.14 "syntax-io.ioml"*)
+(*#line 247.14 "syntax-io.ioml"*)datatype 
+(*#line 247.14 "syntax-io.ioml"*)
+(*#line 247.14 "syntax-io.ioml"*)res_location  = 
+(*#line 248.12 "syntax-io.ioml"*)RealTxout of 
+(*#line 248.25 "syntax-io.ioml"*)(
+(*#line 248.25 "syntax-io.ioml"*)TypeCoinTxn.txnid   * 
+(*#line 248.45 "syntax-io.ioml"*)int  )| 
+(*#line 249.12 "syntax-io.ioml"*)BatchTxout of 
+(*#line 249.26 "syntax-io.ioml"*)(
+(*#line 249.26 "syntax-io.ioml"*)Int32.int   * 
+(*#line 249.38 "syntax-io.ioml"*)int  )
+(*#line 1239.34 "syntax-io.sml"*)fun writeRes_location (p , x ) = case x of RealTxout x  => (IOTypes.writeInt (p , 0 ); (
+(*#line 248.25 "syntax-io.ioml"*)
+(*#line 248.25 "syntax-io.ioml"*)(
+(*#line 248.25 "syntax-io.ioml"*)fn 
+(*#line 248.25 "syntax-io.ioml"*)
+(*#line 1244.34 "syntax-io.sml"*)x  => 
+(*#line 248.25 "syntax-io.ioml"*)
+(*#line 248.25 "syntax-io.ioml"*)TypeCoinTxn.writeTxnid 
+(*#line 1247.34 "syntax-io.sml"*)(p , x ))(# 1 x ); (fn x  => IOTypes.writeInt (p , x ))(# 2 x ))) | BatchTxout x  => (IOTypes.writeInt (p , 1 ); (
+(*#line 249.26 "syntax-io.ioml"*)
+(*#line 249.26 "syntax-io.ioml"*)(
+(*#line 249.26 "syntax-io.ioml"*)fn 
+(*#line 249.26 "syntax-io.ioml"*)
+(*#line 1252.34 "syntax-io.sml"*)x  => 
+(*#line 249.26 "syntax-io.ioml"*)
+(*#line 249.26 "syntax-io.ioml"*)IOInt32.writeInt 
+(*#line 1255.34 "syntax-io.sml"*)(p , x ))(# 1 x ); (fn x  => IOTypes.writeInt (p , x ))(# 2 x )))fun readRes_location p  = case IOTypes.readInt p of SOME 0  => (case case 
+(*#line 248.25 "syntax-io.ioml"*)
+(*#line 248.25 "syntax-io.ioml"*)TypeCoinTxn.readTxnid 
+(*#line 1258.34 "syntax-io.sml"*)p of NONE  => NONE  | SOME y0  => (case IOTypes.readInt p of NONE  => NONE  | SOME y1  => (SOME (y0 , y1 )))of NONE  => NONE  | SOME x  => SOME (RealTxout x )) | SOME 1  => (case case 
+(*#line 249.26 "syntax-io.ioml"*)
+(*#line 249.26 "syntax-io.ioml"*)IOInt32.readInt 
+(*#line 1261.34 "syntax-io.sml"*)p of NONE  => NONE  | SOME y0  => (case IOTypes.readInt p of NONE  => NONE  | SOME y1  => (SOME (y0 , y1 )))of NONE  => NONE  | SOME x  => SOME (BatchTxout x )) | _  => NONE 
+(*#line 250.1 "syntax-io.ioml"*)end 

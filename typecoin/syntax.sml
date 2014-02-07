@@ -238,3 +238,13 @@ struct
   fun toHexId id = Bytestring.toStringHex (Bytestring.rev id)
 
 end
+
+(* This doesn't really belong here, it belongs as part of the
+ * batch server, but the way I have serialization set up we have
+ * to dump everything we serialize into this file. *)
+structure BatchData =
+struct
+  datatype res_location =
+           RealTxout of TypeCoinTxn.txnid * int
+         | BatchTxout of Int32.int * int
+end
