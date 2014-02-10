@@ -5,6 +5,8 @@ sig
 
   type type_record = Logic.prop vector TypeCoinTxn.TxnDict.dict
 
+  val lookupTxout : type_record -> TypeCoinTxn.txnid * int ->
+                    Logic.prop
 
   val checkTransaction : Basis.basis -> type_record -> TypeCoinTxn.txn ->
                          (Basis.basis * type_record)
@@ -28,12 +30,15 @@ struct
     | build_tensor [x] = x
     | build_tensor (x::xs) = PTensor (x, build_tensor xs)
 
-  fun checkInput tr (Input {source=(source_txn, idx), prop, ...}) =
-      ((case TxnDict.find tr source_txn of
-            NONE => (* Not a typecoin txn. Type must be 1 *)
-            LogicCheck.propEquality prop POne
-          | SOME source_outputs =>
-            LogicCheck.propEquality prop (Vector.sub (source_outputs, idx)));
+  fun lookupTxout tr (source_txn, idx) =
+      (case TxnDict.find tr source_txn of
+           (* Not a typecoin txn. Type must be 1 *)
+            NONE => POne
+          | SOME source_outputs => Vector.sub (source_outputs, idx))
+
+
+  fun checkInput tr (Input {source, prop, ...}) =
+      (LogicCheck.propEquality prop (lookupTxout tr source);
        prop)
 
   fun checkInputs tr inputs = map (checkInput tr) inputs
