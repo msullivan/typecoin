@@ -52,6 +52,7 @@ so we can update the protocol. Meh.
 * resid -> who owns it, where it lives (batch txn output vs. actual txout)
 * user id -> list of resids that they own
 * some way to look up a transaction by id
+* Might need a deposits table to track what we have seen before
 
 *** Updates that need to be done
 * new resources created on inserts
@@ -70,3 +71,7 @@ so we can update the protocol. Meh.
   from before the things hit the batch server.
 
 -----
+
+* What upstream things does it know about?
+
+* I think I might just require all transaction creations to include the upstream chain
