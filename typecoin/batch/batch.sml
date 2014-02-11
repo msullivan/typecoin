@@ -5,11 +5,20 @@ struct
 
 local
     open TypeCoinTxn
+
+  fun mapi f l =
+      let fun mapi' _ _ nil = nil
+            | mapi' f n (x::xs) = (f n x)::mapi' f (n+1) xs
+      in mapi' f 0 l end
+
 in
 
   val BatchError = Fail
 
-  fun getMyAddress () = Bytestring.fromString "DUNNO LOL"
+  val batch_address = ref (Bytestring.fromString "DUNNO LOL")
+  fun getMyAddress () = !batch_address
+
+  fun setup address file = (batch_address := address; BatchStore.setup file)
 
   (* This needs vastly more checking. *)
   fun depositResource userid chain (coord as (txnid, idx)) =
@@ -43,8 +52,70 @@ in
 
           (* TODO: probably store the chain somewhere. *)
 
-          val id = BatchStoreSql.insertResource userid (BatchData.RealTxout coord, res)
+          val id = BatchStore.insertResource userid (BatchData.RealTxout coord, res)
       in id end
+
+  fun checkInput userid tr (Input {source=(fake_txnid, i), prop}) =
+      let val resid =
+              (case (Int32.fromString fake_txnid, i) of
+                   (SOME resid, 0) => resid
+                 | _ => raise BatchError "invalid input resid")
+
+          val {origin, owner, resource} = BatchStore.lookupResource resid
+                                          handle _ => raise BatchError "couldn't lookup resid"
+          val () = if userid = owner then ()
+                   else raise BatchError "attempting to spend someone else's resource"
+          val () = LogicCheck.propEquality prop resource
+
+      in TxnDict.insert tr fake_txnid (Vector.fromList [prop]) end
+
+  fun checkInputs userid tr inputs =
+      foldl (fn (input, tr) => checkInput userid tr input) tr inputs
+
+  fun makeTransaction userid chain txn_body =
+      let
+          (* check the chain provided *)
+          val (basis, tr) = TypeCoinCheck.checkChain
+                                LogicCheck.stdlib_basis
+                                TxnDict.empty
+                                chain
+
+          val (TxnBody {basis=provided_basis, linear_grant, inputs, outputs, ...}) = txn_body
+
+          (* check some restrictions *)
+          val () = if null provided_basis andalso null linear_grant then ()
+                   else raise BatchError "batch txn can not contain basis or grant"
+
+          (* check the inputs against the database and add them to the type record *)
+          val tr' = checkInputs userid tr inputs
+
+          val () = app (fn Output {needs_receipt, ...} =>
+                           if needs_receipt then raise BatchError "receipts not supported"
+                           else ())
+                   outputs
+
+          (* Actually check the transaction *)
+          val (cond, _) = TypeCoinCheck.checkTransactionWithCond basis tr'
+                          (NONE, "dummy", [txn_body])
+
+          (* We could be more permissive in the conds we allow, but aren't yet. *)
+          val () = if cond = Logic.CTrue then ()
+                   else raise BatchError "txn uses complicated cond"
+
+          (* Insert all of the stuff. *)
+          fun submit_txn () =
+              let val txnid = BatchStore.insertTransaction userid txn_body
+
+                  fun submit_output i (Output {dest, prop, ...}) =
+                      BatchStore.insertResource
+                          userid
+                          (BatchData.BatchTxout (txnid, i), prop)
+
+                  val resids = mapi submit_output outputs
+              in (txnid, resids) end
+
+      in BatchStore.runTransactionally submit_txn end
+
 
 end
 end

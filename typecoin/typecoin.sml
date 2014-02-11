@@ -8,10 +8,14 @@ sig
   val lookupTxout : type_record -> TypeCoinTxn.txnid * int ->
                     Logic.prop
 
+
+  val checkTransactionWithCond : Basis.basis -> type_record -> TypeCoinTxn.txn ->
+                                 Logic.condition * (Basis.basis * type_record)
+
   val checkTransaction : Basis.basis -> type_record -> TypeCoinTxn.txn ->
-                         (Basis.basis * type_record)
+                         Basis.basis * type_record
   val checkChain : Basis.basis -> type_record -> TypeCoinTxn.chain ->
-                   (Basis.basis * type_record)
+                   Basis.basis * type_record
 end
 
 
@@ -110,8 +114,12 @@ struct
 *)
           (* If we don't have a particular block number, we'll just assume the current
            * one for checking purposes. *)
-          val block_num = (case block of NONE => RPC.Blockchain.lastBlock () | SOME n => n)
-          val meets_condition = TypeCoinCrypto.checkCondition block_num condition
+          (* Don't contact the RPC server if there is no condition *)
+          val meets_condition =
+              condition = CTrue orelse
+              TypeCoinCrypto.checkCondition
+                  (case block of NONE => RPC.Blockchain.lastBlock () | SOME n => n)
+                  condition
           val () = if meets_condition then () else
                    raise TypeCoinError "condition does not hold"
 
@@ -124,20 +132,22 @@ struct
           val tr' = TxnDict.insert tr txnid (Vector.fromList output_props')
 
       in
-          (basis'', tr')
+          (condition, (basis'', tr'))
       end
 
-  fun checkTransaction basis tr (block, txnid, [tx]) =
+  fun checkTransactionWithCond basis tr (block, txnid, [tx]) =
       (* If there is only one, don't catch the errors *)
       checkTransaction' basis tr (block, txnid, tx)
-    | checkTransaction basis tr (block, txnid, tx :: txs) =
+    | checkTransactionWithCond basis tr (block, txnid, tx :: txs) =
       (* I am really sloppy about exceptions... *)
       (checkTransaction' basis tr (block, txnid, tx)
        handle BlockExplorer.ExplorerError => raise BlockExplorer.ExplorerError
-            | _ => checkTransaction basis tr (block, txnid, txs))
-    | checkTransaction _ _ (_, _, []) =
+            | _ => checkTransactionWithCond basis tr (block, txnid, txs))
+    | checkTransactionWithCond _ _ (_, _, []) =
       raise TypeCoinError "empty transaction"
 
+
+  fun checkTransaction basis tr txn = #2 (checkTransactionWithCond basis tr txn)
 
   fun checkChain basis tr txns =
       foldl (fn (txn, (basis, tr)) => checkTransaction basis tr txn) (basis, tr) txns

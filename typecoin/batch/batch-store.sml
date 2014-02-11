@@ -12,6 +12,7 @@ sig
   val checkpoint : unit -> unit
   val commit : unit -> unit
   val rollback : unit -> unit
+  val runTransactionally : (unit -> 'a) -> 'a
 
   (* Lookup operations *)
   val lookupResource : resid -> {origin: BatchData.res_location, owner: userid, resource: resource}
@@ -41,6 +42,14 @@ struct
   val commit = SQL.commitSqlTransaction
   val rollback = SQL.rollbackSqlTransaction
 
+  fun runTransactionally f =
+      let val () = checkpoint ()
+          val result = f ()
+                       handle e => (rollback (); raise e)
+          val () = commit ()
+      in result end
+
+
   fun serializeTxn body = IOTypes.writeToVector TypeCoinTxn.writeTxn_body body
   fun deserializeTxn v = valOf (IOTypes.readFromVector TypeCoinTxn.readTxn_body v)
   fun serializeProp prop = IOTypes.writeToVector Logic.writeProp prop
@@ -65,3 +74,5 @@ struct
   val removeResource = SQL.removeResource
 
 end
+
+structure BatchStore = BatchStoreSql

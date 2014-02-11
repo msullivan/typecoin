@@ -336,7 +336,6 @@ struct
 
 end
 
-
 structure MoneyTests =
 struct
 
