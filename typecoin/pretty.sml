@@ -320,6 +320,7 @@ struct
       String.concatWith "\n" (map prettyDecl sg)
 
   fun prettyProof M = fmt (toLayoutProof M)
+  fun prettyProp A = fmt (toLayoutProp A)
 
   end
 

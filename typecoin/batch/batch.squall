@@ -21,9 +21,9 @@ select id from resource where owner = ?
 
 insert into txn (txn_body) values (?)
 
---- insertResource : {origin: blob, owner: blob, resource: blob} -> insert_id
+--- insertResource : {origin: blob, owner: blob, resource: blob, debug_name: string option} -> insert_id
 
-insert into resource (origin, owner, resource) values (?, ?, ?)
+insert into resource (origin, owner, resource, debug_name) values (?, ?, ?, ?)
 
 --- removeResource : int -> unit
 

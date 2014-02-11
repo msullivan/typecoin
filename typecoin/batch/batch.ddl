@@ -9,6 +9,7 @@ create table resource (
 	id integer primary key autoincrement not null,
 	resource blob not null,
 	origin blob not null,
-	owner blob not null
+	owner blob not null,
+	debug_name string
 );
 

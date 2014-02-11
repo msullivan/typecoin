@@ -68,7 +68,8 @@ struct
   fun insertTransaction user txn = SQL.insertTxn (serializeTxn txn)
   fun insertResource owner (origin, res) =
       SQL.insertResource
-      {origin=serializeOrigin origin, owner=owner, resource=serializeProp res}
+      {origin=serializeOrigin origin, owner=owner, resource=serializeProp res,
+       debug_name=SOME (PrettyLogic.prettyProp res)}
   fun moveResource resid origin =
       SQL.moveResource {origin=serializeOrigin origin, id=resid}
   val removeResource = SQL.removeResource

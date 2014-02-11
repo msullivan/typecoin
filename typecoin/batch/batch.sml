@@ -95,8 +95,8 @@ in
                    outputs
 
           (* Actually check the transaction *)
-          val (cond, _) = TypeCoinCheck.checkTransactionWithCond basis tr'
-                          (NONE, "dummy", [txn_body])
+          val (cond, _) = TypeCoinCheck.checkTransactionWithCond
+                              basis tr' (NONE, "dummy", [txn_body])
 
           (* We could be more permissive in the conds we allow, but aren't yet. *)
           val () = if cond = Logic.CTrue then ()
@@ -106,11 +106,18 @@ in
           fun submit_txn () =
               let val txnid = BatchStore.insertTransaction userid txn_body
 
+                  (* N.B. that we can only get away with directly using the prop
+                   * in the output because we disallow basises, so none of the outputs
+                   * can reference self. *)
                   fun submit_output i (Output {dest, prop, ...}) =
                       BatchStore.insertResource
-                          userid
+                          dest
                           (BatchData.BatchTxout (txnid, i), prop)
 
+                  fun delete_input (Input {source=(fake_txnid, _), prop}) =
+                      BatchStore.removeResource (valOf (Int32.fromString fake_txnid))
+
+                  val () = app delete_input inputs
                   val resids = mapi submit_output outputs
               in (txnid, resids) end
 
