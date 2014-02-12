@@ -262,6 +262,7 @@ struct
       (case M of
            MRule c => &[$"MRule ", $(PrettyLF.prettyConst c)]
          | MVar v => &[$"MVar ", lvar v]
+         | MLet (M1, v, M2) => help "MLet" [lproof M1, lvar v, lproof M2]
          | MBang M => help "MBang" [lproof M]
          | MBangLet (M1, v, M2) => help "MBangLet" [lproof M1, lvar v, lproof M2]
          | MLam (v, A, M) => help "MLam" [lvar v, lprop A, lproof M]

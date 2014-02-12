@@ -95,6 +95,7 @@ struct
       (case proof of
            MRule c => MRule c
          | MVar v => MVar v
+         | MLet (M1, v, M2) => MLet (convert M1, v, convert M2)
          | MBang M => MBang (convert M)
          | MBangLet (M1, v, M2) => MBangLet (convert M1, v, convert M2)
          | MLam (v, A, M) => MLam (v, convertProp G A, convert M)

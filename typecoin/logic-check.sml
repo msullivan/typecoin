@@ -219,6 +219,11 @@ struct
                    consumeResource res v
            in (A, res') end
 
+         | MLet (M1, v, E2) =>
+           let val (A, res') = checkProof D M1
+               val D' = addResource (ctx, res') v A
+           in checkProof D' E2 end
+
          | MBang M' =>
            let val (A, empty_res) = checkProof (ctx, VarSet.empty) M'
            in (PBang A, res) end

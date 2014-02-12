@@ -150,6 +150,9 @@ struct
 
   datatype proof = MRule of const
                  | MVar of var
+
+                 | MLet of proof * var * proof
+
                  | MBang of proof
                  | MBangLet of proof * var * proof
                  | MLam of var * prop * proof
