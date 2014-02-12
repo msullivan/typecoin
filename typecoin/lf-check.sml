@@ -108,6 +108,16 @@ in
           val t2' = LFSubst.substExp 0 [e] 0 t2
       in checkSpine basis ctx t2' s end
 
+  fun checkExp' basis ctx exp typ =
+      ((checkExp basis ctx exp typ)
+       handle TypeError s => (print ("Type error: " ^ s ^ "\n"); raise TypeError s))
+  val checkExp = checkExp'
+  fun expEquality'' e e' =
+      ((expEquality e e')
+       handle TypeError s => (print ("Type error: " ^ s ^ "\n"); raise TypeError s))
+  val expEquality = expEquality''
+
+
   (* Check that we aren't creating ways to build things of
    * types declared in other namespaces. *)
   fun thawedType e =
