@@ -14,6 +14,11 @@ select real_txn_origin, batch_txn_origin, idx, owner, resource, spent  from reso
 
 select id from resource where owner = ?
 
+--- getTxnOutputs : int -> {resid: int, idx: int} list
+
+select id, idx from resource where batch_txn_origin = ?
+order by idx
+
 
 # Modification
 
