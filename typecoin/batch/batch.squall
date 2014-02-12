@@ -6,9 +6,9 @@ engine: sqlite
 
 select txn_body from txn where id = ?
 
---- lookupResource : int -> {origin: blob, owner: blob, resource: blob}
+--- lookupResource : int -> {real_txn_origin: string option, batch_txn_origin: int option, index: int, owner: blob, resource: blob, spent: int}
 
-select origin, owner, resource  from resource where id = ?
+select real_txn_origin, batch_txn_origin, idx, owner, resource, spent  from resource where id = ?
 
 --- getUserResources : blob -> {id: int} list
 
@@ -21,17 +21,17 @@ select id from resource where owner = ?
 
 insert into txn (txn_body) values (?)
 
---- insertResource : {origin: blob, owner: blob, resource: blob, debug_name: string option} -> insert_id
+--- insertResource : {real_txn_origin: string option, batch_txn_origin: int option, index: int, owner: blob, resource: blob debug_name: string option} -> insert_id
 
-insert into resource (origin, owner, resource, debug_name) values (?, ?, ?, ?)
+insert into resource (real_txn_origin, batch_txn_origin, idx, owner, resource, debug_name, spent) values (?, ?, ?, ?, ?, ?, 0)
 
---- removeResource : int -> unit
+--- spendResource : int -> unit
 
-delete from resource where id = ?
+update resource set spent = 1 where id = ?
 
---- moveResource : {origin: blob, id: int} -> unit
+--- moveResource : {real_txn_origin: string option, batch_txn_origin: int option, index: int, id: int} -> unit
 
-update resource set origin = ? where id = ?
+update resource set real_txn_origin=?, batch_txn_origin=?, idx=? where id = ?
 
 # Transactions!
 

@@ -15,7 +15,8 @@ sig
   val runTransactionally : (unit -> 'a) -> 'a
 
   (* Lookup operations *)
-  val lookupResource : resid -> {origin: BatchData.res_location, owner: userid, resource: resource}
+  val lookupResource : resid -> {origin: BatchData.res_location, owner: userid,
+                                 resource: resource, spent: bool}
   val getUserResources : userid -> resid list
   val lookupTransaction : batch_txnid -> TypeCoinTxn.txn_body
 
@@ -23,7 +24,7 @@ sig
   val insertTransaction : userid -> TypeCoinTxn.txn_body -> batch_txnid
   val insertResource : userid -> BatchData.res_location * resource -> resid
   val moveResource : resid -> BatchData.res_location -> unit
-  val removeResource : resid -> unit
+  val spendResource : resid -> unit
 
 end
 
@@ -54,25 +55,46 @@ struct
   fun deserializeTxn v = valOf (IOTypes.readFromVector TypeCoinTxn.readTxn_body v)
   fun serializeProp prop = IOTypes.writeToVector Logic.writeProp prop
   fun deserializeProp v = valOf (IOTypes.readFromVector Logic.readProp v)
-  fun serializeOrigin origin = IOTypes.writeToVector BatchData.writeRes_location origin
-  fun deserializeOrigin v = valOf (IOTypes.readFromVector BatchData.readRes_location v)
 
   (* Lookup operations *)
   fun lookupResource id =
-      let val {origin, owner, resource} = SQL.lookupResource id
-      in {origin=deserializeOrigin origin, owner=owner, resource=deserializeProp resource} end
+      let val {real_txn_origin, batch_txn_origin, index, owner, resource, spent} =
+              SQL.lookupResource id
+          val i = Int32.toInt index
+          val origin =
+              (case (real_txn_origin, batch_txn_origin) of
+                   (SOME id, NONE) => BatchData.RealTxout (id, i)
+                 | (NONE, SOME id) => BatchData.BatchTxout (id, i)
+                 | _ => raise Fail "inconsistent database state")
+      in {origin=origin, owner=owner, resource=deserializeProp resource, spent=spent <> 0} end
+
   val getUserResources = map #id o SQL.getUserResources
   val lookupTransaction = deserializeTxn o SQL.lookupTxn
+
+  fun formatResource origin =
+      (case origin of
+           BatchData.RealTxout (id, i) => (SOME id, NONE, Int32.fromInt i)
+         | BatchData.BatchTxout (id, i) => (NONE, SOME id, Int32.fromInt i))
 
   (* Modification operations *)
   fun insertTransaction user txn = SQL.insertTxn (serializeTxn txn)
   fun insertResource owner (origin, res) =
-      SQL.insertResource
-      {origin=serializeOrigin origin, owner=owner, resource=serializeProp res,
-       debug_name=SOME (PrettyLogic.prettyProp res)}
+      let val (real, batch, index) = formatResource origin
+      in
+          SQL.insertResource
+              {real_txn_origin=real, batch_txn_origin=batch, index=index,
+               owner=owner, resource=serializeProp res,
+               debug_name=SOME (PrettyLogic.prettyProp res)}
+      end
+
   fun moveResource resid origin =
-      SQL.moveResource {origin=serializeOrigin origin, id=resid}
-  val removeResource = SQL.removeResource
+      let val (real, batch, index) = formatResource origin
+      in
+          SQL.moveResource
+              {real_txn_origin=real, batch_txn_origin=batch, index=index,
+               id=resid}
+      end
+  val spendResource = SQL.spendResource
 
 end
 

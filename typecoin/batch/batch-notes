@@ -75,3 +75,6 @@ so we can update the protocol. Meh.
 * What upstream things does it know about?
 
 * I think I might just require all transaction creations to include the upstream chain
+
+* There is a sticky bit about signing; batch transactions might have no inputs, which
+  causes fuckups here.

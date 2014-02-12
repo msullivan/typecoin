@@ -7,9 +7,17 @@ create table txn (
 drop table if exists resource;
 create table resource (
 	id integer primary key autoincrement not null,
+
 	resource blob not null,
-	origin blob not null,
-	owner blob not null,
-	debug_name string
+	debug_name string,
+
+    spent int not null,
+
+    -- only one of these should be non null
+	real_txn_origin string, -- this is dum.
+	batch_txn_origin int,
+	idx int not null,
+
+	owner blob not null
 );
 

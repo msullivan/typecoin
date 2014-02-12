@@ -1,10 +1,26 @@
 
+structure Int32Ordered
+   :> ORDERED where type t = Int32.int
+   =
+   struct
+      type t = Int32.int
+
+      val eq : Int32.int * Int32.int -> bool = (op =)
+      val compare = Int32.compare
+   end
+
+structure Int32SplayDict    = SplayDict (structure Key = Int32Ordered)
+structure Int32SplaySet     = SplaySet (structure Elem = Int32Ordered)
+
+
 
 structure Batch =
 struct
 
 local
     open TypeCoinTxn
+    open BatchData
+
 
   fun mapi f l =
       let fun mapi' _ _ nil = nil
@@ -61,8 +77,10 @@ in
                    (SOME resid, 0) => resid
                  | _ => raise BatchError "invalid input resid")
 
-          val {origin, owner, resource} = BatchStore.lookupResource resid
-                                          handle _ => raise BatchError "couldn't lookup resid"
+          val {origin, owner, resource, spent} = BatchStore.lookupResource resid
+              handle _ => raise BatchError "couldn't lookup resid"
+          val () = if not spent then ()
+                   else raise BatchError "resource already spent"
           val () = if userid = owner then ()
                    else raise BatchError "attempting to spend someone else's resource"
           val () = LogicCheck.propEquality prop resource
@@ -114,8 +132,8 @@ in
                           dest
                           (BatchData.BatchTxout (txnid, i), prop)
 
-                  fun delete_input (Input {source=(fake_txnid, _), prop}) =
-                      BatchStore.removeResource (valOf (Int32.fromString fake_txnid))
+                  fun delete_input (Input {source=(fake_txnid, _), ...}) =
+                      BatchStore.spendResource (valOf (Int32.fromString fake_txnid))
 
                   val () = app delete_input inputs
                   val resids = mapi submit_output outputs
