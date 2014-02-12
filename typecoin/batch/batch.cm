@@ -9,3 +9,5 @@
         batch.squall
         batch-store.sml
         batch.sml
+
+        batch-testing.sml
