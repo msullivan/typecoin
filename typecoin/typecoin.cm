@@ -30,3 +30,4 @@ Group is
         lib/http-downloader.sig
         lib/curl-lib.sml
         lib/fsutil.sml
+        lib/util.sml

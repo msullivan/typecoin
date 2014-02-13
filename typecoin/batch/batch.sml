@@ -21,12 +21,6 @@ local
     open TypeCoinTxn
     open BatchData
 
-
-  fun mapi f l =
-      let fun mapi' _ _ nil = nil
-            | mapi' f n (x::xs) = (f n x)::mapi' f (n+1) xs
-      in mapi' f 0 l end
-
 in
 
   val BatchError = Fail
@@ -136,7 +130,7 @@ in
                       BatchStore.spendResource (valOf (Int32.fromString fake_txnid))
 
                   val () = app delete_input inputs
-                  val resids = mapi submit_output outputs
+                  val resids = Util.mapi submit_output outputs
               in (txnid, resids) end
 
       in BatchStore.runTransactionally submit_txn end
