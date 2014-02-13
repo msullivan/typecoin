@@ -97,12 +97,16 @@ struct
   val (charlie_txnid, [A_resid_alice, B_resid_bob]) = Batch.makeTransaction charlie_hash test_chain charlie_test_txn
 
   (* Now Alice makes a B -@ C and sends it to Bob *)
+  (* For kicks she also sends herself a 1. *)
   local
     val inputs = [Input {source = (Int32.toString A_resid_alice, 0), prop = A}]
-    val outputs = [StdOutput {dest = bob_hash, prop = B -@ C}]
+    val outputs = [StdOutput {dest = bob_hash, prop = B -@ C},
+                   StdOutput {dest = alice_hash, prop = POne}]
 
     val proof_term =
-        MLam ("z", A, ifret (MApp (make_C, z)))
+        MLam ("z", A, ifret (
+                      MTensor (MApp (make_C, z),
+                               MOne)))
 
   in
 
@@ -118,7 +122,8 @@ struct
   end
 
   (* Send it to the batch server *)
-  val (alice_txnid, [B_imp_C_resid_bob]) =
+
+  val (alice_txnid, [B_imp_C_resid_bob, one_resid_alice]) =
       Batch.makeTransaction alice_hash test_chain alice_test_txn
 
 
@@ -149,7 +154,6 @@ struct
   (* Send it to the batch server *)
   val (bob_txnid, [C_resid_bob]) =
       Batch.makeTransaction bob_hash test_chain bob_test_txn
-
 end
 
 

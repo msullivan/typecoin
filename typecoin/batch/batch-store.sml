@@ -20,6 +20,7 @@ sig
   val getUserResources : userid -> resid list
   val lookupTransaction : batch_txnid -> TypeCoinTxn.txn_body
   val getTxnOutputs : batch_txnid -> {id: resid, idx: int} list
+  val getUnspentTxnOutputs : batch_txnid -> resid list
 
   (* Modification operations *)
   val insertTransaction : userid -> TypeCoinTxn.txn_body -> batch_txnid
@@ -73,6 +74,7 @@ struct
   val lookupTransaction = deserializeTxn o SQL.lookupTxn
 
   val getTxnOutputs = map (fn {resid, idx} => {id=resid, idx=Int32.toInt idx}) o SQL.getTxnOutputs
+  val getUnspentTxnOutputs = map #id o SQL.getUnspentTxnOutputs
 
   fun formatResource origin =
       (case origin of

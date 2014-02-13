@@ -19,6 +19,9 @@ select id from resource where owner = ?
 select id, idx from resource where batch_txn_origin = ?
 order by idx
 
+--- getUnspentTxnOutputs : int -> {id: int} list
+
+select id, idx from resource where batch_txn_origin = ? and spent = 0
 
 # Modification
 

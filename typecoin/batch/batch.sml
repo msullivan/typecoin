@@ -65,11 +65,13 @@ in
           val id = BatchStore.insertResource userid (BatchData.RealTxout coord, res)
       in id end
 
-  fun checkInput userid tr (Input {source=(fake_txnid, i), prop}) =
-      let val resid =
-              (case (Int32.fromString fake_txnid, i) of
-                   (SOME resid, 0) => resid
-                 | _ => raise BatchError "invalid input resid")
+  fun inputResid (Input {source=(fake_txnid, i), ...}) =
+      (case (Int32.fromString fake_txnid, i) of
+           (SOME resid, 0) => resid
+         | _ => raise BatchError "invalid input resid")
+
+  fun checkInput userid tr (input as Input {source=(fake_txnid, i), prop}) =
+      let val resid = inputResid input
 
           val {origin, owner, resource, spent} = BatchStore.lookupResource resid
               handle _ => raise BatchError "couldn't lookup resid"
@@ -126,8 +128,7 @@ in
                           dest
                           (BatchData.BatchTxout (txnid, i), prop)
 
-                  fun delete_input (Input {source=(fake_txnid, _), ...}) =
-                      BatchStore.spendResource (valOf (Int32.fromString fake_txnid))
+                  fun delete_input input = BatchStore.spendResource (inputResid input)
 
                   val () = app delete_input inputs
                   val resids = Util.mapi submit_output outputs
@@ -135,6 +136,107 @@ in
 
       in BatchStore.runTransactionally submit_txn end
 
+  structure TxnidSet = Int32SplaySet
+
+  (********* Doesn't really belong here ************)
+  local
+      val cnt = ref 0
+  in
+  fun new_var s = s ^ Int.toString (!cnt) before cnt := !cnt + 1
+  end
+
+  structure L = Logic
+
+  (* This is a bit annoying with all the special cases *)
+
+  fun build_tensor [] = L.POne
+    | build_tensor [x] = x
+    | build_tensor (x::xs) = L.PTensor (x, build_tensor xs)
+
+  fun build_mtensor [] = L.MOne
+    | build_mtensor [x] = x
+    | build_mtensor (x::xs) = L.MTensor (x, build_mtensor xs)
+
+  fun bind_tensor body e [] = body
+    | bind_tensor body e [v] = L.MLet (e, v, body)
+    | bind_tensor body e [v1, v2] = L.MTensorLet (e, v1, v2, body)
+    | bind_tensor body e (v::vs) =
+      let val v' = new_var "binding"
+      in L.MTensorLet (e, v, v', bind_tensor body (L.MVar v') vs) end
+  (*************************************************)
+
+
+
+
+  fun residToVar id = "res" ^ Int32.toString id
+
+  fun collect resid (stuff as (txns, real_inputs, seen)) =
+      let val {origin, resource, spent, ...} = BatchStore.lookupResource resid
+          val seen' = TxnidSet.insert seen resid
+      in
+      (case origin of
+
+           RealTxout txout =>
+           (txns, (resid, txout, resource) :: real_inputs, seen')
+         | BatchTxout (txnid, i) =>
+           if TxnidSet.member seen txnid then stuff else
+           let
+               val (txn as TxnBody {inputs, outputs, proof_term, ...}) =
+                   BatchStore.lookupTransaction txnid
+
+               val input_resids = map inputResid inputs
+               val (txns', real_inputs', seen'') =
+                   collectMany input_resids (txns, real_inputs, seen')
+
+               val data = (txnid, inputs, outputs, proof_term)
+           in
+               (data :: txns', real_inputs', seen'')
+           end
+
+      )
+      end
+  and collectMany resids stuff =
+      foldl (Util.uncurry2 collect) stuff resids
+
+  fun findUnspent txns =
+      List.concat (map (fn (id, _, _, _) => BatchStore.getUnspentTxnOutputs id) txns)
+
+
+  fun batchTerm resid (txns, real_inputs, seen) unspent =
+      let
+          fun runFunction ((txnid, inputs, outputs, proof), body) =
+              let val output_vars = map (residToVar o #id) (BatchStore.getTxnOutputs txnid)
+                  val input_term = build_mtensor (map (L.MVar o residToVar o inputResid) inputs)
+                  val output_var = new_var "output"
+
+                  val rest = bind_tensor body (L.MVar output_var) output_vars
+
+              in
+                  L.MIfBind (L.MApp (proof, input_term),
+                             output_var,
+                             rest)
+              end
+
+          val output_stuff = build_mtensor (map (L.MVar o residToVar) unspent)
+
+          val body = foldl runFunction (L.MIfReturn (L.CTrue, output_stuff)) txns
+          val input_vars = map (residToVar o Util.first3) real_inputs
+          val input_type = build_tensor (map Util.third3 real_inputs)
+          val input_var = new_var "input"
+
+          val term = L.MLam (input_var, input_type,
+                             bind_tensor body (L.MVar input_var) input_vars)
+
+      in term end
+
+  fun withdrawResource userid resid =
+      let val (stuff as (txns, real_inputs, seen)) =
+              collect resid ([], [], TxnidSet.empty)
+          val unspent = findUnspent txns
+
+          val term = batchTerm resid stuff unspent
+
+      in (rev txns, real_inputs, unspent, term) end
 
 end
 end
