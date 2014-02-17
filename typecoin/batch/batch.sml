@@ -229,14 +229,67 @@ in
 
       in term end
 
+  (* TODO: we need to be able to actually create a bitcoin transaction.
+   * For testing, we just make a bogus id *)
+  fun createTxn txn_body =
+      ((),
+       (TypeCoinTxn.toHexId (TypeCoinCrypto.hash
+                                 (IOTypes.writeToVector TypeCoinTxn.writeTxn_bodies [txn_body]))))
+  fun submitTxn realTxn = ()
+
+
   fun withdrawResource userid resid =
-      let val (stuff as (txns, real_inputs, seen)) =
+      let
+          val {owner, ...} = BatchStore.lookupResource resid
+              handle _ => raise BatchError "couldn't lookup resid"
+          val () = if userid = owner then ()
+                   else raise BatchError "attempting to spend someone else's resource"
+
+
+
+          val (stuff as (txns, real_inputs, seen)) =
               collect resid ([], [], TxnidSet.empty)
           val unspent = findUnspent txns
 
           val term = batchTerm resid stuff unspent
 
-      in (rev txns, real_inputs, unspent, term) end
+          val inputs = map (fn (_, source, prop) => Input {source=source, prop=prop}) real_inputs
+
+          fun mkOutput resid' =
+              let val dest = if resid' = resid then userid else getMyAddress ()
+                  val prop = #resource (BatchStore.lookupResource resid')
+              in Output { dest = dest, prop = prop,
+                          needs_receipt = false, amount = NONE
+                        }
+              end
+          val outputs = map mkOutput unspent
+
+          val txn_body = TxnBody { name = "withdraw " ^ Int32.toString resid,
+
+                                   inputs = inputs,
+                                   outputs = outputs,
+                                   proof_term = term,
+
+                                   metadata = [],
+                                   basis = [],
+                                   linear_grant = []
+                                 }
+
+          val (real_txn, txnid) = createTxn txn_body
+
+          fun updateOutput n resid' =
+              if resid' = resid then BatchStore.spendResource resid'
+              else
+                  BatchStore.moveResource resid' (BatchData.RealTxout (txnid, n))
+
+          fun doChanges () =
+              (Util.appi updateOutput unspent;
+               submitTxn real_txn)
+
+          val () = BatchStore.runTransactionally doChanges
+
+
+      in (txn_body, txnid) end
 
 end
 end

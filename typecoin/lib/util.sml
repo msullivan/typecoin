@@ -83,6 +83,10 @@ struct
       let fun mapi' _ _ nil = nil
             | mapi' f n (x::xs) = (f n x)::mapi' f (n+1) xs
       in mapi' f 0 l end
+  fun appi f l =
+      let fun appi' _ _ nil = ()
+            | appi' f n (x::xs) = (f n x; appi' f (n+1) xs)
+      in appi' f 0 l end
 
   fun split f l =
       let fun splitter' cur blocks [] = rev (map rev (cur::blocks))
