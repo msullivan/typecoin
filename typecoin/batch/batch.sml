@@ -249,7 +249,10 @@ in
 
           val (stuff as (txns, real_inputs, seen)) =
               collect resid ([], [], TxnidSet.empty)
-          val unspent = findUnspent txns
+          (* If there aren't any txns, then we are just doing a
+           * simple withdraw *)
+          val unspent = if null txns then [resid]
+                        else findUnspent txns
 
           val term = batchTerm resid stuff unspent
 
