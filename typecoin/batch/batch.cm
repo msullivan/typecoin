@@ -3,11 +3,14 @@
         ../../client/sources.cm
         ../typecoin.cm
 
+		chiralml.cm
         $SMACKAGE/stilts/v1/db/sqlite/sqlite.cm
         $SMACKAGE/stilts/v1/db/squall/squall-tool.cm : tool
+        $SMACKAGE/stilts/v1/util/linereader.sml
 
         batch.squall
         batch-store.sml
         batch.sml
+        batch-server.sml
 
         batch-testing.sml
