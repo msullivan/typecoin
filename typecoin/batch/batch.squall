@@ -23,15 +23,18 @@ order by idx
 
 select id, idx from resource where batch_txn_origin = ? and spent = 0
 
+--- getResourceFromOrigin : {original_origin_txn: string, original_origin_index: int} -> {id: int} option
+select id from resource where original_origin_txn = ? and original_origin_idx = ?
+
 # Modification
 
 --- insertTxn : blob -> insert_id
 
 insert into txn (txn_body) values (?)
 
---- insertResource : {real_txn_origin: string option, batch_txn_origin: int option, index: int, owner: blob, resource: blob debug_name: string option} -> insert_id
+--- insertResource : {real_txn_origin: string option, batch_txn_origin: int option, index: int, owner: blob, resource: blob debug_name: string option, original_origin_txn: string option, original_origin_index: int } -> insert_id
 
-insert into resource (real_txn_origin, batch_txn_origin, idx, owner, resource, debug_name, spent) values (?, ?, ?, ?, ?, ?, 0)
+insert into resource (real_txn_origin, batch_txn_origin, idx, owner, resource, debug_name, spent, original_origin_txn, original_origin_idx) values (?, ?, ?, ?, ?, ?, 0, ?, ?)
 
 --- spendResource : int -> unit
 

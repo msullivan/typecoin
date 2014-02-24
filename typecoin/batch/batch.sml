@@ -58,7 +58,8 @@ in
           val () = if List.exists (fn x => x = dest_metadata_str) metadata then ()
                    else raise BatchError "txn not a deposit to proper account"
 
-          (* TODO: check that (tx, idx) hasn't been deposited before *)
+          val () = if not (BatchStore.isAlreadyDeposited coord) then ()
+                   else raise BatchError "resource already deposited"
 
           (* TODO: probably store the chain somewhere. *)
 
