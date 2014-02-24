@@ -1,5 +1,10 @@
 
-structure RpcClient :> RPC_CLIENT =
+signature RPC_CLIENT_PARAMS =
+sig
+  val getParams : unit -> Network.addr * int
+end
+
+functor RpcClientFn(structure Params : RPC_CLIENT_PARAMS) :> RPC_CLIENT =
    struct
 
       structure B = Bytestring
@@ -10,9 +15,6 @@ structure RpcClient :> RPC_CLIENT =
 
       val theSock : Network.asock option ref = ref NONE
       val theCostring : C.costring ref = ref C.null
-
-      val loopback = Address.toInAddr (valOf (Address.fromString "127.0.0.1"))
-
 
       exception RPC
       exception RemoteError of string
@@ -25,11 +27,12 @@ structure RpcClient :> RPC_CLIENT =
          theCostring := C.null
          )
 
-         
+
       fun connect () =
          let
+            val (address, port) = Params.getParams ()
             val sock =
-               Network.connect (loopback, !Constants.rpcPort)
+               Network.connect (address, port)
                handle Network.NetworkException _ => raise RPC
 
             val sd = Socket.sockDesc sock
@@ -104,14 +107,14 @@ structure RpcClient :> RPC_CLIENT =
                   Word32.toInt (ConvertWord.bytesToWord32SB (C.slice (cos, 0, 4)))
                   handle Overflow => raise RPC
                        | Subscript => raise RPC
-   
+
                val resp =
                   Reader.readfullS U.reader (C.slice (cos, 4, sz))
                   handle Reader.SyntaxError => raise RPC
                        | Subscript => raise RPC
             in
                theCostring := C.suffix (cos, 4+sz);
-               
+
                (case resp of
                    U.Method =>
                       (* remote syntax error *)
@@ -149,3 +152,10 @@ structure RpcClient :> RPC_CLIENT =
          )
 
    end
+
+structure RpcClient = RpcClientFn(structure Params =
+                                  struct
+                                    fun getParams () =
+                                        (Address.toInAddr (valOf (Address.fromString "127.0.0.1")),
+                                         !Constants.rpcPort)
+                                  end)

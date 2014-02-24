@@ -8,12 +8,15 @@ structure SU = ChiralSockUtil(CS)
 structure LR = LineReader(CS.Socket)
 
 
-structure BatchAction =
-struct
-  local
-      open Unityped
-  in
 
+signature BATCH_ACTION =
+sig
+  val act : TypeCoinTxn.crypto_principal -> Word8.word -> Unityped.unityped -> Unityped.unityped
+end
+
+structure BatchAction :> BATCH_ACTION =
+struct
+  open Unityped
 
   fun decodeChain chain = valOf (IOTypes.readFromVector TypeCoinTxn.readChain chain)
   fun decodeBody body = valOf (IOTypes.readFromVector TypeCoinTxn.readTxn_body body)
@@ -26,7 +29,7 @@ struct
   fun List f [] = Nil
     | List f (x::xs) = Cons (f x, List f xs)
 
-  fun action userid (method : Word8.word) args =
+  fun act userid (method : Word8.word) args =
       (case (method, args) of
            (0w10, Cons (Bytestring chain, Cons (String txnid, Int idx))) =>
            Resid (
@@ -51,8 +54,6 @@ struct
          | _ => Method
       )
 
-
-  end
 end
 
 
@@ -67,11 +68,8 @@ struct
 
   fun batch_server (conn, conn_addr) () =
       let
-          (* First, we "authenticate" by reading in the userid the connection thinks it is *)
           (* XXX: should do some sort of actual authentication at all. *)
-          val userid = SU.recvVec (conn, 20)
-
-          val () = print ("Got batch server connection from " ^ TypeCoinTxn.toHexId userid ^ "\n")
+          val userid = ref NONE
 
           fun loop () =
               let val sz = Word32.toInt (ConvertWord.bytesToWord32B (SU.recvVec (conn, 4)))
@@ -80,12 +78,16 @@ struct
 
                   val response =
                       (case request of
-                           U.Cons (U.Byte method, args) =>
-                           (case method of
-                                (* should handle any top level things *)
-                                _ =>
-                                    (BatchAction.action userid method args
-                                     handle exn => U.Exception (U.String (exnMessage exn))))
+                           U.Cons (U.Byte 0w1, U.Nil) =>
+                           (CS.Socket.close conn; T.deschedule (); raise Fail "not gone")
+                         | U.Cons (U.Byte 0w2, U.Nil) => raise Fail "should shutdown"
+                         | U.Cons (U.Byte 0w3, U.Bytestring new_userid) =>
+                           (print ("Authentication " ^ TypeCoinTxn.toHexId new_userid ^ "\n");
+                            userid := SOME new_userid;
+                            U.True)
+                         | U.Cons (U.Byte method, args) =>
+                           (BatchAction.act (valOf (!userid)) method args
+                            handle exn => U.Exception (U.String (exnMessage exn)))
                          | _ => U.Method)
 
                   val response_str = Writer.write (U.writer response)
@@ -93,9 +95,7 @@ struct
                   val () = SU.sendVec (conn, (ConvertWord.word32ToBytesB (Word32.fromInt (BS.size response_str))))
                   val () = SU.sendVec (conn, response_str)
 
-              in SU.sendVec (conn, line);
-                 loop ()
-              end
+              in loop () end
 
       in loop () end
 

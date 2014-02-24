@@ -10,8 +10,13 @@ struct
   infixr -@
   val (op -@) = PLolli
 
-
   fun ifret M = MIfReturn (CTrue, M)
+
+  (* Function to authenticate and then do an action *)
+  fun doit f userid =
+      (BatchClient.authenticate "127.0.0.1" 5124 userid;
+       f)
+
 
 
   local
@@ -68,7 +73,8 @@ struct
   end
 
   (* Send it to the batch server *)
-  val C_resid_charlie = Batch.depositResource charlie_hash test_chain (initial_test_txnid, 0)
+  val C_resid_charlie = doit
+                        BatchClient.depositResource charlie_hash test_chain (initial_test_txnid, 0)
 
 
   (* Now Charlie breaks C and transfers A to alice and B to Bob *)
@@ -94,7 +100,8 @@ struct
   end
 
   (* Send it to the batch server *)
-  val (charlie_txnid, [A_resid_alice, B_resid_bob]) = Batch.makeTransaction charlie_hash test_chain charlie_test_txn
+  val (charlie_txnid, [A_resid_alice, B_resid_bob]) =
+      doit BatchClient.makeTransaction charlie_hash test_chain charlie_test_txn
 
   (* Now Alice makes a B -@ C and sends it to Bob *)
   (* For kicks she also sends herself a 1. *)
@@ -124,7 +131,7 @@ struct
   (* Send it to the batch server *)
 
   val (alice_txnid, [B_imp_C_resid_bob, one_resid_alice]) =
-      Batch.makeTransaction alice_hash test_chain alice_test_txn
+      doit BatchClient.makeTransaction alice_hash test_chain alice_test_txn
 
 
   (* Build the B now *)
@@ -153,7 +160,7 @@ struct
 
   (* Send it to the batch server *)
   val (bob_txnid, [C_resid_bob]) =
-      Batch.makeTransaction bob_hash test_chain bob_test_txn
+      doit BatchClient.makeTransaction bob_hash test_chain bob_test_txn
 end
 
 

@@ -12,5 +12,6 @@
         batch-store.sml
         batch.sml
         batch-server.sml
+        batch-client.sml
 
         batch-testing.sml
