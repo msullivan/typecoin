@@ -13,8 +13,26 @@ structure Int32SplayDict    = SplayDict (structure Key = Int32Ordered)
 structure Int32SplaySet     = SplaySet (structure Elem = Int32Ordered)
 
 
+signature BATCH =
+sig
+  val actually_do_bitcoin : bool ref
 
-structure Batch =
+
+  val setup : ECDERp.pubkey * ECDSAp.privkey -> string -> unit
+  val depositResource : TypeCoinTxn.crypto_principal ->
+                        TypeCoinTxn.chain ->
+                        TypeCoinTxn.txnid * int ->
+                        Int32.int
+  val makeTransaction : TypeCoinTxn.crypto_principal ->
+                        TypeCoinTxn.chain -> TypeCoinTxn.txn_body ->
+                        BatchStore.batch_txnid * BatchStore.resid list
+  val withdrawResource : TypeCoinTxn.crypto_principal ->
+                         Int32.int -> TypeCoinTxn.txn_body * TypeCoinTxn.txnid
+
+end
+
+
+structure Batch :> BATCH =
 struct
 
 local
@@ -23,12 +41,61 @@ local
 
 in
 
+  val actually_do_bitcoin = ref false
+
   val BatchError = Fail
 
   val batch_address = ref (Bytestring.fromString "DUNNO LOL")
+  val batch_keypair : (ECDSAp.pubkey * ECDSAp.privkey) option ref = ref NONE
   fun getMyAddress () = !batch_address
+  fun getMyKeyPair () = valOf (!batch_keypair)
 
-  fun setup address file = (batch_address := address; BatchStore.setup file)
+
+  (* This is a fake version for testing. We produce a bogus id. *)
+  fun createTxnFake txn_body =
+      (fn () => (),
+       (TypeCoinTxn.toHexId (TypeCoinCrypto.hash
+                                 (IOTypes.writeToVector TypeCoinTxn.writeTxn_bodies [txn_body]))))
+
+
+  fun getOutputAmount (txnid, idx) =
+      let val tx = valOf (RPC.Blockchain.tx (TypeCoinTxn.fromHexId txnid))
+      in Word64.toLargeInt (#amount (List.nth (#outputs tx, idx))) end
+
+  fun createTxnReal (txn_body as TxnBody {inputs, outputs, ...}) =
+      let val total = foldl (fn (Input {source, ...}, amt) => amt + getOutputAmount source)
+                            0 inputs
+          val num_outputs = IntInf.fromInt (length outputs + 2)
+          (* Divide output up evenly... (including to fee??) *)
+          val out_amount = total div num_outputs
+          (* Sending any excess to the recovery thing *)
+          val recovery_amount = out_amount + (total mod num_outputs)
+
+          val (pub, priv) = getMyKeyPair ()
+
+          val real_txn =
+              TypeCoinCrypto.createTxn [] {
+                  typecoin_txn = [txn_body],
+                  keys = map (fn _ => priv) inputs,
+                  fee = out_amount,
+                  recovery_amount = recovery_amount,
+                  recovery_pubkey = pub
+              }
+          val txnid = TypeCoinTxn.toHexId (TypeCoinCrypto.hash (Transaction.writeTx real_txn))
+
+          fun submit () = RPC.Process.inject real_txn
+
+      in (submit, txnid) end
+
+  fun createTxn tx = if !actually_do_bitcoin then createTxnReal tx else createTxnFake tx
+  fun checkChain chain = if !actually_do_bitcoin then TypeCoinCrypto.checkChain chain else ()
+
+  fun hashPubKey key = TypeCoinCrypto.hashKey (
+                       ECDERp.encodePubkey (EllipticCurveParams.secp256k1, key))
+  fun setup (keypair as (pub, _)) file =
+      (batch_address := hashPubKey pub;
+       batch_keypair := SOME keypair;
+       BatchStore.setup file)
 
   (* This needs vastly more checking. *)
   fun depositResource userid chain (coord as (txnid, idx)) =
@@ -38,8 +105,7 @@ in
                                 LogicCheck.stdlib_basis
                                 TxnDict.empty
                                 chain
-
-          (* TODO: check that the chain actually lives in the block chain *)
+          val () = checkChain chain
 
           (* look up the resource getting deposited *)
           val res = TypeCoinCheck.lookupTxout tr coord
@@ -94,6 +160,8 @@ in
                                 LogicCheck.stdlib_basis
                                 TxnDict.empty
                                 chain
+          val () = checkChain chain
+
 
           val (TxnBody {basis=provided_basis, linear_grant, inputs, outputs, ...}) = txn_body
 
@@ -230,14 +298,6 @@ in
 
       in term end
 
-  (* TODO: we need to be able to actually create a bitcoin transaction.
-   * For testing, we just make a bogus id *)
-  fun createTxn txn_body =
-      ((),
-       (TypeCoinTxn.toHexId (TypeCoinCrypto.hash
-                                 (IOTypes.writeToVector TypeCoinTxn.writeTxn_bodies [txn_body]))))
-  fun submitTxn realTxn = ()
-
 
   fun withdrawResource userid resid =
       let
@@ -279,7 +339,7 @@ in
                                    linear_grant = []
                                  }
 
-          val (real_txn, txnid) = createTxn txn_body
+          val (submitTxn, txnid) = createTxn txn_body
 
           fun updateOutput n resid' =
               if resid' = resid then BatchStore.spendResource resid'
@@ -288,7 +348,7 @@ in
 
           fun doChanges () =
               (Util.appi updateOutput unspent;
-               submitTxn real_txn)
+               submitTxn ())
 
           val () = BatchStore.runTransactionally doChanges
 

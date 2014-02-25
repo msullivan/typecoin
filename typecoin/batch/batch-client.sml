@@ -5,7 +5,7 @@ sig
                         Int32.int
   val makeTransaction : TypeCoinTxn.chain -> TypeCoinTxn.txn_body ->
                         BatchStore.batch_txnid * BatchStore.resid list
-  val withDrawResource : Int32.int -> TypeCoinTxn.txn_body * TypeCoinTxn.txnid
+  val withdrawResource : Int32.int -> TypeCoinTxn.txn_body * TypeCoinTxn.txnid
 end
 
 
@@ -93,7 +93,7 @@ struct
           (fromList fromResid)
           (rpc (0w11, Cons (encodeChain chain, encodeBody body)))
 
-  fun withDrawResource resid =
+  fun withdrawResource resid =
       fromCons decodeBody fromString
           (rpc (0w12, Resid resid))
 
