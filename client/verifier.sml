@@ -111,7 +111,7 @@ structure Verifier :> VERIFIER =
          handle OS.SysErr _ => false
               | Overflow => true
 
-      val utxoinc = 10000
+      val utxoinc = 5000
 
       (* load the latest utxo table not later than i, where i mod utxoinc = 0 *)
       fun bestUtxo i =
