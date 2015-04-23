@@ -18,6 +18,12 @@ create table resource (
 	batch_txn_origin int,
 	idx int not null,
 
+	original_origin_txn string, -- this is dum.
+	original_origin_idx int not null,
+
 	owner blob not null
 );
 
+
+
+-- Ought to have indexes!!

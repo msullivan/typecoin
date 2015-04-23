@@ -33,7 +33,9 @@ sig
 
     val createTxn : (TypeCoinTxn.txnid * Transaction.tx) list
                     -> txn_specifier -> Transaction.tx
-    val checkTxn : TypeCoinTxn.txn_body list -> Transaction.tx -> unit
+    val checkTxnAgainstReal : TypeCoinTxn.txn_bodies -> Transaction.tx -> unit
+    val checkTxn : TypeCoinTxn.txn -> unit
+    val checkChain : TypeCoinTxn.chain -> unit
 
     val checkCondition : int -> Logic.condition -> bool
 end
@@ -177,7 +179,7 @@ struct
       end
 
   (* Checks a typecoin transaction against a bitcoin transaction *)
-  fun checkTxn tcTxn (realTxn: Transaction.tx) =
+  fun checkTxnAgainstReal tcTxn (realTxn: Transaction.tx) =
       let val {inputs=realInputs, outputs=realOutputs, ...} = realTxn
           val (TypeCoinTxn.TxnBody {inputs=tcInputs, outputs=tcOutputs, ...}) = hd tcTxn
 
@@ -214,6 +216,17 @@ struct
           val () = ListPair.appEq checkOutput (tcOutputs, regularTxouts)
 
       in () end
+
+  fun lookupTxn NONE txnid =
+      (case RPC.Blockchain.tx (TypeCoinTxn.fromHexId txnid) of
+           SOME tx => tx
+         | NONE => raise Error ("couldn't find transaction " ^ txnid))
+    | lookupTxn (SOME n) txnid = RPC.Blockchain.txByNumberAndHash n (TypeCoinTxn.fromHexId txnid)
+
+
+  fun checkTxn (blockno, txnid, tcTxn) = checkTxnAgainstReal tcTxn (lookupTxn blockno txnid)
+  fun checkChain chain = List.app checkTxn chain
+
 
   (* Verify that `txid' in `block' actually spent the output `coord' *)
   (* We get this data from blockexplorer, but "trust but verify" *)

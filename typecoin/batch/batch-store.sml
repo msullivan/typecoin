@@ -22,6 +22,8 @@ sig
   val getTxnOutputs : batch_txnid -> {id: resid, idx: int} list
   val getUnspentTxnOutputs : batch_txnid -> resid list
 
+  val isAlreadyDeposited : TypeCoinTxn.txnid * int -> bool
+
   (* Modification operations *)
   val insertTransaction : userid -> TypeCoinTxn.txn_body -> batch_txnid
   val insertResource : userid -> BatchData.res_location * resource -> resid
@@ -76,6 +78,10 @@ struct
   val getTxnOutputs = map (fn {resid, idx} => {id=resid, idx=Int32.toInt idx}) o SQL.getTxnOutputs
   val getUnspentTxnOutputs = map #id o SQL.getUnspentTxnOutputs
 
+  fun isAlreadyDeposited (id, i) =
+      isSome (SQL.getResourceFromOrigin
+                  {original_origin_txn=id, original_origin_index=Int32.fromInt i})
+
   fun formatResource origin =
       (case origin of
            BatchData.RealTxout (id, i) => (SOME id, NONE, Int32.fromInt i)
@@ -89,7 +95,8 @@ struct
           SQL.insertResource
               {real_txn_origin=real, batch_txn_origin=batch, index=index,
                owner=owner, resource=serializeProp res,
-               debug_name=SOME (PrettyLogic.prettyProp res)}
+               debug_name=SOME (PrettyLogic.prettyProp res),
+               original_origin_txn=real, original_origin_index=index}
       end
 
   fun moveResource resid origin =
