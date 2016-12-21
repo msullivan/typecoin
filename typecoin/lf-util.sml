@@ -56,7 +56,7 @@ struct
                        let val sub = List.nth (substs, i-skip)
                            val sub' = substExpMain 0 [] 0 skip ns' ns sub
                        (* I'm *pretty* sure all of the index stuff is done.. *)
-                       in hereditaryReduce sub' spine end
+                       in hereditaryReduce sub' spine' end
                    else
                        EApp (HVar (i-substs_len+lift, s), spine'))
            end
@@ -73,11 +73,8 @@ struct
       let fun getBody (ELam (b, e)) n = getBody e (n+1)
             | getBody e n = (e, n)
 
-           fun getSubsts SNil subs = subs
-             | getSubsts (SApp (e, s)) subs = getSubsts s (e :: subs)
-
            val (body, count) = getBody head 0
-           val subs = getSubsts spine []
+           val subs = rev (spineToList spine)
 
            val () = if count = length subs then ()
                     else raise Fail "bogus application"
