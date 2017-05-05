@@ -5,9 +5,3 @@ client/testnetclient
 client/testnetserver
 client/client
 client/server
-paper/*.aux
-paper/*.bbl
-paper/*.blg
-paper/*.dvi
-paper/*.log
-paper/*.pdf
