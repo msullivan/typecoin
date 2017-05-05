@@ -1,5 +1,4 @@
-This is a demo implementation of [Typecoin]
- (https://www.msully.net/stuff/typecoin.pdf).
+This is a demo implementation of [Typecoin](https://www.msully.net/stuff/typecoin.pdf).
 
 Typecoin generalizes Bitcoin to, instead of having transactions deal
 merely in monetary amounts, have transactions instead deal in
@@ -44,10 +43,10 @@ Building and using
 
 Dependencies
 -----------
- * [cmlib] (https://github.com/standardml/cmlib/), for lots of various useful stuff
- * [stilts] (https://github.com/j4cbo/stilts/), for its sqlite
+ * [cmlib](https://github.com/standardml/cmlib/), for lots of various useful stuff
+ * [stilts](https://github.com/j4cbo/stilts/), for its sqlite
    bindings (which are used in the demo batch server)
- * [IOtype] (http://yumegakanau.org/code/iotype/), for auto-generating
+ * [IOtype](http://yumegakanau.org/code/iotype/), for auto-generating
    code to serialize and deserialize Typecoin transactions. This is not
    a build dependency, since we (terribly) just commit the generated
    file to source control, but it is needed to make changes to the
