@@ -1,4 +1,4 @@
 Library
-        library($SMACKAGE/stilts/v1/chiralml/chiralml.cm) - structure Weak
+        library(../../deps/stilts/chiralml/chiralml.cm) - structure Weak
 is
-        $SMACKAGE/stilts/v1/chiralml/chiralml.cm
+        ../../deps/stilts/chiralml/chiralml.cm

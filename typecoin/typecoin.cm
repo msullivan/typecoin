@@ -1,5 +1,5 @@
 Group is
-        $CMLIB/cmlib.cm
+        ../deps/cmlib/cmlib.cm
         $smlnj-tdp/back-trace.cm
         ../client/sources.cm
 

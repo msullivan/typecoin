@@ -1,0 +1,6 @@
+[submodule "deps/cmlib"]
+	path = deps/cmlib
+	url = https://github.com/standardml/cmlib
+[submodule "deps/stilts"]
+	path = deps/stilts
+	url = https://github.com/j4cbo/stilts
