@@ -1,10 +1,13 @@
-This is a demo implementation of [Typecoin](https://www.msully.net/stuff/typecoin.pdf).
+This is a demo implementation of Typecoin.
 
 Typecoin generalizes Bitcoin to, instead of having transactions deal
 merely in monetary amounts, have transactions instead deal in
 propositions in an expressive linear logic.
 This has applications in consumable credentials for proof-carrying
 authorization systems and in smart contracts.
+More information is available in the
+[paper](https://www.msully.net/stuff/typecoin.pdf) and the
+[talk slides](https://www.msully.net/stuff/typecoin-slides.pdf).
 
 We have an implementation of the Typecoin logic and typechecker that
 can interact with Bitcoin via a new Bitcoin client written in SML.
