@@ -1,11 +1,11 @@
-
 (* Changes by Tom 7 in 2003- *)
+(* Changes by sully in 2014 *)
 
 (* Copyright (C) 1999-2002 Henry Cejtin, Matthew Fluet, Suresh
  *    Jagannathan, and Stephen Weeks.
  *
- * MLton is released under the GNU General Public License (GPL).
- * Please see the file MLton-LICENSE for license information.
+ * MLton is released under a BSD-style license.
+ * See the file MLton-LICENSE for details.
  *)
 signature LAYOUT =
    sig
